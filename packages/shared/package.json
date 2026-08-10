@@ -11,6 +11,10 @@
       "types": "./src/model.ts",
       "import": "./src/model.ts"
     },
+    "./jcodeInnerProvider": {
+      "types": "./src/jcodeInnerProvider.ts",
+      "import": "./src/jcodeInnerProvider.ts"
+    },
     "./advertisedEndpoint": {
       "types": "./src/advertisedEndpoint.ts",
       "import": "./src/advertisedEndpoint.ts"

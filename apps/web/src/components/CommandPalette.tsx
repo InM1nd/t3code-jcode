@@ -34,6 +34,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   LinkIcon,
+  ListTodoIcon,
   MessageSquareIcon,
   PaletteIcon,
   SettingsIcon,
@@ -1492,6 +1493,26 @@ function OpenCommandPaletteDialog(props: {
         themeHalves,
         initialAppearance: resolvedTheme,
       });
+    },
+  });
+
+  const boardThreadRef = activeThread
+    ? scopeThreadRef(activeThread.environmentId, activeThread.id)
+    : activeDraftThread
+      ? scopeThreadRef(activeDraftThread.environmentId, activeDraftThread.threadId)
+      : null;
+
+  actionItems.push({
+    kind: "action",
+    value: "action:toggle-project-board",
+    searchTerms: ["board", "project board", "todos", "checklist", "tasks"],
+    title: "Toggle project board",
+    disabled: boardThreadRef === null,
+    icon: <ListTodoIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "board.toggle",
+    run: async () => {
+      if (!boardThreadRef) return;
+      useRightPanelStore.getState().toggle(boardThreadRef, "board");
     },
   });
 

@@ -10,18 +10,24 @@ import {
 } from "./runtime.ts";
 import {
   type CreateProjectInput,
+  type DeleteProjectBoardItemInput,
   type DeleteProjectInput,
   type UpdateProjectInput,
+  type UpsertProjectBoardItemInput,
   createProject,
   deleteProject,
+  deleteProjectBoardItem,
   updateProject,
+  upsertProjectBoardItem,
 } from "../operations/commands.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 
 export type {
   CreateProjectInput,
+  DeleteProjectBoardItemInput,
   DeleteProjectInput,
   UpdateProjectInput,
+  UpsertProjectBoardItemInput,
 } from "../operations/commands.ts";
 
 export interface OptimisticProjectFile {
@@ -89,6 +95,18 @@ export function createProjectEnvironmentAtoms<R, E>(
     delete: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:project:delete",
       execute: (input: DeleteProjectInput) => deleteProject(input),
+      scheduler: projectScheduler,
+      concurrency: projectConcurrency,
+    }),
+    upsertBoardItem: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:project:board-item:upsert",
+      execute: (input: UpsertProjectBoardItemInput) => upsertProjectBoardItem(input),
+      scheduler: projectScheduler,
+      concurrency: projectConcurrency,
+    }),
+    deleteBoardItem: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:project:board-item:delete",
+      execute: (input: DeleteProjectBoardItemInput) => deleteProjectBoardItem(input),
       scheduler: projectScheduler,
       concurrency: projectConcurrency,
     }),

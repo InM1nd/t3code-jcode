@@ -1,17 +1,29 @@
 import { useColorScheme } from "react-native";
-import { Path, Svg } from "react-native-svg";
+import { Circle, Path, Svg } from "react-native-svg";
+import {
+  resolveJcodeInnerProviderIconKind,
+  type JcodeInnerProviderIconKind,
+} from "@t3tools/shared/jcodeInnerProvider";
+import { View } from "react-native";
 
 type ProviderIconProps = {
   readonly provider: string | null | undefined;
   readonly size?: number;
+  /** Selected model slug — used to pick a nested LLM brand when provider is jcode. */
+  readonly model?: string | null | undefined;
+  /** jcode `-p` setting when known. */
+  readonly jcodeProvider?: string | null | undefined;
 };
 
-export function ProviderIcon(props: ProviderIconProps) {
-  const isDarkMode = useColorScheme() === "dark";
-  const size = props.size ?? 16;
-  const mono = isDarkMode ? "#e5e5e5" : "#171717";
+function BrandGlyph(props: {
+  readonly kind: string;
+  readonly size: number;
+  readonly mono: string;
+  readonly isDarkMode: boolean;
+}) {
+  const { kind, size, mono, isDarkMode } = props;
 
-  if (props.provider === "claudeAgent") {
+  if (kind === "claudeAgent") {
     return (
       <Svg width={size} height={size} viewBox="0 0 256 257" fill="none">
         <Path
@@ -22,7 +34,7 @@ export function ProviderIcon(props: ProviderIconProps) {
     );
   }
 
-  if (props.provider === "grok") {
+  if (kind === "grok") {
     const fill = isDarkMode ? "#F5F5F5" : "#0F0F0F";
     return (
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -38,7 +50,7 @@ export function ProviderIcon(props: ProviderIconProps) {
     );
   }
 
-  if (props.provider === "cursor") {
+  if (kind === "cursor") {
     return (
       <Svg width={size} height={size} viewBox="0 0 466.73 532.09" fill="none">
         <Path
@@ -49,11 +61,127 @@ export function ProviderIcon(props: ProviderIconProps) {
     );
   }
 
-  if (props.provider === "opencode") {
+  if (kind === "opencode") {
     return (
       <Svg width={size} height={size} viewBox="0 0 32 40" fill="none">
         <Path d="M24 32H8V16H24V32Z" fill={isDarkMode ? "#4B4646" : "#CFCECD"} />
         <Path d="M24 8H8V32H24V8ZM32 40H0V0H32V40Z" fill={isDarkMode ? "#F1ECEC" : "#211E1E"} />
+      </Svg>
+    );
+  }
+
+  if (kind === "jcode") {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+        <Circle cx="73.57" cy="14.64" r="3.95" fill={mono} />
+        <Circle cx="79.46" cy="20.54" r="3.94" fill={mono} />
+        <Circle cx="85.36" cy="26.43" r="1.57" fill={mono} />
+        <Circle cx="50.00" cy="2.86" r="3.94" fill={mono} />
+        <Circle cx="55.89" cy="8.75" r="4.85" fill={mono} />
+        <Circle cx="61.79" cy="14.64" r="4.51" fill={mono} />
+        <Circle cx="67.68" cy="20.54" r="4.34" fill={mono} />
+        <Circle cx="73.57" cy="26.43" r="4.41" fill={mono} />
+        <Circle cx="79.46" cy="32.32" r="4.58" fill={mono} />
+        <Circle cx="85.36" cy="38.21" r="4.63" fill={mono} />
+        <Circle cx="91.25" cy="44.11" r="3.90" fill={mono} />
+        <Circle cx="38.21" cy="2.86" r="5.15" fill={mono} />
+        <Circle cx="44.11" cy="8.75" r="4.75" fill={mono} />
+        <Circle cx="50.00" cy="14.64" r="4.10" fill={mono} />
+        <Circle cx="55.89" cy="20.54" r="3.45" fill={mono} />
+        <Circle cx="61.79" cy="26.43" r="3.15" fill={mono} />
+        <Circle cx="67.68" cy="32.32" r="3.51" fill={mono} />
+        <Circle cx="73.57" cy="38.21" r="4.17" fill={mono} />
+        <Circle cx="79.46" cy="44.11" r="4.66" fill={mono} />
+        <Circle cx="85.36" cy="50.00" r="4.75" fill={mono} />
+        <Circle cx="91.25" cy="55.89" r="4.19" fill={mono} />
+        <Circle cx="26.43" cy="2.86" r="2.57" fill={mono} />
+        <Circle cx="32.32" cy="8.75" r="4.93" fill={mono} />
+        <Circle cx="38.21" cy="14.64" r="4.26" fill={mono} />
+        <Circle cx="44.11" cy="20.54" r="3.20" fill={mono} />
+        <Circle cx="67.68" cy="44.11" r="3.45" fill={mono} />
+        <Circle cx="73.57" cy="50.00" r="4.56" fill={mono} />
+        <Circle cx="79.46" cy="55.89" r="4.94" fill={mono} />
+        <Circle cx="85.36" cy="61.79" r="4.76" fill={mono} />
+        <Circle cx="91.25" cy="67.68" r="3.54" fill={mono} />
+        <Circle cx="20.54" cy="8.75" r="5.12" fill={mono} />
+        <Circle cx="26.43" cy="14.64" r="4.74" fill={mono} />
+        <Circle cx="32.32" cy="20.54" r="3.98" fill={mono} />
+        <Circle cx="38.21" cy="26.43" r="2.49" fill={mono} />
+        <Circle cx="67.68" cy="55.89" r="4.46" fill={mono} />
+        <Circle cx="73.57" cy="61.79" r="5.06" fill={mono} />
+        <Circle cx="79.46" cy="67.68" r="4.97" fill={mono} />
+        <Circle cx="85.36" cy="73.57" r="4.31" fill={mono} />
+        <Circle cx="14.64" cy="14.64" r="5.05" fill={mono} />
+        <Circle cx="20.54" cy="20.54" r="4.70" fill={mono} />
+        <Circle cx="26.43" cy="26.43" r="4.04" fill={mono} />
+        <Circle cx="32.32" cy="32.32" r="2.73" fill={mono} />
+        <Circle cx="61.79" cy="61.79" r="4.40" fill={mono} />
+        <Circle cx="67.68" cy="67.68" r="5.15" fill={mono} />
+        <Circle cx="73.57" cy="73.57" r="5.04" fill={mono} />
+        <Circle cx="79.46" cy="79.46" r="4.48" fill={mono} />
+        <Circle cx="8.75" cy="20.54" r="4.99" fill={mono} />
+        <Circle cx="14.64" cy="26.43" r="4.76" fill={mono} />
+        <Circle cx="20.54" cy="32.32" r="4.33" fill={mono} />
+        <Circle cx="26.43" cy="38.21" r="3.63" fill={mono} />
+        <Circle cx="32.32" cy="44.11" r="1.72" fill={mono} />
+        <Circle cx="55.89" cy="67.68" r="4.81" fill={mono} />
+        <Circle cx="61.79" cy="73.57" r="5.13" fill={mono} />
+        <Circle cx="67.68" cy="79.46" r="4.97" fill={mono} />
+        <Circle cx="73.57" cy="85.36" r="4.41" fill={mono} />
+        <Circle cx="79.46" cy="91.25" r="2.13" fill={mono} />
+        <Circle cx="2.86" cy="26.43" r="4.89" fill={mono} />
+        <Circle cx="8.75" cy="32.32" r="4.82" fill={mono} />
+        <Circle cx="14.64" cy="38.21" r="4.59" fill={mono} />
+        <Circle cx="20.54" cy="44.11" r="4.29" fill={mono} />
+        <Circle cx="26.43" cy="50.00" r="3.97" fill={mono} />
+        <Circle cx="32.32" cy="55.89" r="3.70" fill={mono} />
+        <Circle cx="38.21" cy="61.79" r="3.81" fill={mono} />
+        <Circle cx="44.11" cy="67.68" r="4.54" fill={mono} />
+        <Circle cx="50.00" cy="73.57" r="4.94" fill={mono} />
+        <Circle cx="55.89" cy="79.46" r="5.00" fill={mono} />
+        <Circle cx="61.79" cy="85.36" r="4.77" fill={mono} />
+        <Circle cx="67.68" cy="91.25" r="4.15" fill={mono} />
+        <Circle cx="-3.03" cy="32.32" r="4.64" fill={mono} />
+        <Circle cx="2.86" cy="38.21" r="4.79" fill={mono} />
+        <Circle cx="8.75" cy="44.11" r="4.72" fill={mono} />
+        <Circle cx="14.64" cy="50.00" r="4.61" fill={mono} />
+        <Circle cx="20.54" cy="55.89" r="4.52" fill={mono} />
+        <Circle cx="26.43" cy="61.79" r="4.51" fill={mono} />
+        <Circle cx="32.32" cy="67.68" r="4.62" fill={mono} />
+        <Circle cx="38.21" cy="73.57" r="4.77" fill={mono} />
+        <Circle cx="44.11" cy="79.46" r="4.85" fill={mono} />
+        <Circle cx="50.00" cy="85.36" r="4.76" fill={mono} />
+        <Circle cx="55.89" cy="91.25" r="4.44" fill={mono} />
+        <Circle cx="61.79" cy="97.14" r="3.66" fill={mono} />
+        <Circle cx="-3.03" cy="44.11" r="4.60" fill={mono} />
+        <Circle cx="2.86" cy="50.00" r="4.68" fill={mono} />
+        <Circle cx="8.75" cy="55.89" r="4.66" fill={mono} />
+        <Circle cx="14.64" cy="61.79" r="4.64" fill={mono} />
+        <Circle cx="20.54" cy="67.68" r="4.64" fill={mono} />
+        <Circle cx="26.43" cy="73.57" r="4.67" fill={mono} />
+        <Circle cx="32.32" cy="79.46" r="4.68" fill={mono} />
+        <Circle cx="38.21" cy="85.36" r="4.61" fill={mono} />
+        <Circle cx="44.11" cy="91.25" r="4.41" fill={mono} />
+        <Circle cx="50.00" cy="97.14" r="3.93" fill={mono} />
+        <Circle cx="55.89" cy="103.03" r="2.57" fill={mono} />
+        <Circle cx="-3.03" cy="55.89" r="4.39" fill={mono} />
+        <Circle cx="2.86" cy="61.79" r="4.49" fill={mono} />
+        <Circle cx="8.75" cy="67.68" r="4.51" fill={mono} />
+        <Circle cx="14.64" cy="73.57" r="4.50" fill={mono} />
+        <Circle cx="20.54" cy="79.46" r="4.47" fill={mono} />
+        <Circle cx="26.43" cy="85.36" r="4.39" fill={mono} />
+        <Circle cx="32.32" cy="91.25" r="4.21" fill={mono} />
+        <Circle cx="38.21" cy="97.14" r="3.83" fill={mono} />
+        <Circle cx="44.11" cy="103.03" r="2.92" fill={mono} />
+        <Circle cx="-3.03" cy="67.68" r="3.92" fill={mono} />
+        <Circle cx="2.86" cy="73.57" r="4.07" fill={mono} />
+        <Circle cx="8.75" cy="79.46" r="4.07" fill={mono} />
+        <Circle cx="14.64" cy="85.36" r="4.00" fill={mono} />
+        <Circle cx="20.54" cy="91.25" r="3.81" fill={mono} />
+        <Circle cx="26.43" cy="97.14" r="3.42" fill={mono} />
+        <Circle cx="32.32" cy="103.03" r="2.43" fill={mono} />
+        <Circle cx="2.86" cy="85.36" r="2.53" fill={mono} />
+        <Circle cx="8.75" cy="91.25" r="2.48" fill={mono} />
       </Svg>
     );
   }
@@ -66,5 +194,41 @@ export function ProviderIcon(props: ProviderIconProps) {
         d="M239.184 106.203a64.716 64.716 0 0 0-5.576-53.103C219.452 28.459 191 15.784 163.213 21.74A65.586 65.586 0 0 0 52.096 45.22a64.716 64.716 0 0 0-43.23 31.36c-14.31 24.602-11.061 55.634 8.033 76.74a64.665 64.665 0 0 0 5.525 53.102c14.174 24.65 42.644 37.324 70.446 31.36a64.72 64.72 0 0 0 48.754 21.744c28.481.025 53.714-18.361 62.414-45.481a64.767 64.767 0 0 0 43.229-31.36c14.137-24.558 10.875-55.423-8.083-76.483Zm-97.56 136.338a48.397 48.397 0 0 1-31.105-11.255l1.535-.87 51.67-29.825a8.595 8.595 0 0 0 4.247-7.367v-72.85l21.845 12.636c.218.111.37.32.409.563v60.367c-.056 26.818-21.783 48.545-48.601 48.601Zm-104.466-44.61a48.345 48.345 0 0 1-5.781-32.589l1.534.921 51.722 29.826a8.339 8.339 0 0 0 8.441 0l63.181-36.425v25.221a.87.87 0 0 1-.358.665l-52.335 30.184c-23.257 13.398-52.97 5.431-66.404-17.803ZM23.549 85.38a48.499 48.499 0 0 1 25.58-21.333v61.39a8.288 8.288 0 0 0 4.195 7.316l62.874 36.272-21.845 12.636a.819.819 0 0 1-.767 0L41.353 151.53c-23.211-13.454-31.171-43.144-17.804-66.405v.256Zm179.466 41.695-63.08-36.63L161.73 77.86a.819.819 0 0 1 .768 0l52.233 30.184a48.6 48.6 0 0 1-7.316 87.635v-61.391a8.544 8.544 0 0 0-4.4-7.213Zm21.742-32.69-1.535-.922-51.619-30.081a8.39 8.39 0 0 0-8.492 0L99.98 99.808V74.587a.716.716 0 0 1 .307-.665l52.233-30.133a48.652 48.652 0 0 1 72.236 50.391v.205ZM88.061 139.097l-21.845-12.585a.87.87 0 0 1-.41-.614V65.685a48.652 48.652 0 0 1 79.757-37.346l-1.535.87-51.67 29.825a8.595 8.595 0 0 0-4.246 7.367l-.051 72.697Zm11.868-25.58 28.138-16.217 28.188 16.218v32.434l-28.086 16.218-28.188-16.218-.052-32.434Z"
       />
     </Svg>
+  );
+}
+
+function innerKindToProvider(kind: JcodeInnerProviderIconKind): string {
+  return kind;
+}
+
+export function ProviderIcon(props: ProviderIconProps) {
+  const isDarkMode = useColorScheme() === "dark";
+  const size = props.size ?? 16;
+  const mono = isDarkMode ? "#e5e5e5" : "#171717";
+  const provider = props.provider ?? "codex";
+
+  const innerKind =
+    provider === "jcode"
+      ? resolveJcodeInnerProviderIconKind({
+          jcodeProvider: props.jcodeProvider,
+          model: props.model,
+        })
+      : null;
+
+  if (!innerKind) {
+    return <BrandGlyph kind={provider} size={size} mono={mono} isDarkMode={isDarkMode} />;
+  }
+
+  const nestedSize = Math.max(10, Math.round(size * 0.85));
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+      <BrandGlyph kind="jcode" size={size} mono={mono} isDarkMode={isDarkMode} />
+      <BrandGlyph
+        kind={innerKindToProvider(innerKind)}
+        size={nestedSize}
+        mono={mono}
+        isDarkMode={isDarkMode}
+      />
+    </View>
   );
 }

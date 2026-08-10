@@ -10,6 +10,12 @@ export const EMBER_THEME_ID = "ember" as const;
 export const EMBER_THEME_LABEL = "Ember";
 export const IRIS_THEME_ID = "iris" as const;
 export const IRIS_THEME_LABEL = "Iris";
+export const SIGNAL_THEME_ID = "signal" as const;
+export const SIGNAL_THEME_LABEL = "Signal";
+export const VOLT_THEME_ID = "volt" as const;
+export const VOLT_THEME_LABEL = "Volt";
+export const ION_THEME_ID = "ion" as const;
+export const ION_THEME_LABEL = "Ion";
 export const THEME_FILE_VERSION = 1 as const;
 export const CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
 export const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "t3code:theme-follow-system";
@@ -122,6 +128,9 @@ const RESERVED_THEME_IDS = new Set([
   OCEAN_THEME_ID,
   EMBER_THEME_ID,
   IRIS_THEME_ID,
+  SIGNAL_THEME_ID,
+  VOLT_THEME_ID,
+  ION_THEME_ID,
   LEGACY_T3_CHAT_DARK_THEME_ID,
   "t3-grove",
   "t3-ocean",
@@ -1384,12 +1393,66 @@ export const IRIS_THEME: ThemeDefinition = {
   },
 };
 
+/** Near-black + hot orange — matches the user's Superset custom theme seeds. */
+export const SIGNAL_THEME: ThemeDefinition = {
+  id: SIGNAL_THEME_ID,
+  label: SIGNAL_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#fff5f2", "#ff3300", { exactSeeds: true }),
+    ...themeActionColors("#ff3300"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a0a0a", "#ff3300", { exactSeeds: true }),
+      ...themeActionColors("#ff3300"),
+    },
+  },
+};
+
+/** Near-black + acid lime. */
+export const VOLT_THEME: ThemeDefinition = {
+  id: VOLT_THEME_ID,
+  label: VOLT_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#f4faf3", "#5ee000", { exactSeeds: true }),
+    ...themeActionColors("#5ee000"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a0a0a", "#b8ff3c", { exactSeeds: true }),
+      ...themeActionColors("#b8ff3c"),
+    },
+  },
+};
+
+/** Near-black + cold cyan. */
+export const ION_THEME: ThemeDefinition = {
+  id: ION_THEME_ID,
+  label: ION_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#f2f9fb", "#0891b2", { exactSeeds: true }),
+    ...themeActionColors("#0891b2"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a0a0a", "#22d3ee", { exactSeeds: true }),
+      ...themeActionColors("#22d3ee"),
+    },
+  },
+};
+
 const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = [
   T3_CHAT_THEME,
   GROVE_THEME,
   OCEAN_THEME,
   EMBER_THEME,
   IRIS_THEME,
+  SIGNAL_THEME,
+  VOLT_THEME,
+  ION_THEME,
 ];
 
 export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | null {

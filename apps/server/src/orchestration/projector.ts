@@ -11,6 +11,8 @@ import * as Schema from "effect/Schema";
 import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "./Errors.ts";
 import {
   MessageSentPayloadSchema,
+  ProjectBoardItemDeletedPayload,
+  ProjectBoardItemUpsertedPayload,
   ProjectCreatedPayload,
   ProjectDeletedPayload,
   ProjectMetaUpdatedPayload,
@@ -217,6 +219,7 @@ export function projectEvent(
             defaultThreadEnvMode: null,
             faviconPath: payload.faviconPath ?? null,
             scripts: payload.scripts,
+            boardItems: [],
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
             deletedAt: null,
@@ -272,6 +275,57 @@ export function projectEvent(
                   ...project,
                   deletedAt: payload.deletedAt,
                   updatedAt: payload.deletedAt,
+                }
+              : project,
+          ),
+        })),
+      );
+
+    case "project.board-item-upserted":
+      return decodeForEvent(
+        ProjectBoardItemUpsertedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          projects: nextBase.projects.map((project) => {
+            if (project.id !== payload.projectId) return project;
+            const currentItems = project.boardItems ?? [];
+            const existingIndex = currentItems.findIndex((item) => item.id === payload.item.id);
+            const boardItems =
+              existingIndex === -1
+                ? [...currentItems, payload.item]
+                : currentItems.map((item, index) =>
+                    index === existingIndex ? payload.item : item,
+                  );
+            return {
+              ...project,
+              boardItems,
+              updatedAt: payload.updatedAt,
+            };
+          }),
+        })),
+      );
+
+    case "project.board-item-deleted":
+      return decodeForEvent(
+        ProjectBoardItemDeletedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          projects: nextBase.projects.map((project) =>
+            project.id === payload.projectId
+              ? {
+                  ...project,
+                  boardItems: (project.boardItems ?? []).filter(
+                    (item) => item.id !== payload.itemId,
+                  ),
+                  updatedAt: payload.updatedAt,
                 }
               : project,
           ),

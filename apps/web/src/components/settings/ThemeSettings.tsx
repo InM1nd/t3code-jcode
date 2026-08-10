@@ -19,8 +19,11 @@ import {
   T3_CHAT_THEME,
   EMBER_THEME,
   GROVE_THEME,
+  ION_THEME,
   IRIS_THEME,
   OCEAN_THEME,
+  SIGNAL_THEME,
+  VOLT_THEME,
 } from "../../themePalette";
 import {
   AlertDialog,
@@ -52,6 +55,9 @@ const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = [
   OCEAN_THEME,
   EMBER_THEME,
   IRIS_THEME,
+  SIGNAL_THEME,
+  VOLT_THEME,
+  ION_THEME,
 ];
 
 function downloadThemeFile(filename: string, contents: string): void {

@@ -1,8 +1,10 @@
 import {
   EventId,
+  PROJECT_BOARD_ITEM_LIMIT,
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
+  type ProjectBoardItem,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
@@ -345,6 +347,79 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           projectId: command.projectId,
           deletedAt: occurredAt,
+        },
+      };
+    }
+
+    case "project.board.item.upsert": {
+      const project = yield* requireProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      const occurredAt = yield* nowIso;
+      const boardItems = project.boardItems ?? [];
+      const existing = boardItems.find((item) => item.id === command.itemId);
+      if (!existing && boardItems.length >= PROJECT_BOARD_ITEM_LIMIT) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Project board is limited to ${PROJECT_BOARD_ITEM_LIMIT} items.`,
+        });
+      }
+      const item: ProjectBoardItem = {
+        id: command.itemId,
+        title: command.title,
+        status: command.status,
+        notes: command.notes === undefined ? (existing?.notes ?? null) : command.notes,
+        source: command.source ?? existing?.source ?? "user",
+        sourceThreadId:
+          command.sourceThreadId === undefined
+            ? (existing?.sourceThreadId ?? null)
+            : command.sourceThreadId,
+        createdAt: existing?.createdAt ?? occurredAt,
+        updatedAt: occurredAt,
+      };
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "project",
+          aggregateId: command.projectId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "project.board-item-upserted" as const,
+        payload: {
+          projectId: command.projectId,
+          item,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "project.board.item.delete": {
+      const project = yield* requireProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      if (!(project.boardItems ?? []).some((item) => item.id === command.itemId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Board item '${command.itemId}' was not found on project '${command.projectId}'.`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "project",
+          aggregateId: command.projectId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "project.board-item-deleted" as const,
+        payload: {
+          projectId: command.projectId,
+          itemId: command.itemId,
+          updatedAt: occurredAt,
         },
       };
     }

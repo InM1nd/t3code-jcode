@@ -14,6 +14,7 @@ import {
   MessageId,
   NonNegativeInt,
   PositiveInt,
+  ProjectBoardItemId,
   ProjectId,
   ProviderItemId,
   ThreadId,
@@ -217,6 +218,27 @@ export const ProjectFaviconPath = TrimmedNonEmptyString.check(
 );
 export type ProjectFaviconPath = typeof ProjectFaviconPath.Type;
 
+/** Soft cap so shell snapshots stay small when the board rides on project-upserted. */
+export const PROJECT_BOARD_ITEM_LIMIT = 100;
+
+export const ProjectBoardItemStatus = Schema.Literals(["pending", "inProgress", "completed"]);
+export type ProjectBoardItemStatus = typeof ProjectBoardItemStatus.Type;
+
+export const ProjectBoardItemSource = Schema.Literals(["user", "agent"]);
+export type ProjectBoardItemSource = typeof ProjectBoardItemSource.Type;
+
+export const ProjectBoardItem = Schema.Struct({
+  id: ProjectBoardItemId,
+  title: TrimmedNonEmptyString,
+  status: ProjectBoardItemStatus,
+  notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  source: ProjectBoardItemSource,
+  sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type ProjectBoardItem = typeof ProjectBoardItem.Type;
+
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
@@ -229,6 +251,8 @@ export const OrchestrationProject = Schema.Struct({
   // Optional on the wire so cached snapshots from older servers still decode.
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
+  // Project-scoped todos shared across threads. Optional for older servers/clients.
+  boardItems: Schema.optional(Schema.Array(ProjectBoardItem)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
@@ -426,6 +450,8 @@ export const OrchestrationProjectShell = Schema.Struct({
   // Optional on the wire so cached snapshots from older servers still decode.
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   scripts: Schema.Array(ProjectScript),
+  // Optional for older servers/clients; treat missing as [].
+  boardItems: Schema.optional(Schema.Array(ProjectBoardItem)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -648,6 +674,25 @@ const ProjectDeleteCommand = Schema.Struct({
   commandId: CommandId,
   projectId: ProjectId,
   force: Schema.optional(Schema.Boolean),
+});
+
+const ProjectBoardItemUpsertCommand = Schema.Struct({
+  type: Schema.Literal("project.board.item.upsert"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+  title: TrimmedNonEmptyString,
+  status: ProjectBoardItemStatus,
+  notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  source: Schema.optional(ProjectBoardItemSource),
+  sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+});
+
+const ProjectBoardItemDeleteCommand = Schema.Struct({
+  type: Schema.Literal("project.board.item.delete"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
 });
 
 const ThreadCreateCommand = Schema.Struct({
@@ -899,6 +944,8 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
+  ProjectBoardItemUpsertCommand,
+  ProjectBoardItemDeleteCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -927,6 +974,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
+  ProjectBoardItemUpsertCommand,
+  ProjectBoardItemDeleteCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -1045,6 +1094,8 @@ export const OrchestrationEventType = Schema.Literals([
   "project.created",
   "project.meta-updated",
   "project.deleted",
+  "project.board-item-upserted",
+  "project.board-item-deleted",
   "thread.created",
   "thread.deleted",
   "thread.archived",
@@ -1106,6 +1157,18 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
 export const ProjectDeletedPayload = Schema.Struct({
   projectId: ProjectId,
   deletedAt: IsoDateTime,
+});
+
+export const ProjectBoardItemUpsertedPayload = Schema.Struct({
+  projectId: ProjectId,
+  item: ProjectBoardItem,
+  updatedAt: IsoDateTime,
+});
+
+export const ProjectBoardItemDeletedPayload = Schema.Struct({
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+  updatedAt: IsoDateTime,
 });
 
 export const ThreadCreatedPayload = Schema.Struct({
@@ -1341,6 +1404,16 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("project.deleted"),
     payload: ProjectDeletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("project.board-item-upserted"),
+    payload: ProjectBoardItemUpsertedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("project.board-item-deleted"),
+    payload: ProjectBoardItemDeletedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
