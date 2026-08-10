@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
-import { ModelSelection, ProjectScript } from "@t3tools/contracts";
+import { ModelSelection, ProjectBoardItem, ProjectScript } from "@t3tools/contracts";
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
   DeleteProjectionProjectInput,
@@ -19,6 +19,7 @@ const ProjectionProjectDbRow = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
+    boardItems: Schema.fromJsonString(Schema.Array(ProjectBoardItem)),
   }),
 );
 type ProjectionProjectDbRow = typeof ProjectionProjectDbRow.Type;
@@ -38,6 +39,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           default_thread_env_mode,
           favicon_path,
           scripts_json,
+          board_items_json,
           created_at,
           updated_at,
           deleted_at
@@ -50,6 +52,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           ${row.defaultThreadEnvMode},
           ${row.faviconPath ?? null},
           ${JSON.stringify(row.scripts)},
+          ${JSON.stringify(row.boardItems ?? [])},
           ${row.createdAt},
           ${row.updatedAt},
           ${row.deletedAt}
@@ -62,6 +65,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           default_thread_env_mode = excluded.default_thread_env_mode,
           favicon_path = excluded.favicon_path,
           scripts_json = excluded.scripts_json,
+          board_items_json = excluded.board_items_json,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at,
           deleted_at = excluded.deleted_at
@@ -81,6 +85,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          board_items_json AS "boardItems",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -102,6 +107,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          board_items_json AS "boardItems",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"

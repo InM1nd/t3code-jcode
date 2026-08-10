@@ -62,9 +62,22 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
 export const cli = makeCli();
 
 if (import.meta.main) {
-  Command.run(cli, { version: packageJson.version }).pipe(
-    Effect.scoped,
-    Effect.provide(CliRuntimeLayer),
-    NodeRuntime.runMain,
-  );
+  // Hidden stdio MCP entry for jcode (see provider/jcodeMcpConfig.ts). Must run
+  // before Effect CLI so stdin stays available for NDJSON framing.
+  if (process.argv[2] === "__jcode-mcp-stdio") {
+    const { runJcodeMcpStdioBridge } = await import("./mcp/jcodeMcpStdioBridge.ts");
+    try {
+      await runJcodeMcpStdioBridge();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`t3 jcode MCP bridge failed: ${detail}\n`);
+      process.exit(1);
+    }
+  } else {
+    Command.run(cli, { version: packageJson.version }).pipe(
+      Effect.scoped,
+      Effect.provide(CliRuntimeLayer),
+      NodeRuntime.runMain,
+    );
+  }
 }

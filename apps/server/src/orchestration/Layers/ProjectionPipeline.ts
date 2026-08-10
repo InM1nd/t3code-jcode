@@ -498,6 +498,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             defaultThreadEnvMode: null,
             faviconPath: event.payload.faviconPath ?? null,
             scripts: event.payload.scripts,
+            boardItems: [],
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
             deletedAt: null,
@@ -543,6 +544,46 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             deletedAt: event.payload.deletedAt,
             updatedAt: event.payload.deletedAt,
+          });
+          return;
+        }
+
+        case "project.board-item-upserted": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          const currentItems = existingRow.value.boardItems ?? [];
+          const existingIndex = currentItems.findIndex((item) => item.id === event.payload.item.id);
+          const boardItems =
+            existingIndex === -1
+              ? [...currentItems, event.payload.item]
+              : currentItems.map((item, index) =>
+                  index === existingIndex ? event.payload.item : item,
+                );
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "project.board-item-deleted": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems: (existingRow.value.boardItems ?? []).filter(
+              (item) => item.id !== event.payload.itemId,
+            ),
+            updatedAt: event.payload.updatedAt,
           });
           return;
         }

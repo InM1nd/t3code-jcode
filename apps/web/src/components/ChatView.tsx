@@ -145,6 +145,7 @@ import {
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
+import { ProjectBoardPanel } from "./ProjectBoardPanel";
 import {
   deriveAgentPanelModel,
   foldSubagentActivities,
@@ -243,9 +244,11 @@ import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
+import { JcodeAsciiIdle } from "./chat/JcodeAsciiIdle";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
+import { isJcodeDriverKind } from "./chat/ThreadProviderIcons";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
@@ -2602,6 +2605,11 @@ function ChatViewContent(props: ChatViewProps) {
     ? activeProviderStatus
     : null;
   const hasTimelineTopBanner = Boolean(threadError) || visibleProviderStatus !== null;
+  const showJcodeAsciiIdle =
+    isJcodeDriverKind(activeProviderStatus?.driver ?? selectedProvider) &&
+    timelineEntries.length === 0 &&
+    !isWorking &&
+    !threadDetailLoading;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
@@ -3218,6 +3226,14 @@ function ChatViewContent(props: ChatViewProps) {
   const addAgentsSurface = useCallback(() => {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
+  }, [activeThreadRef]);
+  const addBoardSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "board");
+  }, [activeThreadRef]);
+  const toggleBoardSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().toggle(activeThreadRef, "board");
   }, [activeThreadRef]);
   const openFileSurface = useCallback(
     (relativePath: string) => {
@@ -4624,6 +4640,13 @@ function ChatViewContent(props: ChatViewProps) {
         return;
       }
 
+      if (command === "board.toggle") {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleBoardSurface();
+        return;
+      }
+
       if (command === "terminal.split") {
         event.preventDefault();
         event.stopPropagation();
@@ -4718,6 +4741,7 @@ function ChatViewContent(props: ChatViewProps) {
     splitPanelTerminal,
     keybindings,
     onToggleDiff,
+    toggleBoardSurface,
     toggleRightPanel,
     toggleTerminalVisibility,
     composerRef,
@@ -5988,6 +6012,8 @@ function ChatViewContent(props: ChatViewProps) {
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
       />
+    ) : activeRightPanelSurface?.kind === "board" && activeProject ? (
+      <ProjectBoardPanel environmentId={activeProject.environmentId} projectId={activeProject.id} />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&
       activeWorkspaceRoot ? (
@@ -6071,9 +6097,8 @@ function ChatViewContent(props: ChatViewProps) {
           error={threadError}
           onDismiss={() => setThreadError(activeThread.id, null)}
         />
-        {/* Main content area with optional plan sidebar */}
+        {/* Chat column */}
         <div className="flex min-h-0 min-w-0 flex-1">
-          {/* Chat column */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {/* Provider status overlays the timeline without changing its content height. */}
             <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
@@ -6084,6 +6109,7 @@ function ChatViewContent(props: ChatViewProps) {
             </div>
             {/* Messages Wrapper */}
             <div className="relative flex min-h-0 flex-1 flex-col">
+              {showJcodeAsciiIdle ? <JcodeAsciiIdle /> : null}
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 agentPanelModel={agentPanelModel}
@@ -6423,6 +6449,7 @@ function ChatViewContent(props: ChatViewProps) {
           onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
           onAddAgents={addAgentsSurface}
+          onAddBoard={addBoardSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
@@ -6452,6 +6479,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
             onAddAgents={addAgentsSurface}
+            onAddBoard={addBoardSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}

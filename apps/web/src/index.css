@@ -310,16 +310,24 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     );
   }
 
+  /* Dev/jcode stage header follows the active theme accent. */
   .stage-blueprint {
-    --stage-bp-top: #67c2ff;
-    --stage-bp-mid: #347ff8;
-    --stage-bp-bottom: #1538d0;
+    --stage-accent: var(--app-theme-accent, #a21caf);
+    --stage-surface: var(--app-theme-sidebar, var(--app-theme-canvas, #1a0a1f));
+    --stage-bp-top: color-mix(in srgb, var(--stage-accent) 72%, white);
+    --stage-bp-mid: var(--stage-accent);
+    --stage-bp-bottom: color-mix(in srgb, var(--stage-accent) 28%, var(--stage-surface));
+    --stage-bp-glow: color-mix(in srgb, var(--stage-accent) 80%, white);
+    --stage-bp-glow-mid: color-mix(in srgb, var(--stage-accent) 70%, transparent);
+    --stage-bp-glow-fade: color-mix(in srgb, var(--stage-surface) 80%, transparent);
+    --stage-bp-dot: color-mix(in srgb, var(--stage-accent) 45%, white);
+    --stage-bp-spark: color-mix(in srgb, var(--stage-accent) 30%, white);
   }
 
   .dark .stage-blueprint {
-    --stage-bp-top: #3a7ad1;
-    --stage-bp-mid: #2050ae;
-    --stage-bp-bottom: #101f6e;
+    --stage-bp-top: color-mix(in srgb, var(--stage-accent) 78%, white);
+    --stage-bp-mid: color-mix(in srgb, var(--stage-accent) 88%, black);
+    --stage-bp-bottom: color-mix(in srgb, var(--stage-accent) 22%, var(--stage-surface));
   }
 
   .workspace-topbar {

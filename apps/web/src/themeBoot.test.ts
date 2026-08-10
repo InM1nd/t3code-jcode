@@ -11,8 +11,11 @@ import {
   T3_CHAT_THEME,
   EMBER_THEME,
   GROVE_THEME,
+  ION_THEME,
   IRIS_THEME,
   OCEAN_THEME,
+  SIGNAL_THEME,
+  VOLT_THEME,
   THEME_APPEARANCE_MODE_STORAGE_KEY,
   THEME_FOLLOW_SYSTEM_STORAGE_KEY,
 } from "./themePalette";
@@ -279,7 +282,16 @@ describe("index.html boot script", () => {
   // boot script's hand-maintained copy into a CI-enforced contract: any
   // palette change breaks this test until the copy in index.html is updated.
   it("keeps every built-in boot splash in sync with the real palettes", () => {
-    for (const theme of [T3_CHAT_THEME, GROVE_THEME, OCEAN_THEME, EMBER_THEME, IRIS_THEME]) {
+    for (const theme of [
+      T3_CHAT_THEME,
+      GROVE_THEME,
+      OCEAN_THEME,
+      EMBER_THEME,
+      IRIS_THEME,
+      SIGNAL_THEME,
+      VOLT_THEME,
+      ION_THEME,
+    ]) {
       // The boot script resolves every built-in from a light base appearance.
       expect(theme.appearance).toBe("light");
       for (const mode of ["light", "dark"] as const) {

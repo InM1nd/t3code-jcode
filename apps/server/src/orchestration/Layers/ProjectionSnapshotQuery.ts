@@ -11,6 +11,7 @@ import {
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadDetailSnapshot,
+  ProjectBoardItem,
   ProjectScript,
   TurnId,
   type OrchestrationCheckpointSummary,
@@ -73,6 +74,7 @@ const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
+    boardItems: Schema.fromJsonString(Schema.Array(ProjectBoardItem)),
   }),
 );
 const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
@@ -319,6 +321,7 @@ function mapProjectShellRow(
     defaultThreadEnvMode: row.defaultThreadEnvMode,
     faviconPath: row.faviconPath ?? null,
     scripts: row.scripts,
+    boardItems: row.boardItems ?? [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -396,6 +399,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          board_items_json AS "boardItems",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -851,6 +855,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          board_items_json AS "boardItems",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -875,6 +880,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           default_thread_env_mode AS "defaultThreadEnvMode",
           favicon_path AS "faviconPath",
           scripts_json AS "scripts",
+          board_items_json AS "boardItems",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -1553,6 +1559,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                 defaultThreadEnvMode: row.defaultThreadEnvMode,
                 faviconPath: row.faviconPath ?? null,
                 scripts: row.scripts,
+                boardItems: row.boardItems ?? [],
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
                 deletedAt: row.deletedAt,
@@ -1684,6 +1691,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   defaultThreadEnvMode: row.defaultThreadEnvMode,
                   faviconPath: row.faviconPath ?? null,
                   scripts: row.scripts,
+                  boardItems: row.boardItems ?? [],
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
                   deletedAt: row.deletedAt,
@@ -2177,6 +2185,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                     defaultThreadEnvMode: option.value.defaultThreadEnvMode,
                     faviconPath: option.value.faviconPath ?? null,
                     scripts: option.value.scripts,
+                    boardItems: option.value.boardItems ?? [],
                     createdAt: option.value.createdAt,
                     updatedAt: option.value.updatedAt,
                     deletedAt: option.value.deletedAt,

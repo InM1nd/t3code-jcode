@@ -151,10 +151,16 @@ import {
   type SnoozePreset,
 } from "./Sidebar.snooze";
 import { ProjectFavicon } from "./ProjectFavicon";
-import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelLabel } from "./chat/providerIconUtils";
+import {
+  formatJcodeThreadProviderLabel,
+  isJcodeDriverKind,
+  resolveThreadInnerProviderIconKind,
+  ThreadProviderIcons,
+} from "./chat/ThreadProviderIcons";
 import { deriveProviderInstanceEntries, type ProviderInstanceEntry } from "../providerInstances";
-import { primaryServerProvidersAtom } from "../state/server";
+import { primaryServerProvidersAtom, primaryServerSettingsAtom } from "../state/server";
+import type { JcodeInnerProviderIconKind } from "@t3tools/shared/jcodeInnerProvider";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Button } from "./ui/button";
@@ -242,6 +248,7 @@ function SidebarThreadTooltip({
   driverKind,
   modelInstanceId,
   modelLabel,
+  innerProviderKind,
   branchMismatch,
   terminalStatus,
   terminalProcessCount,
@@ -254,6 +261,7 @@ function SidebarThreadTooltip({
   driverKind: ProviderInstanceEntry["driverKind"] | null;
   modelInstanceId: string;
   modelLabel: string;
+  innerProviderKind: JcodeInnerProviderIconKind | null;
   branchMismatch: {
     threadBranch: string;
     currentBranch: string;
@@ -307,12 +315,20 @@ function SidebarThreadTooltip({
           ) : null}
           {driverKind ? (
             <div className="flex min-w-0 items-center gap-2">
-              <ProviderInstanceIcon
+              <ThreadProviderIcons
                 driverKind={driverKind}
                 displayName={thread.session?.providerName ?? modelInstanceId}
+                innerKind={innerProviderKind}
                 iconClassName="size-3 shrink-0 grayscale opacity-60"
               />
-              <div className="min-w-0 truncate text-foreground/75">{modelLabel}</div>
+              <div className="min-w-0 truncate text-foreground/75">
+                {isJcodeDriverKind(driverKind)
+                  ? formatJcodeThreadProviderLabel({
+                      innerKind: innerProviderKind,
+                      modelLabel,
+                    })
+                  : modelLabel}
+              </div>
             </div>
           ) : null}
           {terminalStatus ? (
@@ -678,6 +694,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   projectFaviconPath: string | null;
   projectTitle: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
+  jcodeIconContext: {
+    readonly providerInstances:
+      | Readonly<Record<string, { readonly config?: unknown } | undefined>>
+      | undefined;
+    readonly legacyJcodeProvider: string | undefined;
+  };
   timestampFormat: TimestampFormat;
   onThreadClick: (event: ReactMouseEvent, threadRef: ScopedThreadRef) => void;
   onThreadActivate: (threadRef: ScopedThreadRef) => void;
@@ -857,6 +879,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
     : thread.modelSelection.model;
+  const innerProviderKind = resolveThreadInnerProviderIconKind({
+    driverKind,
+    model: thread.modelSelection.model,
+    instanceId: modelInstanceId,
+    providerInstances: props.jcodeIconContext.providerInstances,
+    legacyJcodeProvider: props.jcodeIconContext.legacyJcodeProvider,
+  });
 
   const isRemote =
     props.currentEnvironmentId !== null && thread.environmentId !== props.currentEnvironmentId;
@@ -871,6 +900,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       driverKind={driverKind}
       modelInstanceId={modelInstanceId}
       modelLabel={modelLabel}
+      innerProviderKind={innerProviderKind}
       branchMismatch={branchMismatch}
       terminalStatus={terminalStatus}
       terminalProcessCount={terminalProcessCount}
@@ -1439,9 +1469,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 ) : null}
                 {driverKind ? (
                   <span className="inline-flex shrink-0 items-center opacity-60">
-                    <ProviderInstanceIcon
+                    <ThreadProviderIcons
                       driverKind={driverKind}
                       displayName={thread.session?.providerName ?? modelInstanceId}
+                      innerKind={innerProviderKind}
                       iconClassName="size-3.5"
                     />
                   </span>
@@ -1473,6 +1504,12 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   projectTitle: string | null;
   environmentLabel: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
+  jcodeIconContext: {
+    readonly providerInstances:
+      | Readonly<Record<string, { readonly config?: unknown } | undefined>>
+      | undefined;
+    readonly legacyJcodeProvider: string | undefined;
+  };
   isHighlighted: boolean;
   isRouteActive: boolean;
   resultId: string;
@@ -1506,6 +1543,13 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   const modelLabel = selectedModel
     ? getTriggerDisplayModelLabel(selectedModel)
     : thread.modelSelection.model;
+  const innerProviderKind = resolveThreadInnerProviderIconKind({
+    driverKind,
+    model: thread.modelSelection.model,
+    instanceId: modelInstanceId,
+    providerInstances: props.jcodeIconContext.providerInstances,
+    legacyJcodeProvider: props.jcodeIconContext.legacyJcodeProvider,
+  });
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: thread.environmentId,
     threadId: thread.id,
@@ -1560,6 +1604,7 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
           driverKind={driverKind}
           modelInstanceId={modelInstanceId}
           modelLabel={modelLabel}
+          innerProviderKind={innerProviderKind}
           branchMismatch={branchMismatch}
           terminalStatus={terminalStatus}
           terminalProcessCount={runningTerminalIds.length}
@@ -1713,6 +1758,21 @@ export default function Sidebar() {
     [sidebarProjectSortOrder, threads, unsortedProjectGroups],
   );
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
+  const serverSettings = useAtomValue(primaryServerSettingsAtom);
+  const jcodeIconContext = useMemo(
+    () => ({
+      providerInstances: serverSettings.providerInstances as
+        | Readonly<Record<string, { readonly config?: unknown } | undefined>>
+        | undefined,
+      legacyJcodeProvider:
+        typeof (serverSettings.providers as { jcode?: { jcodeProvider?: string } }).jcode
+          ?.jcodeProvider === "string"
+          ? (serverSettings.providers as { jcode?: { jcodeProvider?: string } }).jcode
+              ?.jcodeProvider
+          : undefined,
+    }),
+    [serverSettings.providerInstances, serverSettings.providers],
+  );
   const providerEntryByInstanceId = useMemo(
     () =>
       new Map(
@@ -3380,6 +3440,7 @@ export default function Sidebar() {
                         }
                         environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
                         providerEntryByInstanceId={providerEntryByInstanceId}
+                        jcodeIconContext={jcodeIconContext}
                         isHighlighted={activeSearchResultIndex === index}
                         isRouteActive={routeThreadKey === threadKey}
                         resultId={`sidebar-thread-search-result-${index}`}
@@ -3487,6 +3548,7 @@ export default function Sidebar() {
                           ) ?? null
                         }
                         providerEntryByInstanceId={providerEntryByInstanceId}
+                        jcodeIconContext={jcodeIconContext}
                         timestampFormat={timestampFormat}
                         onThreadClick={handleThreadClick}
                         onThreadActivate={navigateToThread}

@@ -545,6 +545,8 @@ const makeWsRpcLayer = (
         switch (event.type) {
           case "project.created":
           case "project.meta-updated":
+          case "project.board-item-upserted":
+          case "project.board-item-deleted":
             return projectUpsertOrRemove(event.payload.projectId, event.sequence);
           case "project.deleted":
             return Effect.succeed(

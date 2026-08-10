@@ -9,6 +9,7 @@
 import {
   IsoDateTime,
   ModelSelection,
+  ProjectBoardItem,
   ProjectId,
   ProjectScript,
   ThreadEnvMode,
@@ -28,6 +29,7 @@ export const ProjectionProject = Schema.Struct({
   defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
   faviconPath: Schema.optional(Schema.NullOr(Schema.String)),
   scripts: Schema.Array(ProjectScript),
+  boardItems: Schema.optional(Schema.Array(ProjectBoardItem)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),

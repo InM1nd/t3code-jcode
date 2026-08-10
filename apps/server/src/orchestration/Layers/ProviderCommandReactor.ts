@@ -35,6 +35,10 @@ import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
+  appendProjectBoardToTurnInput,
+  formatProjectBoardPromptBlock,
+} from "../projectBoardPrompt.ts";
+import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
@@ -753,7 +757,6 @@ const make = Effect.gen(function* () {
     if (input.modelSelection !== undefined) {
       threadModelSelections.set(input.threadId, input.modelSelection);
     }
-    const normalizedInput = toNonEmptyProviderInput(input.messageText);
     const normalizedAttachments = input.attachments ?? [];
     const activeSession = yield* providerService
       .listSessions()
@@ -783,9 +786,21 @@ const make = Effect.gen(function* () {
           : requestedModelSelection
         : input.modelSelection;
 
+    // jcode loads T3 MCP via a stdio bridge; keep a tiny board hint so the model
+    // knows board_* tools exist without dumping the full list every turn.
+    let turnInput = toNonEmptyProviderInput(input.messageText);
+    if (activeSession?.provider === "jcode") {
+      const project = yield* projectionSnapshotQuery.getProjectShellById(thread.projectId).pipe(
+        Effect.map(Option.getOrNull),
+        Effect.orElseSucceed(() => null),
+      );
+      const boardBlock = formatProjectBoardPromptBlock(project?.boardItems ?? []);
+      turnInput = appendProjectBoardToTurnInput(turnInput, boardBlock);
+    }
+
     return {
       threadId: input.threadId,
-      ...(normalizedInput ? { input: normalizedInput } : {}),
+      ...(turnInput ? { input: turnInput } : {}),
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),

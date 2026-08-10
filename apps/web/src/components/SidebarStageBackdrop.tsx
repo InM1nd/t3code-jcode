@@ -193,15 +193,41 @@ function NightlySkyArt() {
 
 function DevBlueprintArt() {
   const idPrefix = useId().replaceAll(":", "");
-  const paperId = `${idPrefix}-stage-bp-paper`;
-  const glowId = `${idPrefix}-stage-bp-glow`;
-  const celesteGlowId = `${idPrefix}-stage-bp-glow-celeste`;
-  const violetGlowId = `${idPrefix}-stage-bp-glow-violet`;
-  const minorGridId = `${idPrefix}-stage-bp-grid-minor`;
-  const majorGridId = `${idPrefix}-stage-bp-grid-major`;
-  const rulerId = `${idPrefix}-stage-bp-ruler`;
-  const glowsId = `${idPrefix}-stage-bp-glows`;
-  const annotationsId = `${idPrefix}-stage-bp-annotations`;
+  const paperId = `${idPrefix}-stage-jc-paper`;
+  const glowId = `${idPrefix}-stage-jc-glow`;
+  const glow2Id = `${idPrefix}-stage-jc-glow-2`;
+  const dotsId = `${idPrefix}-stage-jc-dots`;
+  const softId = `${idPrefix}-stage-jc-soft`;
+  const glowsId = `${idPrefix}-stage-jc-glows`;
+
+  // Sparse sampling of the jcode mark, mapped into a 288×96 tile.
+  const tileDots: ReadonlyArray<{ cx: number; cy: number; r: number; o: number }> = [
+    { cx: 42, cy: 18, r: 1.8, o: 0.55 },
+    { cx: 52, cy: 14, r: 2.1, o: 0.7 },
+    { cx: 62, cy: 20, r: 1.9, o: 0.6 },
+    { cx: 72, cy: 28, r: 2.0, o: 0.65 },
+    { cx: 82, cy: 36, r: 1.7, o: 0.5 },
+    { cx: 34, cy: 28, r: 1.6, o: 0.45 },
+    { cx: 44, cy: 34, r: 2.0, o: 0.62 },
+    { cx: 54, cy: 42, r: 2.2, o: 0.72 },
+    { cx: 64, cy: 50, r: 2.1, o: 0.68 },
+    { cx: 74, cy: 58, r: 1.8, o: 0.55 },
+    { cx: 26, cy: 40, r: 1.5, o: 0.4 },
+    { cx: 36, cy: 48, r: 1.9, o: 0.58 },
+    { cx: 46, cy: 56, r: 2.0, o: 0.64 },
+    { cx: 56, cy: 64, r: 1.9, o: 0.6 },
+    { cx: 66, cy: 72, r: 1.6, o: 0.48 },
+    { cx: 188, cy: 16, r: 1.7, o: 0.5 },
+    { cx: 198, cy: 22, r: 2.0, o: 0.66 },
+    { cx: 208, cy: 30, r: 1.8, o: 0.58 },
+    { cx: 218, cy: 38, r: 2.1, o: 0.7 },
+    { cx: 228, cy: 46, r: 1.7, o: 0.52 },
+    { cx: 180, cy: 34, r: 1.5, o: 0.42 },
+    { cx: 190, cy: 42, r: 1.9, o: 0.6 },
+    { cx: 200, cy: 50, r: 2.0, o: 0.66 },
+    { cx: 210, cy: 58, r: 1.8, o: 0.55 },
+    { cx: 220, cy: 66, r: 1.5, o: 0.42 },
+  ];
 
   return (
     <svg
@@ -214,15 +240,15 @@ function DevBlueprintArt() {
       <defs>
         <linearGradient
           id={paperId}
-          x1="60"
+          x1="40"
           y1="0"
-          x2="220"
+          x2="240"
           y2="96"
           gradientUnits="userSpaceOnUse"
           spreadMethod="reflect"
         >
           <stop style={{ stopColor: "var(--stage-bp-bottom)" }} />
-          <stop offset="0.5" style={{ stopColor: "var(--stage-bp-mid)" }} />
+          <stop offset="0.48" style={{ stopColor: "var(--stage-bp-mid)" }} />
           <stop offset="1" style={{ stopColor: "var(--stage-bp-top)" }} />
         </linearGradient>
         <radialGradient
@@ -230,111 +256,58 @@ function DevBlueprintArt() {
           cx="0"
           cy="0"
           r="1"
-          gradientTransform="translate(216 14) rotate(137) scale(120 84)"
+          gradientTransform="translate(120 20) rotate(130) scale(140 90)"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#D4F6FF" stopOpacity="0.4" />
-          <stop offset="0.52" stopColor="#65C8FF" stopOpacity="0.16" />
-          <stop offset="1" stopColor="#276AF1" stopOpacity="0" />
+          <stop stopColor="var(--stage-bp-glow)" stopOpacity="0.42" />
+          <stop offset="0.55" stopColor="var(--stage-bp-glow-mid)" stopOpacity="0.16" />
+          <stop offset="1" stopColor="var(--stage-bp-glow-fade)" stopOpacity="0" />
         </radialGradient>
         <radialGradient
-          id={celesteGlowId}
+          id={glow2Id}
           cx="0"
           cy="0"
           r="1"
-          gradientTransform="translate(474 44) rotate(166) scale(156 92)"
+          gradientTransform="translate(520 36) rotate(150) scale(160 95)"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#D2FFFF" stopOpacity="0.34" />
-          <stop offset="0.5" stopColor="#48DCF5" stopOpacity="0.18" />
-          <stop offset="1" stopColor="#277EF1" stopOpacity="0" />
+          <stop stopColor="var(--stage-bp-glow)" stopOpacity="0.36" />
+          <stop offset="0.5" stopColor="var(--stage-bp-glow-mid)" stopOpacity="0.14" />
+          <stop offset="1" stopColor="var(--stage-bp-glow-fade)" stopOpacity="0" />
         </radialGradient>
-        <radialGradient
-          id={violetGlowId}
-          cx="0"
-          cy="0"
-          r="1"
-          gradientTransform="translate(704 18) rotate(145) scale(132 88)"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#D9D8FF" stopOpacity="0.3" />
-          <stop offset="0.52" stopColor="#7C8BFF" stopOpacity="0.14" />
-          <stop offset="1" stopColor="#3155DF" stopOpacity="0" />
-        </radialGradient>
-        <pattern id={minorGridId} width="8" height="8" patternUnits="userSpaceOnUse">
-          <path d="M8 0H0V8" stroke="#EAF6FF" strokeOpacity="0.14" strokeWidth="0.5" />
-        </pattern>
-        <pattern id={majorGridId} width="32" height="32" patternUnits="userSpaceOnUse">
-          <path d="M32 0H0V32" stroke="#EAF6FF" strokeOpacity="0.26" strokeWidth="0.6" />
-        </pattern>
-        <pattern id={rulerId} width="32" height="6" patternUnits="userSpaceOnUse">
-          <path
-            d="M4 0V2.5M12 0V2.5M20 0V4M28 0V2.5"
-            stroke="#DDF7FF"
-            strokeOpacity="0.5"
-            strokeWidth="0.5"
-          />
-        </pattern>
-        <pattern id={glowsId} width="768" height="96" patternUnits="userSpaceOnUse">
-          <rect width="768" height="96" fill={`url(#${glowId})`} />
-          <rect width="768" height="96" fill={`url(#${celesteGlowId})`} />
-          <rect width="768" height="96" fill={`url(#${violetGlowId})`} />
-        </pattern>
-        <pattern id={annotationsId} width="768" height="96" patternUnits="userSpaceOnUse">
-          <g stroke="#DDF7FF" strokeLinecap="round" strokeOpacity="0.6" strokeWidth="0.7">
-            <path d="M180 64H264" strokeDasharray="5 4" />
-            <path d="M180 61V67M264 61V67" />
-            <path d="M276 10V44" strokeDasharray="4 4" strokeOpacity="0.5" />
-            <path d="M273 10H279M273 44H279" strokeOpacity="0.5" />
-            <path d="M348 30H428" strokeDasharray="3.5 5" strokeOpacity="0.5" />
-            <path d="M348 27V33M428 27V33" strokeOpacity="0.5" />
-            <path d="M512 48V80" strokeDasharray="5 3" strokeOpacity="0.45" />
-            <path d="M509 48H515M509 80H515" strokeOpacity="0.45" />
-            <path d="M590 70H724" strokeDasharray="7 4" strokeOpacity="0.55" />
-            <path d="M590 67V73M724 67V73" strokeOpacity="0.55" />
+        <filter id={softId} x="-24" y="-24" width="336" height="144" filterUnits="userSpaceOnUse">
+          <feGaussianBlur stdDeviation="2.2" />
+        </filter>
+        <pattern id={dotsId} width="288" height="96" patternUnits="userSpaceOnUse">
+          <g filter={`url(#${softId})`}>
+            {tileDots.map((dot) => (
+              <circle
+                key={`${dot.cx}-${dot.cy}`}
+                cx={dot.cx}
+                cy={dot.cy}
+                r={dot.r}
+                fill="var(--stage-bp-dot)"
+                fillOpacity={dot.o}
+              />
+            ))}
           </g>
-
-          <g stroke="#DDF7FF" strokeLinecap="round" strokeOpacity="0.55" strokeWidth="0.6">
-            <g>
-              <path d="M34 60L38 64M38 60L34 64" />
-            </g>
-            <g>
-              <path d="M228 26H234M231 23V29" />
-            </g>
-            <g>
-              <path d="M143 51H149M146 48V54" />
-            </g>
-            <g>
-              <path d="M316 16L322 22M322 16L316 22" />
-            </g>
-            <g>
-              <path d="M468 70H476M472 66V74" />
-            </g>
-            <g>
-              <path d="M558 28L564 34M564 28L558 34" />
-            </g>
-            <g>
-              <path d="M742 44H750M746 40V48" />
-            </g>
+          <g fill="var(--stage-bp-spark)" fillOpacity="0.35">
+            <circle cx="140" cy="22" r="0.7" />
+            <circle cx="156" cy="48" r="0.55" />
+            <circle cx="248" cy="18" r="0.65" />
+            <circle cx="268" cy="54" r="0.5" />
+            <circle cx="18" cy="62" r="0.55" />
           </g>
-
-          <g stroke="#DDF7FF" strokeOpacity="0.35" strokeWidth="0.6">
-            <circle cx="196" cy="38" r="13" strokeDasharray="3.5 4" />
-            <path d="M196 33V43M191 38H201" strokeOpacity="0.6" strokeWidth="0.4" />
-            <circle cx="414" cy="64" r="10" strokeDasharray="2.5 3.5" />
-            <path d="M414 60V68M410 64H418" strokeOpacity="0.6" strokeWidth="0.4" />
-            <circle cx="648" cy="32" r="15" strokeDasharray="4 5" />
-            <path d="M648 26V38M642 32H654" strokeOpacity="0.6" strokeWidth="0.4" />
-          </g>
+        </pattern>
+        <pattern id={glowsId} width="640" height="96" patternUnits="userSpaceOnUse">
+          <rect width="640" height="96" fill={`url(#${glowId})`} />
+          <rect width="640" height="96" fill={`url(#${glow2Id})`} />
         </pattern>
       </defs>
 
       <rect width="100%" height="96" fill={`url(#${paperId})`} />
       <rect width="100%" height="96" fill={`url(#${glowsId})`} />
-      <rect width="100%" height="96" fill={`url(#${minorGridId})`} />
-      <rect width="100%" height="96" fill={`url(#${majorGridId})`} />
-      <rect width="100%" height="6" fill={`url(#${rulerId})`} />
-      <rect width="100%" height="96" fill={`url(#${annotationsId})`} />
+      <rect width="100%" height="96" fill={`url(#${dotsId})`} />
     </svg>
   );
 }

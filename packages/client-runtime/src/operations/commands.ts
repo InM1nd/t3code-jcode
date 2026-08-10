@@ -31,6 +31,8 @@ type CommandInput<T extends CommandType> = Omit<
 export type CreateProjectInput = CommandInput<"project.create">;
 export type UpdateProjectInput = CommandInput<"project.meta.update">;
 export type DeleteProjectInput = CommandInput<"project.delete">;
+export type UpsertProjectBoardItemInput = CommandInput<"project.board.item.upsert">;
+export type DeleteProjectBoardItemInput = CommandInput<"project.board.item.delete">;
 export type CreateThreadInput = CommandInput<"thread.create">;
 export type DeleteThreadInput = CommandInput<"thread.delete">;
 export type ArchiveThreadInput = CommandInput<"thread.archive">;
@@ -117,6 +119,24 @@ export const deleteProject: (input: DeleteProjectInput) => CommandEffect = Effec
     commandId: yield* commandId(input),
   });
 });
+
+export const upsertProjectBoardItem: (input: UpsertProjectBoardItemInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.upsertProjectBoardItem")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "project.board.item.upsert",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const deleteProjectBoardItem: (input: DeleteProjectBoardItemInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.deleteProjectBoardItem")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "project.board.item.delete",
+      commandId: yield* commandId(input),
+    });
+  });
 
 export const createThread: (input: CreateThreadInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.createThread",

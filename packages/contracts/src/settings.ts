@@ -421,6 +421,54 @@ export const GrokSettings = makeProviderSettingsSchema(
 );
 export type GrokSettings = typeof GrokSettings.Type;
 
+export const JcodeSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("jcode").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description: "Path to the jcode CLI binary.",
+        providerSettingsForm: { placeholder: "jcode", clearWhenEmpty: "omit" },
+      }),
+    ),
+    model: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Model",
+        description: "Optional jcode `-m/--model` value (e.g. claude-opus-5, gpt-5.5).",
+        providerSettingsForm: { placeholder: "claude-opus-5", clearWhenEmpty: "omit" },
+      }),
+    ),
+    providerProfile: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Provider profile",
+        description: "Optional jcode `--provider-profile` from ~/.jcode/config.toml.",
+        providerSettingsForm: { placeholder: "my-gateway", clearWhenEmpty: "omit" },
+      }),
+    ),
+    jcodeProvider: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Jcode provider",
+        description: "Optional jcode `-p/--provider` (claude, openai, openrouter, …).",
+        providerSettingsForm: { placeholder: "auto", clearWhenEmpty: "omit" },
+      }),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  {
+    order: ["binaryPath", "model", "jcodeProvider", "providerProfile"],
+  },
+);
+export type JcodeSettings = typeof JcodeSettings.Type;
+
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
@@ -600,6 +648,7 @@ export const ServerSettings = Schema.Struct({
     claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    jcode: JcodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
@@ -696,6 +745,15 @@ const GrokSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const JcodeSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  model: Schema.optionalKey(TrimmedString),
+  providerProfile: Schema.optionalKey(TrimmedString),
+  jcodeProvider: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
 const OpenCodeSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -743,6 +801,7 @@ export const ServerSettingsPatch = Schema.Struct({
       claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
       cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
+      jcode: Schema.optionalKey(JcodeSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
     }),
   ),
