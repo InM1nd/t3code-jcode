@@ -20,9 +20,13 @@ Board mutations fan out through the existing shell stream as `project-upserted` 
 Toolkit under `apps/server/src/mcp/toolkits/board/`:
 
 - `board_list`
+- `board_digest`
 - `board_upsert`
 - `board_set_status`
+- `board_link_turn`
 - `board_delete`
+
+Each board item may carry `linkedTurnIds` (capped). Agent upsert/status tools append the thread’s latest turn automatically; `board_link_turn` does it explicitly.
 
 Capability `"board"` is issued with every MCP session token. Handlers resolve `projectId` from the invocation `threadId`, then dispatch through `OrchestrationEngineService` so UI and agents share one write path.
 
@@ -37,3 +41,20 @@ That gives jcode the same `board_*` (and other) MCP tools as Claude/Cursor. Turn
 - Web/desktop: right-panel surface `"board"` → `ProjectBoardPanel`
 - Mobile: deferred (phase 2)
 - Client commands: `upsertProjectBoardItem` / `deleteProjectBoardItem` in `packages/client-runtime`
+
+### Board → Thread (web)
+
+`ProjectBoardPanel` Implement action:
+
+1. Creates/reuses a draft via `useNewThreadHandler({ seedPrompt })`
+2. Upserts the item to `inProgress` with `sourceThreadId` set to that draft's thread id
+3. If `sourceThreadId` already points at a live server thread or local draft, reopens it instead
+4. Marks a pending turn-link; `ChatView` attaches the first `latestTurn` via `linkTurnId`
+
+Pure helpers live in `apps/web/src/components/ProjectBoardPanel.logic.ts` and `@t3tools/shared/projectBoard`.
+
+### Board digest
+
+- Shared formatter: `formatProjectBoardDigest`
+- MCP: `board_digest`
+- Web command palette: **Insert project board digest**

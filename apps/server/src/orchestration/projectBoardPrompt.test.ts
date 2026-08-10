@@ -11,6 +11,7 @@ describe("projectBoardPrompt", () => {
     const empty = formatProjectBoardPromptBlock([]);
     expect(empty).toContain("<project_board>");
     expect(empty).toContain("empty");
+    expect(empty).toContain("board_digest");
     expect(empty).toContain("board_list");
     expect(empty).toContain("t3-code");
     expect(empty).not.toContain("id=");

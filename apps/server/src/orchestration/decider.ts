@@ -6,6 +6,7 @@ import {
   type OrchestrationReadModel,
   type ProjectBoardItem,
 } from "@t3tools/contracts";
+import { mergeProjectBoardLinkedTurnIds } from "@t3tools/shared/projectBoard";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -376,6 +377,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           command.sourceThreadId === undefined
             ? (existing?.sourceThreadId ?? null)
             : command.sourceThreadId,
+        linkedTurnIds: mergeProjectBoardLinkedTurnIds({
+          existing: existing?.linkedTurnIds,
+          ...(command.linkedTurnIds !== undefined ? { linkedTurnIds: command.linkedTurnIds } : {}),
+          ...(command.linkTurnId !== undefined ? { linkTurnId: command.linkTurnId } : {}),
+        }),
         createdAt: existing?.createdAt ?? occurredAt,
         updatedAt: occurredAt,
       };

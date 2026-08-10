@@ -4,11 +4,12 @@ import {
   scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import { DEFAULT_RUNTIME_MODE, type ScopedProjectRef } from "@t3tools/contracts";
+import { DEFAULT_RUNTIME_MODE, type ScopedProjectRef, type ThreadId } from "@t3tools/contracts";
 import { useParams, useRouter } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 import {
   composerDraftHasUserContent,
+  DraftId,
   markPromotedDraftThreadByRef,
   type DraftThreadEnvMode,
   type DraftThreadState,
@@ -23,7 +24,7 @@ import {
 } from "../logicalProject";
 import { resolveDefaultThreadEnvMode } from "@t3tools/shared/threadEnvMode";
 import { readThreadShell, useProjects, useThread } from "../state/entities";
-import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
+import { resolveNewDraftStartFromOrigin, type NewThreadResult } from "../lib/chatThreadActions";
 import { readT3ProjectFileDefaultThreadEnvMode } from "../lib/t3ProjectFileDefaults";
 import { primaryServerSettingsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
@@ -72,9 +73,10 @@ export function useNewThreadHandler() {
         worktreePath?: string | null;
         envMode?: DraftThreadEnvMode;
         startFromOrigin?: boolean;
+        seedPrompt?: string;
         replace?: boolean;
       },
-    ): Promise<void> => {
+    ): Promise<NewThreadResult | undefined> => {
       const {
         getComposerDraft,
         getDraftSessionByLogicalProjectKey,
@@ -84,7 +86,17 @@ export function useNewThreadHandler() {
         setDraftThreadContext,
         setLogicalProjectDraftThreadId,
         setModelSelection,
+        setPrompt,
       } = useComposerDraftStore.getState();
+      const applySeedPrompt = (draftId: string) => {
+        const seedPrompt = options?.seedPrompt?.trim();
+        if (!seedPrompt) return;
+        setPrompt(DraftId.make(draftId), seedPrompt);
+      };
+      const settle = (draftId: string, threadId: ThreadId): NewThreadResult => {
+        applySeedPrompt(draftId);
+        return { draftId, threadId };
+      };
       const currentRouteTarget = getCurrentRouteTarget();
       // A new thread carries the user's *working mode* from the thread being
       // viewed: model (including options like reasoning effort and context
@@ -221,7 +233,7 @@ export function useNewThreadHandler() {
               getComposerDraft(emptyStoredDraftThread.draftId),
             );
             if (openedMeanwhile || promotedMeanwhile || remappedMeanwhile || investedMeanwhile) {
-              return;
+              return undefined;
             }
             workspaceContext = {
               branch: null,
@@ -271,13 +283,14 @@ export function useNewThreadHandler() {
             routeTargetAfterWrites?.kind === "draft" &&
             routeTargetAfterWrites.draftId === emptyStoredDraftThread.draftId
           ) {
-            return;
+            return settle(emptyStoredDraftThread.draftId, emptyStoredDraftThread.threadId);
           }
           await router.navigate({
             to: "/draft/$draftId",
             params: { draftId: emptyStoredDraftThread.draftId },
             replace: options?.replace ?? false,
           });
+          return settle(emptyStoredDraftThread.draftId, emptyStoredDraftThread.threadId);
         })();
       }
 
@@ -305,7 +318,9 @@ export function useNewThreadHandler() {
           interactionMode: latestActiveDraftThread.interactionMode,
           ...pickExplicitWorkspaceOptions(options),
         });
-        return Promise.resolve();
+        return Promise.resolve(
+          settle(currentRouteTarget.draftId, latestActiveDraftThread.threadId),
+        );
       }
 
       const draftId = newDraftId();
@@ -347,7 +362,11 @@ export function useNewThreadHandler() {
             params: { draftId: racedDraft.draftId },
             replace: options?.replace ?? false,
           });
-          return;
+          // Don't overwrite an invested raced winner's composer.
+          if (composerDraftHasUserContent(getComposerDraft(racedDraft.draftId))) {
+            return undefined;
+          }
+          return settle(racedDraft.draftId, racedDraft.threadId);
         }
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, draftId, {
           threadId,
@@ -379,6 +398,7 @@ export function useNewThreadHandler() {
           params: { draftId },
           replace: options?.replace ?? false,
         });
+        return settle(draftId, threadId);
       })();
     },
     [getCurrentRouteTarget, primaryServerSettings, projectGroupingSettings, projects, router],

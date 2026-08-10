@@ -1,11 +1,16 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectId, ScopedProjectRef } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ScopedProjectRef, ThreadId } from "@t3tools/contracts";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
 
 interface ThreadContextLike {
   environmentId: EnvironmentId;
   projectId: ProjectId;
 }
+
+export type NewThreadResult = {
+  draftId: string;
+  threadId: ThreadId;
+};
 
 interface NewThreadHandler {
   (
@@ -15,8 +20,10 @@ interface NewThreadHandler {
       worktreePath?: string | null;
       envMode?: DraftThreadEnvMode;
       startFromOrigin?: boolean;
+      seedPrompt?: string;
+      replace?: boolean;
     },
-  ): Promise<void>;
+  ): Promise<NewThreadResult | undefined>;
 }
 
 export interface ChatThreadActionContext {

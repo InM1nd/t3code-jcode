@@ -16,6 +16,16 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 
+describe("ClientSettings companion pet", () => {
+  it("defaults the floating pet off", () => {
+    expect(decodeClientSettings({}).petEnabled).toBe(false);
+  });
+
+  it("accepts an explicit petEnabled patch", () => {
+    expect(decodeClientSettingsPatch({ petEnabled: true })).toEqual({ petEnabled: true });
+  });
+});
+
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
     expect(decodeClientSettings({}).wordWrap).toBe(true);

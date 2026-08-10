@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 /**
  * ProviderServiceLive - Cross-provider orchestration layer.
  *
@@ -36,6 +37,11 @@ import * as SchemaIssue from "effect/SchemaIssue";
 import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
+import {
+  isTextLikeChatFileMime,
+  PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS,
+} from "@t3tools/shared/chatAttachments";
+import * as NodeFS from "node:fs";
 import * as ServerConfig from "../../config.ts";
 import {
   increment,
@@ -679,23 +685,52 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     // Adapters inline attachment pixels into the model prompt, but the model's
     // tools cannot dereference pixels. Appending the on-disk path is what lets
     // a turn like "include this screenshot in the PR" copy the actual file.
-    // This runs after schema decode, so the appended lines are exempt from the
-    // PROVIDER_SEND_TURN_MAX_INPUT_CHARS check; attachment count is capped, so
-    // the overhead is bounded. Unresolvable ids are skipped here and surface
-    // as adapter errors when the file is read for inlining.
-    const attachmentPathLines = attachments.flatMap((attachment) => {
+    // Text-like file attachments are also embedded (capped) so every provider
+    // sees their contents without per-adapter file APIs. This runs after schema
+    // decode, so the appended lines are exempt from
+    // PROVIDER_SEND_TURN_MAX_INPUT_CHARS; attachment count is capped, so the
+    // overhead is bounded. Unresolvable ids are skipped here and surface as
+    // adapter errors when the file is read for inlining.
+    const attachmentContextParts: string[] = [];
+    for (const attachment of attachments) {
       const attachmentPath = resolveAttachmentPath({
         attachmentsDir: serverConfig.attachmentsDir,
         attachment,
       });
-      return attachmentPath === null
-        ? []
-        : [`[Attached ${attachment.type} "${attachment.name}" is saved at: ${attachmentPath}]`];
-    });
+      if (attachmentPath === null) continue;
+      attachmentContextParts.push(
+        `[Attached ${attachment.type} "${attachment.name}" is saved at: ${attachmentPath}]`,
+      );
+      if (attachment.type === "file" && isTextLikeChatFileMime(attachment.mimeType)) {
+        try {
+          const raw = NodeFS.readFileSync(attachmentPath, "utf8");
+          const truncated =
+            raw.length > PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS
+              ? `${raw.slice(0, PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS)}
+
+[...truncated ${raw.length - PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS} characters]`
+              : raw;
+          attachmentContextParts.push(
+            `[Attached file "${attachment.name}" contents]
+\`\`\`
+${truncated}
+\`\`\``,
+          );
+        } catch {
+          attachmentContextParts.push(
+            `[Attached file "${attachment.name}" could not be read as text; use the path above.]`,
+          );
+        }
+      } else if (attachment.type === "file") {
+        attachmentContextParts.push(
+          `[Attached file "${attachment.name}" (${attachment.mimeType}) — open/read it from the path above.]`,
+        );
+      }
+    }
     const inputTextWithAttachmentPaths =
-      attachmentPathLines.length === 0
+      attachmentContextParts.length === 0
         ? parsed.input
-        : [parsed.input, attachmentPathLines.join("\n")]
+        : [parsed.input, attachmentContextParts.join("\n\n")]
             .filter((part): part is string => typeof part === "string" && part.length > 0)
             .join("\n\n");
 

@@ -15,6 +15,14 @@
       "types": "./src/jcodeInnerProvider.ts",
       "import": "./src/jcodeInnerProvider.ts"
     },
+    "./chatAttachments": {
+      "types": "./src/chatAttachments.ts",
+      "import": "./src/chatAttachments.ts"
+    },
+    "./projectBoard": {
+      "types": "./src/projectBoard.ts",
+      "import": "./src/projectBoard.ts"
+    },
     "./advertisedEndpoint": {
       "types": "./src/advertisedEndpoint.ts",
       "import": "./src/advertisedEndpoint.ts"

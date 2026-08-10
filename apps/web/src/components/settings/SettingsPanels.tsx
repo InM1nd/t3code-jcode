@@ -1069,10 +1069,38 @@ export function AppearanceSettingsPanel() {
             }
           />
         ) : null}
+
+        <PetEnabledRow />
       </SettingsSection>
 
       <TypographySection />
     </SettingsPageContainer>
+  );
+}
+
+function PetEnabledRow() {
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
+  return (
+    <SettingsRow
+      {...searchableSetting("companion-pet")}
+      description="Show a small floating companion you can drag around the window. It reacts when the active thread is working."
+      resetAction={
+        settings.petEnabled !== DEFAULT_UNIFIED_SETTINGS.petEnabled ? (
+          <SettingResetButton
+            label="companion pet"
+            onClick={() => updateSettings({ petEnabled: DEFAULT_UNIFIED_SETTINGS.petEnabled })}
+          />
+        ) : null
+      }
+      control={
+        <Switch
+          checked={settings.petEnabled}
+          onCheckedChange={(checked) => updateSettings({ petEnabled: Boolean(checked) })}
+          aria-label="Show companion pet"
+        />
+      }
+    />
   );
 }
 

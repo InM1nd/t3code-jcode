@@ -42,7 +42,9 @@ import {
   createModelSelection,
   resolvePromptInjectedEffort,
 } from "@t3tools/shared/model";
+import { indexProjectBoardItemsByTurnId } from "@t3tools/shared/projectBoard";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
+import { consumeBoardItemAwaitingTurnLink } from "~/lib/boardTurnLinkPending";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import { truncate } from "@t3tools/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
@@ -1207,6 +1209,9 @@ function ChatViewContent(props: ChatViewProps) {
     reportFailure: false,
   });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const upsertBoardItem = useAtomCommand(projectEnvironment.upsertBoardItem, {
+    reportFailure: false,
+  });
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
   });
@@ -1658,6 +1663,31 @@ function ChatViewContent(props: ChatViewProps) {
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
     : null;
   const activeProject = useProject(activeProjectRef);
+  const boardItemsByTurnId = useMemo(
+    () => indexProjectBoardItemsByTurnId(activeProject?.boardItems ?? []),
+    [activeProject?.boardItems],
+  );
+  useEffect(() => {
+    if (!activeThread || !activeLatestTurn?.turnId || !activeProject) return;
+    const itemId = consumeBoardItemAwaitingTurnLink(activeThread.id);
+    if (!itemId) return;
+    const item = (activeProject.boardItems ?? []).find((entry) => entry.id === itemId);
+    if (!item) return;
+    if (item.linkedTurnIds?.includes(activeLatestTurn.turnId)) return;
+    void upsertBoardItem({
+      environmentId: activeThread.environmentId,
+      input: {
+        projectId: activeThread.projectId,
+        itemId: item.id,
+        title: item.title,
+        status: item.status,
+        ...(item.notes !== undefined ? { notes: item.notes } : {}),
+        source: item.source,
+        sourceThreadId: item.sourceThreadId ?? activeThread.id,
+        linkTurnId: activeLatestTurn.turnId,
+      },
+    });
+  }, [activeLatestTurn?.turnId, activeProject, activeThread, upsertBoardItem]);
   const handleNewThreadInActiveProject = useCallback(() => {
     startNewThreadForProject(activeProjectRef, handleNewThread);
   }, [activeProjectRef, handleNewThread]);
@@ -5025,7 +5055,7 @@ function ChatViewContent(props: ChatViewProps) {
     });
     const turnAttachmentsPromise = Promise.all(
       composerImagesSnapshot.map(async (image) => ({
-        type: "image" as const,
+        type: image.type,
         name: image.name,
         mimeType: image.mimeType,
         sizeBytes: image.sizeBytes,
@@ -5033,7 +5063,7 @@ function ChatViewContent(props: ChatViewProps) {
       })),
     );
     const optimisticAttachments = composerImagesSnapshot.map((image) => ({
-      type: "image" as const,
+      type: image.type,
       id: image.id,
       name: image.name,
       mimeType: image.mimeType,
@@ -6149,6 +6179,7 @@ function ChatViewContent(props: ChatViewProps) {
                 hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
                 topFadeEnabled={!hasTimelineTopBanner}
                 loadEarlier={loadEarlierTurns}
+                boardItemsByTurnId={boardItemsByTurnId}
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}

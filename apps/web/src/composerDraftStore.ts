@@ -84,10 +84,19 @@ export const PersistedComposerImageAttachment = Schema.Struct({
   mimeType: Schema.String,
   sizeBytes: Schema.Number,
   dataUrl: Schema.String,
+  type: Schema.optionalKey(Schema.Literals(["image", "file"])),
 });
 export type PersistedComposerImageAttachment = typeof PersistedComposerImageAttachment.Type;
 
-export interface ComposerImageAttachment extends Omit<ChatImageAttachment, "previewUrl"> {
+export type ComposerAttachmentKind = "image" | "file";
+
+/** Composer staged attachment (images and allowed files share one draft list). */
+export interface ComposerImageAttachment {
+  type: ComposerAttachmentKind;
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
   previewUrl: string;
   file: File;
 }
@@ -1100,12 +1109,14 @@ function normalizePersistedAttachment(value: unknown): PersistedComposerImageAtt
   ) {
     return null;
   }
+  const type = candidate.type === "file" || candidate.type === "image" ? candidate.type : undefined;
   return {
     id,
     name,
     mimeType,
     sizeBytes,
     dataUrl,
+    ...(type ? { type } : {}),
   };
 }
 
@@ -2161,7 +2172,7 @@ export function hydrateImagesFromPersisted(
 
     return [
       {
-        type: "image" as const,
+        type: attachment.type === "file" ? ("file" as const) : ("image" as const),
         id: attachment.id,
         name: attachment.name,
         mimeType: attachment.mimeType,

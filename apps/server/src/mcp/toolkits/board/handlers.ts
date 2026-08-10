@@ -4,7 +4,9 @@ import {
   type ProjectBoardItem,
   type ProjectBoardItemStatus,
   type ProjectId,
+  type TurnId,
 } from "@t3tools/contracts";
+import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -74,6 +76,24 @@ const loadBoard = Effect.fn("BoardToolkit.loadBoard")(function* (projectId: Proj
   return project.value;
 });
 
+const resolveLatestTurnId = Effect.fn("BoardToolkit.resolveLatestTurnId")(function* (
+  threadId: McpInvocationContext.McpInvocationScope["threadId"],
+) {
+  const snapshots = yield* ProjectionSnapshotQuery;
+  const thread = yield* snapshots.getThreadShellById(threadId).pipe(
+    Effect.mapError(
+      (error) =>
+        new BoardToolError({
+          message: `Failed to resolve latest turn: ${errorMessage(error)}`,
+        }),
+    ),
+  );
+  if (Option.isNone(thread)) {
+    return null;
+  }
+  return thread.value.latestTurn?.turnId ?? null;
+});
+
 const nextCommandId = Effect.fn("BoardToolkit.nextCommandId")(function* () {
   const crypto = yield* Crypto.Crypto;
   const uuid = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
@@ -93,6 +113,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
   readonly status: ProjectBoardItemStatus;
   readonly notes?: string | null | undefined;
   readonly sourceThreadId: McpInvocationContext.McpInvocationScope["threadId"];
+  readonly linkTurnId?: TurnId | null | undefined;
 }) {
   const engine = yield* OrchestrationEngineService;
   yield* engine
@@ -106,6 +127,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
       source: "agent",
       sourceThreadId: input.sourceThreadId,
+      ...(input.linkTurnId ? { linkTurnId: input.linkTurnId } : {}),
     })
     .pipe(
       Effect.mapError(
@@ -129,6 +151,22 @@ const handlers = {
       };
     }),
 
+  board_digest: (_input: unknown) =>
+    Effect.gen(function* () {
+      const scope = yield* requireBoardScope();
+      const projectId = yield* resolveProjectId(scope.threadId);
+      const project = yield* loadBoard(projectId);
+      const items = project.boardItems ?? [];
+      return {
+        projectId,
+        digest: formatProjectBoardDigest(items),
+        inProgressCount: items.filter((item) => item.status === "inProgress").length,
+        pendingCount: items.filter((item) => item.status === "pending").length,
+        completedCount: items.filter((item) => item.status === "completed").length,
+        totalCount: items.length,
+      };
+    }),
+
   board_upsert: (input: {
     readonly itemId?: ProjectBoardItemId | undefined;
     readonly title: string;
@@ -139,6 +177,7 @@ const handlers = {
       const scope = yield* requireBoardScope();
       const projectId = yield* resolveProjectId(scope.threadId);
       const itemId = input.itemId ?? (yield* nextItemId());
+      const linkTurnId = yield* resolveLatestTurnId(scope.threadId);
       yield* dispatchUpsert({
         projectId,
         itemId,
@@ -146,6 +185,7 @@ const handlers = {
         status: input.status,
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
         sourceThreadId: scope.threadId,
+        linkTurnId,
       });
       const project = yield* loadBoard(projectId);
       const item =
@@ -167,6 +207,7 @@ const handlers = {
           message: `Board item '${input.itemId}' was not found.`,
         });
       }
+      const linkTurnId = yield* resolveLatestTurnId(scope.threadId);
       yield* dispatchUpsert({
         projectId,
         itemId: existing.id,
@@ -174,6 +215,41 @@ const handlers = {
         status: input.status,
         notes: existing.notes ?? null,
         sourceThreadId: scope.threadId,
+        linkTurnId,
+      });
+      const next = yield* loadBoard(projectId);
+      const item = (next.boardItems ?? []).find((entry) => entry.id === input.itemId) ?? null;
+      return { projectId, item };
+    }),
+
+  board_link_turn: (input: {
+    readonly itemId: ProjectBoardItemId;
+    readonly turnId?: TurnId | undefined;
+  }) =>
+    Effect.gen(function* () {
+      const scope = yield* requireBoardScope();
+      const projectId = yield* resolveProjectId(scope.threadId);
+      const project = yield* loadBoard(projectId);
+      const existing = (project.boardItems ?? []).find((entry) => entry.id === input.itemId);
+      if (!existing) {
+        return yield* new BoardToolError({
+          message: `Board item '${input.itemId}' was not found.`,
+        });
+      }
+      const linkTurnId = input.turnId ?? (yield* resolveLatestTurnId(scope.threadId));
+      if (!linkTurnId) {
+        return yield* new BoardToolError({
+          message: "No turnId provided and the current thread has no latest turn to link.",
+        });
+      }
+      yield* dispatchUpsert({
+        projectId,
+        itemId: existing.id,
+        title: existing.title,
+        status: existing.status,
+        notes: existing.notes ?? null,
+        sourceThreadId: scope.threadId,
+        linkTurnId,
       });
       const next = yield* loadBoard(projectId);
       const item = (next.boardItems ?? []).find((entry) => entry.id === input.itemId) ?? null;
