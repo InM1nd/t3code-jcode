@@ -1797,8 +1797,11 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   });
 
   const sendTurn: CodexAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
+    const imageAttachments = (input.attachments ?? []).filter(
+      (attachment) => attachment.type === "image",
+    );
     const codexAttachments = yield* Effect.forEach(
-      input.attachments ?? [],
+      imageAttachments,
       (attachment) => resolveAttachment(input, attachment),
       { concurrency: 1 },
     );

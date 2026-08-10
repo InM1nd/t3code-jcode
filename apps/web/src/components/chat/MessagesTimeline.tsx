@@ -1,6 +1,7 @@
 import {
   type EnvironmentId,
   type MessageId,
+  type ProjectBoardItem,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type TurnId,
@@ -14,6 +15,10 @@ import {
 
 const EMPTY_AGENT_PANEL_MODEL = emptyAgentPanelModel();
 const NOOP_OPEN_AGENTS = () => {};
+const EMPTY_BOARD_ITEMS_BY_TURN_ID = new Map<
+  TurnId,
+  ReadonlyArray<Pick<ProjectBoardItem, "id" | "title" | "status">>
+>();
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import {
   createContext,
@@ -144,6 +149,10 @@ interface TimelineRowSharedState {
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   agentPanelModel: AgentPanelModel;
   onOpenAgents: () => void;
+  boardItemsByTurnId: ReadonlyMap<
+    TurnId,
+    ReadonlyArray<Pick<ProjectBoardItem, "id" | "title" | "status">>
+  >;
 }
 
 interface TimelineRowActivityState {
@@ -241,6 +250,11 @@ interface MessagesTimelineProps {
   topFadeEnabled?: boolean;
   /** Non-null when older turns exist beyond the loaded window. */
   loadEarlier?: { readonly loading: boolean; readonly onLoadEarlier: () => void } | null;
+  /** Board cards indexed by linked turn id for timeline badges. */
+  boardItemsByTurnId?: ReadonlyMap<
+    TurnId,
+    ReadonlyArray<Pick<ProjectBoardItem, "id" | "title" | "status">>
+  >;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +294,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
   loadEarlier = null,
+  boardItemsByTurnId = EMPTY_BOARD_ITEMS_BY_TURN_ID,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -517,6 +532,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
+      boardItemsByTurnId,
     }),
     [
       timestampFormat,
@@ -533,6 +549,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onToggleWorkGroup,
       agentPanelModel,
       onOpenAgents,
+      boardItemsByTurnId,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -958,6 +975,26 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
   );
 });
 
+function BoardTurnBadges({ turnId }: { turnId: TurnId | null | undefined }) {
+  const ctx = use(TimelineRowCtx);
+  if (!turnId) return null;
+  const items = ctx.boardItemsByTurnId.get(turnId);
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="mb-1.5 flex max-w-full flex-wrap gap-1">
+      {items.map((item) => (
+        <span
+          key={item.id}
+          className="inline-flex max-w-full items-center truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+          title={item.title}
+        >
+          Board · {item.title}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
@@ -976,13 +1013,32 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     ...displayedUserMessage.elementContexts,
     ...elementContextState.contexts,
   ];
-  const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
-  const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
+  const previewImages = userImages.filter(
+    (image) => image.type === "image" && image.name.startsWith("preview-annotation-"),
+  );
+  const regularImages = userImages.filter(
+    (image) => image.type === "image" && !image.name.startsWith("preview-annotation-"),
+  );
+  const regularFiles = userImages.filter((attachment) => attachment.type === "file");
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
 
   return (
     <div className="group flex flex-col items-end gap-1">
       <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
+        <BoardTurnBadges turnId={row.message.turnId} />
+        {regularFiles.length > 0 ? (
+          <div className="mb-2 flex max-w-[420px] flex-col gap-1.5">
+            {regularFiles.map((file) => (
+              <div
+                key={file.id}
+                className="flex items-center gap-2 rounded-lg border border-border/80 bg-background/70 px-2.5 py-2 text-left text-[12px]"
+              >
+                <span className="truncate font-medium text-foreground">{file.name}</span>
+                <span className="shrink-0 text-secondary-label">{file.mimeType}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {regularImages.length > 0 && (
           <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
             {regularImages.map((image: NonNullable<TimelineMessage["attachments"]>[number]) => (
@@ -996,7 +1052,10 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                     className="h-full w-full cursor-zoom-in"
                     aria-label={`Preview ${image.name}`}
                     onClick={() => {
-                      const preview = buildExpandedImagePreview(regularImages, image.id);
+                      const preview = buildExpandedImagePreview(
+                        regularImages.filter((item) => item.type === "image"),
+                        image.id,
+                      );
                       if (!preview) return;
                       ctx.onImageExpand(preview);
                     }}
@@ -1114,6 +1173,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
+        <BoardTurnBadges turnId={row.message.turnId} />
         <ChatMarkdown
           text={messageText}
           cwd={ctx.markdownCwd}

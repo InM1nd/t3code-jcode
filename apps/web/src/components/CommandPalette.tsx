@@ -37,6 +37,7 @@ import {
   ListTodoIcon,
   MessageSquareIcon,
   PaletteIcon,
+  PaperclipIcon,
   SettingsIcon,
   SquarePenIcon,
   TextSearchIcon,
@@ -69,6 +70,8 @@ import { sourceControlEnvironment } from "../state/sourceControl";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
+import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { useProjects, useThreadShells } from "../state/entities";
 import { useThreadSearch } from "../state/queries";
 import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
@@ -555,6 +558,7 @@ function OpenCommandPaletteDialog(props: {
   readonly clearOpenIntent: () => void;
 }) {
   const navigate = useNavigate();
+  const composerHandleRef = useComposerHandleContext();
   const { clearOpenIntent, openIntent, openOverlayMode, setOpen } = props;
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -1504,6 +1508,29 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:attach-composer-images",
+    searchTerms: [
+      "attach",
+      "image",
+      "images",
+      "photo",
+      "upload",
+      "file",
+      "files",
+      "pdf",
+      "paperclip",
+    ],
+    title: "Attach files",
+    disabled: activeThread == null && activeDraftThread == null,
+    icon: <PaperclipIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "composer.attachImages",
+    run: async () => {
+      composerHandleRef?.current?.openImagePicker();
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:toggle-project-board",
     searchTerms: ["board", "project board", "todos", "checklist", "tasks"],
     title: "Toggle project board",
@@ -1513,6 +1540,36 @@ function OpenCommandPaletteDialog(props: {
     run: async () => {
       if (!boardThreadRef) return;
       useRightPanelStore.getState().toggle(boardThreadRef, "board");
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:insert-project-board-digest",
+    searchTerms: ["board", "digest", "summary", "todos", "status", "project board"],
+    title: "Insert project board digest",
+    disabled: activeThread == null && activeDraftThread == null,
+    icon: <ListTodoIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      const environmentId = activeThread?.environmentId ?? activeDraftThread?.environmentId ?? null;
+      const projectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
+      if (!environmentId || !projectId) return;
+      const project = projects.find(
+        (entry) => entry.id === projectId && entry.environmentId === environmentId,
+      );
+      const digest = formatProjectBoardDigest(project?.boardItems ?? []);
+      const draftSession = useComposerDraftStore
+        .getState()
+        .getDraftSessionByProjectRef(scopeProjectRef(environmentId, projectId));
+      const composerTarget =
+        activeThread != null
+          ? scopeThreadRef(activeThread.environmentId, activeThread.id)
+          : (draftSession?.draftId ?? null);
+      if (!composerTarget) return;
+      const existing =
+        useComposerDraftStore.getState().getComposerDraft(composerTarget)?.prompt ?? "";
+      const nextPrompt = existing.trim().length > 0 ? `${existing.trim()}\n\n${digest}` : digest;
+      useComposerDraftStore.getState().setPrompt(composerTarget, nextPrompt);
     },
   });
 

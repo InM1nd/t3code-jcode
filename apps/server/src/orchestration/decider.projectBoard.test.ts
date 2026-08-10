@@ -4,6 +4,7 @@ import {
   PROJECT_BOARD_ITEM_LIMIT,
   ProjectBoardItemId,
   ProjectId,
+  TurnId,
 } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -193,6 +194,52 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
       }).pipe(Effect.flip);
 
       expect(error._tag).toBe("OrchestrationCommandInvariantError");
+    }),
+  );
+
+  it.effect("appends linkTurnId onto a board item", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const projectId = asProjectId("project-board-link-turn");
+      let readModel = yield* projectEvent(
+        createEmptyReadModel(now),
+        createProjectEvent({ sequence: 1, projectId, now }),
+      );
+
+      const created = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.upsert",
+          commandId: CommandId.make("cmd-board-create-link"),
+          projectId,
+          itemId: asItemId("item-1"),
+          title: "Linked work",
+          status: "inProgress",
+        },
+        readModel,
+      });
+      const createdEvent = Array.isArray(created) ? created[0] : created;
+      if (!createdEvent || createdEvent.type !== "project.board-item-upserted") {
+        throw new Error("expected create event");
+      }
+      readModel = yield* projectEvent(readModel, createdEvent);
+
+      const linked = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.upsert",
+          commandId: CommandId.make("cmd-board-link"),
+          projectId,
+          itemId: asItemId("item-1"),
+          title: "Linked work",
+          status: "inProgress",
+          linkTurnId: TurnId.make("turn-1"),
+        },
+        readModel,
+      });
+      const linkedEvent = Array.isArray(linked) ? linked[0] : linked;
+      if (!linkedEvent || linkedEvent.type !== "project.board-item-upserted") {
+        throw new Error("expected link event");
+      }
+      expect(linkedEvent.payload.item.linkedTurnIds).toEqual([TurnId.make("turn-1")]);
     }),
   );
 

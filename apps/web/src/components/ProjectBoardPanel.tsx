@@ -1,41 +1,57 @@
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectBoardItem, ProjectId } from "@t3tools/contracts";
-import { ChevronDown, ChevronRight, ListTodo, X } from "lucide-react";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentId, ProjectBoardItem, ProjectId, ThreadId } from "@t3tools/contracts";
+import { useRouter } from "@tanstack/react-router";
+import { ChevronDown, ChevronRight, ListTodo, Play, X } from "lucide-react";
 import { useCallback, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { projectEnvironment } from "~/state/projects";
-import { useProject } from "~/state/entities";
+import { readThreadShell, useProject } from "~/state/entities";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { DraftId, useComposerDraftStore } from "~/composerDraftStore";
+import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
+import { markBoardItemAwaitingTurnLink } from "~/lib/boardTurnLinkPending";
 import { cn, newProjectBoardItemId } from "~/lib/utils";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { Input } from "~/components/ui/input";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+
+import {
+  buildBoardImplementPrompt,
+  findDraftIdForThread,
+  nextProjectBoardItemStatus,
+  partitionProjectBoardItems,
+  projectBoardStatusLabel,
+} from "./ProjectBoardPanel.logic";
 
 interface ProjectBoardPanelProps {
   environmentId: EnvironmentId;
   projectId: ProjectId;
 }
 
-function isOpenStatus(status: ProjectBoardItem["status"]): boolean {
-  return status === "pending" || status === "inProgress";
-}
-
 function BoardItemRow({
   item,
-  onToggle,
+  onToggleDone,
+  onCycleStatus,
   onDelete,
+  onImplement,
+  onOpenLinkedThread,
 }: {
   item: ProjectBoardItem;
-  onToggle: (item: ProjectBoardItem) => void;
+  onToggleDone: (item: ProjectBoardItem) => void;
+  onCycleStatus: (item: ProjectBoardItem) => void;
   onDelete: (item: ProjectBoardItem) => void;
+  onImplement: (item: ProjectBoardItem) => void;
+  onOpenLinkedThread: (threadId: ThreadId) => void;
 }) {
   const completed = item.status === "completed";
+  const linkedThreadId = item.sourceThreadId ?? null;
   return (
     <div className="group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-accent/50">
       <Checkbox
         checked={completed}
-        onCheckedChange={() => onToggle(item)}
+        onCheckedChange={() => onToggleDone(item)}
         className="mt-0.5"
         aria-label={completed ? `Mark "${item.title}" open` : `Mark "${item.title}" done`}
       />
@@ -49,6 +65,19 @@ function BoardItemRow({
           >
             {item.title}
           </span>
+          <button
+            type="button"
+            onClick={() => onCycleStatus(item)}
+            className={cn(
+              "shrink-0 cursor-pointer rounded px-1 py-px text-[10px] font-medium uppercase tracking-wide",
+              item.status === "inProgress"
+                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+            aria-label={`Cycle status for "${item.title}" (currently ${projectBoardStatusLabel(item.status)})`}
+          >
+            {projectBoardStatusLabel(item.status)}
+          </button>
           {item.source === "agent" ? (
             <span className="shrink-0 rounded bg-muted px-1 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               agent
@@ -58,7 +87,43 @@ function BoardItemRow({
         {item.notes ? (
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.notes}</p>
         ) : null}
+        {(linkedThreadId || (item.linkedTurnIds?.length ?? 0) > 0) && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+            {(item.linkedTurnIds?.length ?? 0) > 0 ? (
+              <span>
+                {item.linkedTurnIds?.length} linked turn
+                {item.linkedTurnIds?.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+            {linkedThreadId ? (
+              <button
+                type="button"
+                onClick={() => onOpenLinkedThread(linkedThreadId)}
+                className="cursor-pointer underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Open linked thread
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
+      {!completed ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={() => onImplement(item)}
+                className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                aria-label={`Implement "${item.title}" in a new thread`}
+              >
+                <Play className="size-3" />
+              </button>
+            }
+          />
+          <TooltipPopup side="top">Implement in new thread</TooltipPopup>
+        </Tooltip>
+      ) : null}
       <button
         type="button"
         onClick={() => onDelete(item)}
@@ -71,25 +136,92 @@ function BoardItemRow({
   );
 }
 
+function BoardSection({
+  title,
+  items,
+  emptyLabel,
+  onToggleDone,
+  onCycleStatus,
+  onDelete,
+  onImplement,
+  onOpenLinkedThread,
+}: {
+  title: string;
+  items: ProjectBoardItem[];
+  emptyLabel?: string;
+  onToggleDone: (item: ProjectBoardItem) => void;
+  onCycleStatus: (item: ProjectBoardItem) => void;
+  onDelete: (item: ProjectBoardItem) => void;
+  onImplement: (item: ProjectBoardItem) => void;
+  onOpenLinkedThread: (threadId: ThreadId) => void;
+}) {
+  return (
+    <section>
+      <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+        {title}
+        {items.length > 0 ? (
+          <span className="ml-1 tabular-nums text-muted-foreground/70">{items.length}</span>
+        ) : null}
+      </div>
+      {items.length === 0 ? (
+        emptyLabel ? (
+          <p className="px-1.5 py-2 text-xs text-muted-foreground">{emptyLabel}</p>
+        ) : null
+      ) : (
+        items.map((item) => (
+          <BoardItemRow
+            key={item.id}
+            item={item}
+            onToggleDone={onToggleDone}
+            onCycleStatus={onCycleStatus}
+            onDelete={onDelete}
+            onImplement={onImplement}
+            onOpenLinkedThread={onOpenLinkedThread}
+          />
+        ))
+      )}
+    </section>
+  );
+}
+
 export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPanelProps) {
   const project = useProject(scopeProjectRef(environmentId, projectId));
   const upsertBoardItem = useAtomCommand(projectEnvironment.upsertBoardItem);
   const deleteBoardItem = useAtomCommand(projectEnvironment.deleteBoardItem);
+  const handleNewThread = useNewThreadHandler();
+  const router = useRouter();
   const [draftTitle, setDraftTitle] = useState("");
   const [doneOpen, setDoneOpen] = useState(false);
+  const [implementingId, setImplementingId] = useState<string | null>(null);
 
   const boardItems = project?.boardItems ?? [];
-  const { openItems, doneItems } = useMemo(() => {
-    const open: ProjectBoardItem[] = [];
-    const done: ProjectBoardItem[] = [];
-    for (const item of boardItems) {
-      if (isOpenStatus(item.status)) open.push(item);
-      else done.push(item);
-    }
-    open.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    done.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return { openItems: open, doneItems: done };
-  }, [boardItems]);
+  const { inProgressItems, pendingItems, doneItems } = useMemo(
+    () => partitionProjectBoardItems(boardItems),
+    [boardItems],
+  );
+
+  const upsertItemStatus = useCallback(
+    async (
+      item: ProjectBoardItem,
+      status: ProjectBoardItem["status"],
+      sourceThreadId?: ThreadId | null,
+    ) => {
+      await upsertBoardItem({
+        environmentId,
+        input: {
+          projectId,
+          itemId: item.id,
+          title: item.title,
+          status,
+          ...(item.notes !== undefined ? { notes: item.notes } : {}),
+          source: item.source,
+          sourceThreadId:
+            sourceThreadId !== undefined ? sourceThreadId : (item.sourceThreadId ?? null),
+        },
+      });
+    },
+    [environmentId, projectId, upsertBoardItem],
+  );
 
   const submitDraft = useCallback(async () => {
     const title = draftTitle.trim();
@@ -107,22 +239,18 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
     });
   }, [draftTitle, environmentId, project, projectId, upsertBoardItem]);
 
-  const onToggle = useCallback(
+  const onToggleDone = useCallback(
     async (item: ProjectBoardItem) => {
-      await upsertBoardItem({
-        environmentId,
-        input: {
-          projectId,
-          itemId: item.id,
-          title: item.title,
-          status: item.status === "completed" ? "pending" : "completed",
-          ...(item.notes !== undefined ? { notes: item.notes } : {}),
-          source: item.source,
-          ...(item.sourceThreadId !== undefined ? { sourceThreadId: item.sourceThreadId } : {}),
-        },
-      });
+      await upsertItemStatus(item, item.status === "completed" ? "pending" : "completed");
     },
-    [environmentId, projectId, upsertBoardItem],
+    [upsertItemStatus],
+  );
+
+  const onCycleStatus = useCallback(
+    async (item: ProjectBoardItem) => {
+      await upsertItemStatus(item, nextProjectBoardItemStatus(item.status));
+    },
+    [upsertItemStatus],
   );
 
   const onDelete = useCallback(
@@ -133,6 +261,89 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
       });
     },
     [deleteBoardItem, environmentId, projectId],
+  );
+
+  const resolveDraftIdForThread = useCallback(
+    (threadId: ThreadId) =>
+      findDraftIdForThread({
+        draftThreadsByThreadKey: useComposerDraftStore.getState().draftThreadsByThreadKey,
+        environmentId,
+        threadId,
+      }),
+    [environmentId],
+  );
+
+  const onOpenLinkedThread = useCallback(
+    (threadId: ThreadId) => {
+      const threadRef = scopeThreadRef(environmentId, threadId);
+      if (readThreadShell(threadRef)) {
+        void router.navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId, threadId },
+        });
+        return;
+      }
+      const draftId = resolveDraftIdForThread(threadId);
+      if (draftId) {
+        void router.navigate({
+          to: "/draft/$draftId",
+          params: { draftId },
+        });
+      }
+    },
+    [environmentId, resolveDraftIdForThread, router],
+  );
+
+  const onImplement = useCallback(
+    async (item: ProjectBoardItem) => {
+      if (implementingId) return;
+      setImplementingId(item.id);
+      try {
+        if (item.sourceThreadId) {
+          const threadRef = scopeThreadRef(environmentId, item.sourceThreadId);
+          if (readThreadShell(threadRef)) {
+            await upsertItemStatus(item, "inProgress", item.sourceThreadId);
+            markBoardItemAwaitingTurnLink(item.sourceThreadId, item.id);
+            await router.navigate({
+              to: "/$environmentId/$threadId",
+              params: { environmentId, threadId: item.sourceThreadId },
+            });
+            return;
+          }
+          const draftId = resolveDraftIdForThread(item.sourceThreadId);
+          if (draftId) {
+            await upsertItemStatus(item, "inProgress", item.sourceThreadId);
+            markBoardItemAwaitingTurnLink(item.sourceThreadId, item.id);
+            useComposerDraftStore
+              .getState()
+              .setPrompt(DraftId.make(draftId), buildBoardImplementPrompt(item));
+            await router.navigate({
+              to: "/draft/$draftId",
+              params: { draftId },
+            });
+            return;
+          }
+        }
+
+        const created = await handleNewThread(scopeProjectRef(environmentId, projectId), {
+          seedPrompt: buildBoardImplementPrompt(item),
+        });
+        if (!created) return;
+        await upsertItemStatus(item, "inProgress", created.threadId);
+        markBoardItemAwaitingTurnLink(created.threadId, item.id);
+      } finally {
+        setImplementingId(null);
+      }
+    },
+    [
+      environmentId,
+      handleNewThread,
+      implementingId,
+      projectId,
+      resolveDraftIdForThread,
+      router,
+      upsertItemStatus,
+    ],
   );
 
   const onDraftKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -158,7 +369,16 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
     );
   }
 
-  const isEmpty = openItems.length === 0 && doneItems.length === 0;
+  const isEmpty =
+    inProgressItems.length === 0 && pendingItems.length === 0 && doneItems.length === 0;
+
+  const rowHandlers = {
+    onToggleDone,
+    onCycleStatus,
+    onDelete,
+    onImplement,
+    onOpenLinkedThread,
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -188,29 +408,24 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
           <ListTodo aria-hidden className="size-6 text-muted-foreground/60" />
           <p className="text-sm font-medium">No board items</p>
           <p className="max-w-56 text-xs text-muted-foreground">
-            Track project todos here. Agents can add items too.
+            Track project todos here. Use Implement to start a thread from an item.
           </p>
         </div>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-3 p-2">
-            <section>
-              <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-                Open
-                {openItems.length > 0 ? (
-                  <span className="ml-1 tabular-nums text-muted-foreground/70">
-                    {openItems.length}
-                  </span>
-                ) : null}
-              </div>
-              {openItems.length === 0 ? (
-                <p className="px-1.5 py-2 text-xs text-muted-foreground">Nothing open</p>
-              ) : (
-                openItems.map((item) => (
-                  <BoardItemRow key={item.id} item={item} onToggle={onToggle} onDelete={onDelete} />
-                ))
-              )}
-            </section>
+            <BoardSection
+              title="In progress"
+              items={inProgressItems}
+              {...(pendingItems.length > 0 ? { emptyLabel: "Nothing in progress" } : {})}
+              {...rowHandlers}
+            />
+            <BoardSection
+              title="Pending"
+              items={pendingItems}
+              {...(inProgressItems.length > 0 ? { emptyLabel: "Nothing pending" } : {})}
+              {...rowHandlers}
+            />
             {doneItems.length > 0 ? (
               <Collapsible open={doneOpen} onOpenChange={setDoneOpen}>
                 <CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground hover:bg-accent/50 hover:text-foreground">
@@ -226,12 +441,7 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
                 </CollapsibleTrigger>
                 <CollapsiblePanel>
                   {doneItems.map((item) => (
-                    <BoardItemRow
-                      key={item.id}
-                      item={item}
-                      onToggle={onToggle}
-                      onDelete={onDelete}
-                    />
+                    <BoardItemRow key={item.id} item={item} {...rowHandlers} />
                   ))}
                 </CollapsiblePanel>
               </Collapsible>

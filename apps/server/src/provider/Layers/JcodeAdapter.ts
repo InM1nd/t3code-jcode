@@ -833,7 +833,7 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
 
               const text = input.input?.trim();
               const imagePromptParts = yield* Effect.forEach(
-                input.attachments ?? [],
+                (input.attachments ?? []).filter((attachment) => attachment.type === "image"),
                 (attachment) =>
                   Effect.gen(function* () {
                     const attachmentPath = resolveAttachmentPath({

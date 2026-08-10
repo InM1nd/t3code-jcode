@@ -68,6 +68,7 @@ const STATIC_KEYBINDING_COMMANDS = [
   "projectSearch.toggle",
   "themeEditor.toggle",
   "composer.stash",
+  "composer.attachImages",
   "chat.new",
   "chat.newLocal",
   "editor.openFavorite",
