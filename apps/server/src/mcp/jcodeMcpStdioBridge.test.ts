@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseHttpMcpResponseBody } from "./jcodeMcpStdioBridge.ts";
+import { buildMcpHttpHeaders, parseHttpMcpResponseBody } from "./jcodeMcpStdioBridge.ts";
 
 describe("parseHttpMcpResponseBody", () => {
   it("parses application/json bodies", () => {
@@ -23,6 +23,29 @@ describe("parseHttpMcpResponseBody", () => {
       jsonrpc: "2.0",
       id: 2,
       result: { tools: [] },
+    });
+  });
+});
+
+describe("buildMcpHttpHeaders", () => {
+  it("omits session and protocol headers before initialize completes", () => {
+    expect(buildMcpHttpHeaders({ authorization: "Bearer t" })).toEqual({
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+      authorization: "Bearer t",
+    });
+  });
+
+  it("sends mcp-protocol-version once negotiated so notifications are not rejected", () => {
+    expect(
+      buildMcpHttpHeaders({
+        authorization: "Bearer t",
+        sessionId: "sess-1",
+        protocolVersion: "2025-06-18",
+      }),
+    ).toMatchObject({
+      "mcp-session-id": "sess-1",
+      "mcp-protocol-version": "2025-06-18",
     });
   });
 });

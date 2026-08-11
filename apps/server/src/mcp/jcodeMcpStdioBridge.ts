@@ -81,8 +81,34 @@ export function parseHttpMcpResponseBody(body: string, contentType: string | nul
   throw new Error("Could not parse MCP HTTP response as JSON or SSE.");
 }
 
+/**
+ * Headers for every POST to T3's `/mcp`. The `mcp-protocol-version` header is
+ * required on all post-initialize requests; omitting it makes the server reject
+ * `notifications/initialized` with a bodyless 400, which used to kill the whole
+ * bridge before jcode ever saw a tool.
+ */
+export function buildMcpHttpHeaders(input: {
+  readonly authorization: string;
+  readonly sessionId?: string | undefined;
+  readonly protocolVersion?: string | undefined;
+}): Record<string, string> {
+  const headers: Record<string, string> = {
+    accept: "application/json, text/event-stream",
+    "content-type": "application/json",
+    authorization: input.authorization,
+  };
+  if (input.sessionId) {
+    headers["mcp-session-id"] = input.sessionId;
+  }
+  if (input.protocolVersion) {
+    headers["mcp-protocol-version"] = input.protocolVersion;
+  }
+  return headers;
+}
+
 class HttpMcpProxy {
   #sessionId: string | undefined;
+  #negotiatedProtocolVersion: string | undefined;
   #nextId = 1;
   readonly endpoint: string;
   readonly authorization: string;
@@ -106,6 +132,15 @@ class HttpMcpProxy {
     if (response.error) {
       throw new Error(`MCP initialize failed: ${JSON.stringify(response.error)}`);
     }
+    const result = response.result;
+    const negotiated =
+      typeof result === "object" && result !== null && "protocolVersion" in result
+        ? (result as { readonly protocolVersion?: unknown }).protocolVersion
+        : undefined;
+    this.#negotiatedProtocolVersion =
+      typeof negotiated === "string" && negotiated.length > 0
+        ? negotiated
+        : PROTOCOL_VERSION_FOR_HTTP;
     await this.#postNotification({
       jsonrpc: "2.0",
       method: "notifications/initialized",
@@ -126,14 +161,11 @@ class HttpMcpProxy {
   }
 
   async #post(payload: JsonRpcMessage): Promise<JsonRpcMessage> {
-    const headers: Record<string, string> = {
-      accept: "application/json, text/event-stream",
-      "content-type": "application/json",
+    const headers = buildMcpHttpHeaders({
       authorization: this.authorization,
-    };
-    if (this.#sessionId) {
-      headers["mcp-session-id"] = this.#sessionId;
-    }
+      sessionId: this.#sessionId,
+      protocolVersion: this.#negotiatedProtocolVersion,
+    });
 
     const res = await fetch(this.endpoint, {
       method: "POST",
@@ -159,23 +191,24 @@ class HttpMcpProxy {
   }
 
   async #postNotification(payload: JsonRpcMessage): Promise<void> {
-    const headers: Record<string, string> = {
-      accept: "application/json, text/event-stream",
-      "content-type": "application/json",
+    const headers = buildMcpHttpHeaders({
       authorization: this.authorization,
-    };
-    if (this.#sessionId) {
-      headers["mcp-session-id"] = this.#sessionId;
-    }
+      sessionId: this.#sessionId,
+      protocolVersion: this.#negotiatedProtocolVersion,
+    });
     const res = await fetch(this.endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
     });
-    // Some servers return 202/204 for notifications; ignore body.
+    // Some servers return 202/204 for notifications; ignore body. A rejected
+    // notification is never worth killing the bridge over: tool calls still
+    // work, so warn on stderr and keep serving jcode.
     if (!res.ok && res.status !== 202 && res.status !== 204) {
       const body = await res.text();
-      throw new Error(`MCP notification HTTP ${res.status}: ${body.slice(0, 400)}`);
+      process.stderr.write(
+        `t3 jcode MCP bridge: notification ${payload.method ?? "?"} returned HTTP ${res.status}: ${body.slice(0, 200)}\n`,
+      );
     }
   }
 }
