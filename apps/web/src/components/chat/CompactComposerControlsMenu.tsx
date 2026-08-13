@@ -10,13 +10,13 @@ import {
   MenuSeparator as MenuDivider,
   MenuTrigger,
 } from "../ui/menu";
+import { composerWorkModes, type ComposerWorkMode } from "./workModes";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
-  showInteractionModeToggle: boolean;
   traitsMenuContent?: ReactNode;
-  onToggleInteractionMode: () => void;
+  onInteractionModeChange: (mode: ComposerWorkMode) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   return (
@@ -40,22 +40,24 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             <MenuDivider />
           </>
         ) : null}
-        {props.showInteractionModeToggle ? (
-          <>
-            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
-            <MenuRadioGroup
-              value={props.interactionMode}
-              onValueChange={(value) => {
-                if (!value || value === props.interactionMode) return;
-                props.onToggleInteractionMode();
-              }}
-            >
-              <MenuRadioItem value="default">Chat</MenuRadioItem>
-              <MenuRadioItem value="plan">Plan</MenuRadioItem>
-            </MenuRadioGroup>
-            <MenuDivider />
-          </>
-        ) : null}
+        <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Work mode</div>
+        <MenuRadioGroup
+          value={props.interactionMode === "default" ? "build" : props.interactionMode}
+          onValueChange={(value) => {
+            if (!value || value === props.interactionMode) return;
+            props.onInteractionModeChange(value as ComposerWorkMode);
+          }}
+        >
+          {composerWorkModes.map((option) => (
+            <MenuRadioItem key={option.mode} value={option.mode}>
+              <div className="grid gap-0.5">
+                <span>{option.label}</span>
+                <span className="text-muted-foreground text-xs">{option.description}</span>
+              </div>
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+        <MenuDivider />
         <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
         <MenuRadioGroup
           value={props.runtimeMode}

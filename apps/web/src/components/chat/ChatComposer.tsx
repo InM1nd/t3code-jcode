@@ -93,6 +93,7 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import { composerWorkModeById, composerWorkModes, type ComposerWorkMode } from "./workModes";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
@@ -197,10 +198,8 @@ import { Select, SelectItem, SelectPopup, SelectValue } from "../ui/select";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import {
-  BotIcon,
   CircleAlertIcon,
   PaperclipIcon,
-  PencilRulerIcon,
   type LucideIcon,
   LockIcon,
   LockOpenIcon,
@@ -209,7 +208,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
-import { getProviderDisplayName, getProviderInteractionModeToggle } from "../../providerModels";
+import { getProviderDisplayName } from "../../providerModels";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -301,51 +300,16 @@ function isInsideComposerFloatingLayer(element: Element): boolean {
 }
 
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
-  showInteractionModeToggle: boolean;
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
-  onToggleInteractionMode: () => void;
+  onInteractionModeChange: (mode: ComposerWorkMode) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
   const RuntimeModeIcon = runtimeModeOption.icon;
-  const interactionModeTooltip =
-    props.interactionMode === "plan"
-      ? "Plan mode — click to return to normal build mode"
-      : "Default mode — click to enter plan mode";
-
-  const interactionModeToggle = props.showInteractionModeToggle ? (
-    <>
-      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <ComposerControl
-              className={cn(
-                "shrink-0 whitespace-nowrap",
-                props.interactionMode === "plan"
-                  ? "bg-accent text-accent-foreground hover:bg-accent/80"
-                  : "text-secondary-label hover:text-foreground",
-              )}
-              type="button"
-              onClick={props.onToggleInteractionMode}
-              aria-label={interactionModeTooltip}
-            />
-          }
-        >
-          {props.interactionMode === "plan" ? (
-            <ComposerControlIcon icon={PencilRulerIcon} className="text-current opacity-100" />
-          ) : (
-            <ComposerControlIcon icon={BotIcon} opticalSize="large" />
-          )}
-          <span className="sr-only sm:not-sr-only">
-            {props.interactionMode === "plan" ? "Plan" : "Build"}
-          </span>
-        </TooltipTrigger>
-        <TooltipPopup side="top">{interactionModeTooltip}</TooltipPopup>
-      </Tooltip>
-    </>
-  ) : null;
+  const currentWorkMode = props.interactionMode === "default" ? "build" : props.interactionMode;
+  const workModeOption = composerWorkModeById[currentWorkMode];
+  const WorkModeIcon = workModeOption.icon;
 
   return (
     <>
@@ -387,7 +351,43 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
         <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
       </Tooltip>
 
-      {interactionModeToggle}
+      <Tooltip>
+        <Select
+          value={currentWorkMode}
+          onValueChange={(value) => props.onInteractionModeChange(value as ComposerWorkMode)}
+        >
+          <TooltipTrigger
+            render={<ComposerSelectControl className="font-medium" aria-label="Work mode" />}
+          >
+            <ComposerControlIcon icon={WorkModeIcon} />
+            <SelectValue>{workModeOption.label}</SelectValue>
+          </TooltipTrigger>
+          <SelectPopup alignItemWithTrigger={false}>
+            {composerWorkModes.map((mode) => {
+              const ModeIcon = mode.icon;
+              return (
+                <SelectItem
+                  key={mode.mode}
+                  value={mode.mode}
+                  hideIndicator
+                  className="min-w-64 py-2"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ModeIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="grid min-w-0 gap-0.5">
+                      <span className="font-medium text-foreground">{mode.label}</span>
+                      <span className="text-muted-foreground text-xs leading-4">
+                        {mode.description}
+                      </span>
+                    </div>
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectPopup>
+        </Select>
+        <TooltipPopup side="top">{workModeOption.description}</TooltipPopup>
+      </Tooltip>
     </>
   );
 });
@@ -594,7 +594,6 @@ export interface ChatComposerProps {
 
   onProviderModelSelect: (instanceId: ProviderInstanceId, model: string) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
-  toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
 
@@ -666,7 +665,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onChangeActivePendingUserInputCustomAnswer,
     onProviderModelSelect,
     getModelDisabledReason,
-    toggleInteractionMode,
     handleRuntimeModeChange,
     handleInteractionModeChange,
     focusComposer,
@@ -883,17 +881,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const selectedPromptEffort = composerProviderState.promptEffort;
   const selectedModelOptionsForDispatch = composerProviderState.modelOptionsForDispatch;
-  // Plan mode is a legacy feature behind Settings → Beta. With the flag off,
-  // ChatView forces the effective mode to "default", so hiding the toggle
-  // can't trap anyone in plan mode.
-  const planModeUiEnabled = settings.planModeEnabled;
-  const composerProviderControls = useMemo(
-    () => ({
-      showInteractionModeToggle:
-        planModeUiEnabled && getProviderInteractionModeToggle(providerStatuses, selectedProvider),
-    }),
-    [planModeUiEnabled, providerStatuses, selectedProvider],
-  );
   const selectedModelSelection = useMemo<ModelSelection>(
     () => createModelSelection(selectedInstanceId, selectedModel, selectedModelOptionsForDispatch),
     [selectedInstanceId, selectedModel, selectedModelOptionsForDispatch],
@@ -1054,24 +1041,41 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           label: "/model",
           description: "Switch response model for this thread",
         },
-        ...(planModeUiEnabled
-          ? ([
-              {
-                id: "slash:plan",
-                type: "slash-command",
-                command: "plan",
-                label: "/plan",
-                description: "Switch this thread into plan mode",
-              },
-              {
-                id: "slash:default",
-                type: "slash-command",
-                command: "default",
-                label: "/default",
-                description: "Switch this thread back to normal build mode",
-              },
-            ] as const)
-          : []),
+        {
+          id: "slash:build",
+          type: "slash-command",
+          command: "build",
+          label: "/build",
+          description: "Switch this thread into build mode",
+        },
+        {
+          id: "slash:plan",
+          type: "slash-command",
+          command: "plan",
+          label: "/plan",
+          description: "Switch this thread into plan mode",
+        },
+        {
+          id: "slash:debug",
+          type: "slash-command",
+          command: "debug",
+          label: "/debug",
+          description: "Switch this thread into debug mode",
+        },
+        {
+          id: "slash:swarm",
+          type: "slash-command",
+          command: "swarm",
+          label: "/swarm",
+          description: "Switch this thread into Swarm Lite mode",
+        },
+        {
+          id: "slash:default",
+          type: "slash-command",
+          command: "default",
+          label: "/default",
+          description: "Alias for build mode",
+        },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
         (command) => ({
@@ -1106,13 +1110,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       );
     }
     return [];
-  }, [
-    composerTrigger,
-    planModeUiEnabled,
-    selectedProvider,
-    selectedProviderStatus,
-    workspaceEntries.entries,
-  ]);
+  }, [composerTrigger, selectedProvider, selectedProviderStatus, workspaceEntries.entries]);
 
   const composerMenuOpen = Boolean(composerTrigger);
   const composerMenuSearchKey = composerTrigger
@@ -1879,8 +1877,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     event: KeyboardEvent,
   ) => {
     if (key === "Tab" && event.shiftKey) {
-      if (!planModeUiEnabled) return false;
-      toggleInteractionMode();
+      handleInteractionModeChange(interactionMode === "plan" ? "build" : "plan");
       return true;
     }
     const { trigger } = resolveActiveComposerTrigger();
@@ -3246,9 +3243,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   <CompactComposerControlsMenu
                     interactionMode={interactionMode}
                     runtimeMode={runtimeMode}
-                    showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
                     traitsMenuContent={providerTraitsMenuContent}
-                    onToggleInteractionMode={toggleInteractionMode}
+                    onInteractionModeChange={handleInteractionModeChange}
                     onRuntimeModeChange={handleRuntimeModeChange}
                   />
                 ) : (
@@ -3260,10 +3256,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       </>
                     ) : null}
                     <ComposerFooterModeControls
-                      showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
                       interactionMode={interactionMode}
                       runtimeMode={runtimeMode}
-                      onToggleInteractionMode={toggleInteractionMode}
+                      onInteractionModeChange={handleInteractionModeChange}
                       onRuntimeModeChange={handleRuntimeModeChange}
                     />
                   </>

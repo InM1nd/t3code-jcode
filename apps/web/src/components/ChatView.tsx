@@ -116,6 +116,7 @@ import {
   type ChatMessage,
   type SessionPhase,
   type Thread,
+  normalizeInteractionMode,
   type TurnDiffSummary,
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
@@ -1498,13 +1499,9 @@ function ChatViewContent(props: ChatViewProps) {
     ? (localServerError ?? activeServerThread?.session?.lastError ?? null)
     : localDraftError;
   const runtimeMode = composerRuntimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
-  // Plan mode is legacy (Settings → Beta). With the flag off the effective
-  // mode is forced to "default" — even for threads with a stored plan mode —
-  // so nobody is trapped in plan mode while its toggle is hidden. The next
-  // send persists "default" back to the thread.
-  const interactionMode = settings.planModeEnabled
-    ? (composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE)
-    : DEFAULT_INTERACTION_MODE;
+  const interactionMode = normalizeInteractionMode(
+    composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE,
+  );
   const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
   const activeThreadId = activeThread?.id ?? null;
@@ -3221,10 +3218,11 @@ function ChatViewContent(props: ChatViewProps) {
 
   const handleInteractionModeChange = useCallback(
     (mode: ProviderInteractionMode) => {
-      if (mode === interactionMode) return;
-      setComposerDraftInteractionMode(composerDraftTarget, mode);
+      const nextMode = normalizeInteractionMode(mode);
+      if (nextMode === interactionMode) return;
+      setComposerDraftInteractionMode(composerDraftTarget, nextMode);
       if (isLocalDraftThread) {
-        setDraftThreadContext(composerDraftTarget, { interactionMode: mode });
+        setDraftThreadContext(composerDraftTarget, { interactionMode: nextMode });
       }
       scheduleComposerFocus();
     },
@@ -3237,9 +3235,6 @@ function ChatViewContent(props: ChatViewProps) {
       setDraftThreadContext,
     ],
   );
-  const toggleInteractionMode = useCallback(() => {
-    handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
-  }, [handleInteractionModeChange, interactionMode]);
   const createBrowserSurface = useCallback(() => {
     if (!activeThreadRef) return;
     void addBrowserSurface({ threadRef: activeThreadRef, openPreview });
@@ -4949,10 +4944,7 @@ function ChatViewContent(props: ChatViewProps) {
       });
       return;
     }
-    // Legacy plan mode: /plan and /default only act when the beta flag is on;
-    // otherwise they send as plain text like any other message.
     const standaloneSlashCommand =
-      settings.planModeEnabled &&
       composerImages.length === 0 &&
       sendableComposerTerminalContexts.length === 0 &&
       composerElementContexts.length === 0 &&
@@ -5473,7 +5465,7 @@ function ChatViewContent(props: ChatViewProps) {
       interactionMode: nextInteractionMode,
     }: {
       text: string;
-      interactionMode: "default" | "plan";
+      interactionMode: "build" | "plan";
     }) => {
       if (
         !activeThread ||
@@ -5579,7 +5571,7 @@ function ChatViewContent(props: ChatViewProps) {
             titleSeed: activeThread.title,
             runtimeMode,
             interactionMode: nextInteractionMode,
-            ...(nextInteractionMode === "default" && activeProposedPlan
+            ...(nextInteractionMode === "build" && activeProposedPlan
               ? {
                   sourceProposedPlan: {
                     threadId: activeThread.id,
@@ -5687,7 +5679,7 @@ function ChatViewContent(props: ChatViewProps) {
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode,
-        interactionMode: "default",
+        interactionMode: "build",
         branch: activeThreadBranch,
         worktreePath: activeThread.worktreePath,
         createdAt,
@@ -5710,7 +5702,7 @@ function ChatViewContent(props: ChatViewProps) {
           modelSelection: ctxSelectedModelSelection,
           titleSeed: nextThreadTitle,
           runtimeMode,
-          interactionMode: "default",
+          interactionMode: "build",
           sourceProposedPlan: {
             threadId: activeThread.id,
             planId: activeProposedPlan.id,
@@ -6323,7 +6315,6 @@ function ChatViewContent(props: ChatViewProps) {
                             }
                             onProviderModelSelect={onProviderModelSelect}
                             getModelDisabledReason={getModelDisabledReason}
-                            toggleInteractionMode={toggleInteractionMode}
                             handleRuntimeModeChange={handleRuntimeModeChange}
                             handleInteractionModeChange={handleInteractionModeChange}
                             focusComposer={focusComposer}
