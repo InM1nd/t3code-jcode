@@ -2,6 +2,7 @@ import {
   CommandId,
   ProjectBoardItemId,
   type ProjectBoardItem,
+  type ProjectBoardBrief,
   type ProjectBoardItemStatus,
   type ProjectId,
   type TurnId,
@@ -112,6 +113,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
   readonly title: string;
   readonly status: ProjectBoardItemStatus;
   readonly notes?: string | null | undefined;
+  readonly brief?: ProjectBoardBrief | null | undefined;
   readonly sourceThreadId: McpInvocationContext.McpInvocationScope["threadId"];
   readonly linkTurnId?: TurnId | null | undefined;
 }) {
@@ -125,6 +127,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
       title: input.title,
       status: input.status,
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.brief !== undefined ? { brief: input.brief } : {}),
       source: "agent",
       sourceThreadId: input.sourceThreadId,
       ...(input.linkTurnId ? { linkTurnId: input.linkTurnId } : {}),
@@ -167,11 +170,26 @@ const handlers = {
       };
     }),
 
+  board_get_brief: (input: { readonly itemId: ProjectBoardItemId }) =>
+    Effect.gen(function* () {
+      const scope = yield* requireBoardScope();
+      const projectId = yield* resolveProjectId(scope.threadId);
+      const project = yield* loadBoard(projectId);
+      const item = (project.boardItems ?? []).find((entry) => entry.id === input.itemId) ?? null;
+      if (!item) {
+        return yield* new BoardToolError({
+          message: `Board item '${input.itemId}' was not found.`,
+        });
+      }
+      return { projectId, item };
+    }),
+
   board_upsert: (input: {
     readonly itemId?: ProjectBoardItemId | undefined;
     readonly title: string;
     readonly status: ProjectBoardItemStatus;
     readonly notes?: string | null | undefined;
+    readonly brief?: ProjectBoardBrief | null | undefined;
   }) =>
     Effect.gen(function* () {
       const scope = yield* requireBoardScope();
@@ -184,6 +202,7 @@ const handlers = {
         title: input.title,
         status: input.status,
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(input.brief !== undefined ? { brief: input.brief } : {}),
         sourceThreadId: scope.threadId,
         linkTurnId,
       });
@@ -191,6 +210,41 @@ const handlers = {
       const item =
         (project.boardItems ?? []).find((entry: ProjectBoardItem) => entry.id === itemId) ?? null;
       return { projectId, item };
+    }),
+
+  board_handoff: (input: {
+    readonly itemId: ProjectBoardItemId;
+    readonly summary: string;
+    readonly decisions?: ReadonlyArray<string> | undefined;
+    readonly nextStep: string;
+  }) =>
+    Effect.gen(function* () {
+      const scope = yield* requireBoardScope();
+      const projectId = yield* resolveProjectId(scope.threadId);
+      const project = yield* loadBoard(projectId);
+      if (!(project.boardItems ?? []).some((item) => item.id === input.itemId)) {
+        return yield* new BoardToolError({
+          message: `Board item '${input.itemId}' was not found.`,
+        });
+      }
+      const engine = yield* OrchestrationEngineService;
+      yield* engine
+        .dispatch({
+          type: "project.board.item.handoff.append",
+          commandId: yield* nextCommandId(),
+          projectId,
+          itemId: input.itemId,
+          sourceThreadId: scope.threadId,
+          summary: input.summary,
+          decisions: input.decisions ?? [],
+          nextStep: input.nextStep,
+        })
+        .pipe(Effect.mapError((error) => new BoardToolError({ message: errorMessage(error) })));
+      const next = yield* loadBoard(projectId);
+      return {
+        projectId,
+        item: (next.boardItems ?? []).find((item) => item.id === input.itemId) ?? null,
+      };
     }),
 
   board_set_status: (input: {

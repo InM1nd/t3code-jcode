@@ -106,8 +106,17 @@ describe("DesktopEnvironment", () => {
       );
       const production = yield* makeEnvironment();
 
-      assert.equal(development.stateDir, "/Users/alice/.t3/dev");
-      assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(development.stateDir, "/Users/alice/.t3-jcode/dev");
+      assert.equal(production.stateDir, "/Users/alice/.t3-jcode/userdata");
+    }),
+  );
+
+  it.effect("isolates packaged fork state from the upstream desktop app", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment();
+
+      assert.equal(environment.baseDir, "/Users/alice/.t3-jcode");
+      assert.equal(environment.userDataDirName, "t3code-jcodefork");
     }),
   );
 

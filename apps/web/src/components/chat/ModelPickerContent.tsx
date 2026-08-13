@@ -87,10 +87,16 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
    * model set but are free to diverge via customModels).
    */
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>>;
+  jcodeInnerProvider?: string | null | undefined;
+  onJcodeInnerProviderChange?: (instanceId: ProviderInstanceId, provider: string) => void;
   terminalOpen: boolean;
   onRequestClose?: () => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
-  onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
+  onInstanceModelChange: (
+    instanceId: ProviderInstanceId,
+    model: string,
+    jcodeProvider?: string,
+  ) => void;
 }) {
   const {
     keybindings: providedKeybindings,
@@ -265,6 +271,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     return [...available, ...disabled];
   }, [instanceEntries, isLocked, matchesLockedProvider]);
   const showSidebar = !isSearching && sidebarInstanceEntries.length > 0;
+  const selectedEntry =
+    selectedInstanceId === "favorites" ? null : (entryByInstanceId.get(selectedInstanceId) ?? null);
+  const showJcodeProviderPicker =
+    selectedEntry?.driverKind === "jcode" && props.onJcodeInnerProviderChange !== undefined;
   const instanceOrder = useMemo(
     () => instanceEntries.map((entry) => entry.instanceId),
     [instanceEntries],
@@ -433,10 +443,20 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       // normalization rules, so pass the driver kind here.
       const resolvedModel = resolveSelectableModel(entry.driverKind, modelSlug, options);
       if (resolvedModel) {
-        onInstanceModelChange(instanceId, resolvedModel);
+        onInstanceModelChange(
+          instanceId,
+          resolvedModel,
+          entry.driverKind === "jcode" ? (props.jcodeInnerProvider ?? undefined) : undefined,
+        );
       }
     },
-    [entryByInstanceId, getModelDisabledReason, modelOptionsByInstance, onInstanceModelChange],
+    [
+      entryByInstanceId,
+      getModelDisabledReason,
+      modelOptionsByInstance,
+      onInstanceModelChange,
+      props.jcodeInnerProvider,
+    ],
   );
 
   const toggleFavorite = useCallback(
@@ -658,6 +678,33 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               showSidebar && "border-l border-border/70",
             )}
           >
+            {showJcodeProviderPicker ? (
+              <div className="flex items-center gap-1 border-b border-border/70 px-3 py-2">
+                <span className="mr-1 text-xs text-muted-foreground">Jcode via</span>
+                {[
+                  ["claude", "Claude"],
+                  ["cursor", "Cursor"],
+                  ["openai", "Codex"],
+                ].map(([provider, label]) => (
+                  <button
+                    key={provider}
+                    type="button"
+                    className={cn(
+                      "rounded px-2 py-1 text-xs transition-colors hover:bg-muted",
+                      props.jcodeInnerProvider === provider &&
+                        "bg-muted font-medium text-foreground",
+                    )}
+                    onClick={() => {
+                      if (selectedEntry && provider) {
+                        props.onJcodeInnerProviderChange?.(selectedEntry.instanceId, provider);
+                      }
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {/* Search bar */}
             <div className="px-2 pt-2">
               <div className="border-b border-border/70 pb-2.5 transition-colors focus-within:border-ring">

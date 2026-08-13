@@ -9,6 +9,7 @@ import {
   OrchestrationCommand,
   OrchestrationEvent,
   OrchestrationGetFullThreadDiffInput,
+  OrchestrationGetProjectActivityResult,
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
   ProjectCreatedPayload,
@@ -28,6 +29,9 @@ import { ProviderInstanceId } from "./providerInstance.ts";
 
 const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput);
 const decodeFullThreadDiffInput = Schema.decodeUnknownEffect(OrchestrationGetFullThreadDiffInput);
+const decodeProjectActivityResult = Schema.decodeUnknownEffect(
+  OrchestrationGetProjectActivityResult,
+);
 const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
 const decodeProjectCreateCommand = Schema.decodeUnknownEffect(ProjectCreateCommand);
 const decodeProjectCreatedPayload = Schema.decodeUnknownEffect(ProjectCreatedPayload);
@@ -86,6 +90,55 @@ it.effect("parses full thread diff input with whitespace ignoring enabled", () =
       ignoreWhitespace: true,
     });
     assert.strictEqual(parsed.ignoreWhitespace, true);
+  }),
+);
+
+it.effect("decodes project activity timeline item variants", () =>
+  Effect.gen(function* () {
+    const result = yield* decodeProjectActivityResult({
+      throughSequence: 42,
+      items: [
+        {
+          id: "event-thread",
+          kind: "thread-created",
+          occurredAt: "2026-08-11T08:00:00.000Z",
+          threadId: "thread-1",
+          threadTitle: "Add activity timeline",
+          modelSelection: { instanceId: "jcode", model: "gpt-5.2" },
+        },
+        {
+          id: "event-checkpoint",
+          kind: "checkpoint",
+          occurredAt: "2026-08-11T08:10:00.000Z",
+          threadId: "thread-1",
+          threadTitle: "Add activity timeline",
+          status: "ready",
+          files: [{ path: "apps/web/src/App.tsx", kind: "modified", additions: 12, deletions: 2 }],
+        },
+        {
+          id: "event-board",
+          kind: "board-updated",
+          occurredAt: "2026-08-11T08:20:00.000Z",
+          threadId: null,
+          threadTitle: null,
+          itemId: "board-1",
+          title: "Activity timeline",
+          status: "completed",
+        },
+        {
+          id: "event-error",
+          kind: "error",
+          occurredAt: "2026-08-11T08:30:00.000Z",
+          threadId: "thread-1",
+          threadTitle: "Add activity timeline",
+          summary: "Provider request failed",
+        },
+      ],
+    });
+
+    assert.strictEqual(result.items.length, 4);
+    assert.strictEqual(result.items[1]?.kind, "checkpoint");
+    assert.strictEqual(result.items[2]?.kind, "board-updated");
   }),
 );
 
@@ -933,5 +986,47 @@ it.effect("project favicon overrides accept only supported image files", () =>
       }),
     );
     assert.strictEqual(invalid._tag, "Failure");
+  }),
+);
+
+it.effect("decodes legacy Board items and handoff append events", () =>
+  Effect.gen(function* () {
+    const legacy = yield* decodeOrchestrationCommand({
+      type: "project.board.item.upsert",
+      commandId: "cmd-board-legacy",
+      projectId: "project-1",
+      itemId: "item-1",
+      title: "Legacy item",
+      status: "pending",
+    });
+    assert.strictEqual(legacy.type, "project.board.item.upsert");
+
+    const handoff = yield* decodeOrchestrationEvent({
+      sequence: 1,
+      eventId: "event-handoff",
+      aggregateKind: "project",
+      aggregateId: "project-1",
+      type: "project.board-item-handoff-appended",
+      occurredAt: "2026-08-12T12:00:00.000Z",
+      commandId: "cmd-handoff",
+      causationEventId: null,
+      correlationId: "cmd-handoff",
+      metadata: {},
+      payload: {
+        projectId: "project-1",
+        itemId: "item-1",
+        itemTitle: "Handoff",
+        handoff: {
+          id: "handoff-1",
+          sourceThreadId: "thread-1",
+          summary: "Done",
+          decisions: [],
+          nextStep: "Review it",
+          createdAt: "2026-08-12T12:00:00.000Z",
+        },
+        updatedAt: "2026-08-12T12:00:00.000Z",
+      },
+    });
+    assert.strictEqual(handoff.type, "project.board-item-handoff-appended");
   }),
 );

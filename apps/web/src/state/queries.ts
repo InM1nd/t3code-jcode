@@ -13,6 +13,7 @@ import type {
   EnvironmentId,
   OrchestrationThread,
   ProjectContentMatch,
+  ProjectId,
   ProjectEntryKind,
   ThreadId,
   VcsListRefsResult,
@@ -25,6 +26,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { orchestrationEnvironment } from "./orchestration";
+import { environmentShell } from "./shell";
 import { isPaginatedBranchesNextPagePending } from "./paginatedBranches";
 import { projectContentSearch, projectEnvironment } from "./projects";
 import { useEnvironmentQuery } from "./query";
@@ -385,4 +387,17 @@ export function useCheckpointDiff(
     turnTarget === null ? null : orchestrationEnvironment.turnDiff(turnTarget),
   );
   return fullThreadTarget === null ? turn : fullThread;
+}
+
+export function useProjectActivity(environmentId: EnvironmentId, projectId: ProjectId) {
+  const shellState = useAtomValue(environmentShell.stateValueAtom(environmentId));
+  const snapshot = Option.getOrNull(shellState.snapshot);
+  return useEnvironmentQuery(
+    snapshot === null
+      ? null
+      : orchestrationEnvironment.projectActivity({
+          environmentId,
+          input: { projectId, throughSequence: snapshot.snapshotSequence },
+        }),
+  );
 }

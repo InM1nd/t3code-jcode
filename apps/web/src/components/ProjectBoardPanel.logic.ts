@@ -61,9 +61,29 @@ export function buildBoardImplementPrompt(item: ProjectBoardItem): string {
   if (item.notes?.trim()) {
     lines.push("", item.notes.trim());
   }
+  if (item.brief) {
+    lines.push("", "## Task brief", `Goal: ${item.brief.goal}`);
+    if (item.brief.acceptanceCriteria.length > 0) {
+      lines.push(
+        "Acceptance criteria:",
+        ...item.brief.acceptanceCriteria.map((value) => `- ${value}`),
+      );
+    }
+    if (item.brief.importantFiles.length > 0) {
+      lines.push("Important files:", ...item.brief.importantFiles.map((value) => `- ${value}`));
+    }
+    if (item.brief.notes) lines.push(`Notes: ${item.brief.notes}`);
+  }
+  if (item.latestHandoff) {
+    lines.push("", "## Latest handoff", item.latestHandoff.summary);
+    if (item.latestHandoff.decisions.length > 0) {
+      lines.push("Decisions:", ...item.latestHandoff.decisions.map((value) => `- ${value}`));
+    }
+    lines.push(`Next step: ${item.latestHandoff.nextStep}`);
+  }
   lines.push(
     "",
-    "Use the project board MCP tools (`board_list`, `board_set_status`, `board_upsert`) to keep this item updated. Mark it completed when the work is done.",
+    "Use the project board MCP tools (`board_get_brief`, `board_set_status`, `board_upsert`, `board_handoff`) to keep this item updated. Mark it completed when the work is done.",
   );
   return lines.join("\n");
 }

@@ -4,7 +4,10 @@ import {
   type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
-import type * as EffectAcpSchema from "effect-acp/schema";
+import {
+  JCODE_INNER_PROVIDERS,
+  resolveJcodeInnerProvider,
+} from "@t3tools/shared/jcodeInnerProvider";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -29,7 +32,6 @@ import {
   enrichProviderSnapshotWithVersionAdvisory,
   type ProviderMaintenanceCapabilities,
 } from "../providerMaintenance.ts";
-import { makeJcodeAcpRuntime, resolveJcodeAcpBaseModelId } from "../acp/JcodeAcpSupport.ts";
 
 const JCODE_PRESENTATION = {
   displayName: "Jcode",
@@ -42,7 +44,7 @@ const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
 });
 
 const VERSION_PROBE_TIMEOUT_MS = 4_000;
-const JCODE_ACP_MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
+const JCODE_MODEL_LIST_TIMEOUT_MS = 4_000;
 
 const JCODE_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
   {
@@ -99,46 +101,29 @@ function jcodeModelsFromSettings(
   return providerModelsFromSettings(builtInModels, customModels ?? [], EMPTY_CAPABILITIES);
 }
 
-function buildJcodeDiscoveredModelsFromSessionModelState(
-  modelState: EffectAcpSchema.SessionModelState | null | undefined,
+export function jcodeModelsFromModelList(
+  providerId: string,
+  output: string,
 ): ReadonlyArray<ServerProviderModel> {
-  if (!modelState || modelState.availableModels.length === 0) {
-    return [];
-  }
+  const provider = resolveJcodeInnerProvider(providerId);
+  if (!provider) return [];
   const seen = new Set<string>();
-  return modelState.availableModels
-    .map((model): ServerProviderModel | undefined => {
-      const slug = resolveJcodeAcpBaseModelId(model.modelId);
-      if (!slug || seen.has(slug)) {
-        return undefined;
-      }
-      seen.add(slug);
-      return {
-        slug,
-        name: model.name.trim() || slug,
-        isCustom: false,
-        capabilities: EMPTY_CAPABILITIES,
-      };
-    })
-    .filter((model): model is ServerProviderModel => model !== undefined);
-}
-
-const discoverJcodeModelsViaAcp = (
-  jcodeSettings: JcodeSettings,
-  environment: NodeJS.ProcessEnv = process.env,
-) =>
-  Effect.gen(function* () {
-    const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const acp = yield* makeJcodeAcpRuntime({
-      jcodeSettings,
-      environment,
-      childProcessSpawner,
-      cwd: process.cwd(),
-      clientInfo: { name: "t3-code-jcode-provider-probe", version: "0.0.0" },
+  const models: ServerProviderModel[] = [];
+  for (const line of output.split("\n")) {
+    const slug = line.trim();
+    if (!slug || /\s/.test(slug) || seen.has(slug)) continue;
+    seen.add(slug);
+    models.push({
+      slug,
+      name: slug,
+      subProvider: provider.label,
+      isCustom: false,
+      capabilities: EMPTY_CAPABILITIES,
+      ...(models.length === 0 ? { isDefault: true } : {}),
     });
-    const started = yield* acp.start();
-    return buildJcodeDiscoveredModelsFromSessionModelState(started.sessionSetupResult.models);
-  }).pipe(Effect.scoped);
+  }
+  return models;
+}
 
 const runJcodeVersionCommand = (
   jcodeSettings: JcodeSettings,
@@ -157,6 +142,43 @@ const runJcodeVersionCommand = (
       }),
     );
   });
+
+const runJcodeModelListCommand = (
+  jcodeSettings: JcodeSettings,
+  providerId: string,
+  environment: NodeJS.ProcessEnv = process.env,
+) =>
+  Effect.gen(function* () {
+    const command = jcodeSettings.binaryPath || "jcode";
+    const spawnCommand = yield* resolveSpawnCommand(
+      command,
+      ["model", "list", "-p", providerId, "--quiet"],
+      { env: environment },
+    );
+    return yield* spawnAndCollect(
+      command,
+      ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+        env: environment,
+        shell: spawnCommand.shell,
+      }),
+    );
+  });
+
+const discoverJcodeModels = (jcodeSettings: JcodeSettings, environment: NodeJS.ProcessEnv) =>
+  Effect.forEach(
+    JCODE_INNER_PROVIDERS,
+    (provider) =>
+      runJcodeModelListCommand(jcodeSettings, provider.id, environment).pipe(
+        Effect.timeoutOption(JCODE_MODEL_LIST_TIMEOUT_MS),
+        Effect.map((result) =>
+          Option.isSome(result) && result.value.code === 0
+            ? jcodeModelsFromModelList(provider.id, result.value.stdout)
+            : [],
+        ),
+        Effect.catchCause(() => Effect.succeed([])),
+      ),
+    { concurrency: "unbounded" },
+  ).pipe(Effect.map((groups) => groups.flat()));
 
 export const checkJcodeProviderStatus = Effect.fn("checkJcodeProviderStatus")(function* (
   jcodeSettings: JcodeSettings,
@@ -251,47 +273,7 @@ export const checkJcodeProviderStatus = Effect.fn("checkJcodeProviderStatus")(fu
     });
   }
 
-  const discoveryExit = yield* discoverJcodeModelsViaAcp(jcodeSettings, environment).pipe(
-    Effect.timeoutOption(JCODE_ACP_MODEL_DISCOVERY_TIMEOUT_MS),
-    Effect.exit,
-  );
-  if (Exit.isFailure(discoveryExit)) {
-    yield* Effect.logWarning("Jcode ACP model discovery failed", {
-      errorTag: causeErrorTag(discoveryExit.cause),
-    });
-    return buildServerProvider({
-      presentation: JCODE_PRESENTATION,
-      enabled: jcodeSettings.enabled,
-      checkedAt,
-      models: fallbackModels,
-      probe: {
-        installed: true,
-        version,
-        status: "error",
-        auth: { status: "unknown" },
-        message: "Jcode CLI is installed but ACP startup failed. Check server logs for details.",
-      },
-    });
-  }
-  if (Option.isNone(discoveryExit.value)) {
-    yield* Effect.logWarning(
-      `Jcode ACP model discovery timed out after ${JCODE_ACP_MODEL_DISCOVERY_TIMEOUT_MS}ms.`,
-    );
-    return buildServerProvider({
-      presentation: JCODE_PRESENTATION,
-      enabled: jcodeSettings.enabled,
-      checkedAt,
-      models: fallbackModels,
-      probe: {
-        installed: true,
-        version,
-        status: "error",
-        auth: { status: "unknown" },
-        message: `Jcode CLI is installed but ACP startup timed out after ${JCODE_ACP_MODEL_DISCOVERY_TIMEOUT_MS}ms.`,
-      },
-    });
-  }
-  const discoveredModels = discoveryExit.value.value;
+  const discoveredModels = yield* discoverJcodeModels(jcodeSettings, environment);
   const models =
     discoveredModels.length > 0
       ? jcodeModelsFromSettings(jcodeSettings.customModels, discoveredModels)

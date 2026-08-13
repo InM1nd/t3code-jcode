@@ -5,10 +5,13 @@ import {
   type ModelSelection,
   ProviderDriverKind,
   ProviderInstanceId,
+  type ProviderOptionSelection,
   type ServerProvider,
 } from "@t3tools/contracts";
+import { resolveJcodeInnerProvider } from "@t3tools/shared/jcodeInnerProvider";
 import {
   createModelSelection,
+  getProviderOptionStringSelectionValue,
   normalizeCustomModelSlug,
   resolveSelectableModel,
 } from "@t3tools/shared/model";
@@ -243,11 +246,28 @@ export function resolveAppModelSelectionForInstance(
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
   selectedModel: string | null | undefined,
+  selectedOptions?: ReadonlyArray<ProviderOptionSelection> | null | undefined,
 ): string | null {
-  const entry = deriveProviderInstanceEntries(providers).find(
-    (candidate) => candidate.instanceId === instanceId,
-  );
+  const entries = deriveProviderInstanceEntries(providers);
+  const entry = entries.find((candidate) => candidate.instanceId === instanceId);
   if (!entry) return null;
+  const jcodeInnerProvider =
+    entry.driverKind === "jcode"
+      ? resolveJcodeInnerProvider(
+          getProviderOptionStringSelectionValue(selectedOptions, "jcodeProvider"),
+        )
+      : null;
+  if (jcodeInnerProvider) {
+    const sourceOptions = getAppModelOptionsForInstance(settings, entry).filter(
+      (option) => option.subProvider === jcodeInnerProvider.label,
+    );
+    return (
+      resolveSelectableModel(entry.driverKind, selectedModel, sourceOptions) ??
+      sourceOptions.find((option) => option.isDefault)?.slug ??
+      sourceOptions[0]?.slug ??
+      null
+    );
+  }
   const options = getAppModelOptionsForInstance(settings, entry);
   return (
     resolveSelectableModel(entry.driverKind, selectedModel, options) ??

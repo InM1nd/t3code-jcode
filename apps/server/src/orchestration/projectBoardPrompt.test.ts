@@ -13,6 +13,8 @@ describe("projectBoardPrompt", () => {
     expect(empty).toContain("empty");
     expect(empty).toContain("board_digest");
     expect(empty).toContain("board_list");
+    expect(empty).toContain("board_get_brief");
+    expect(empty).toContain("board_handoff");
     expect(empty).toContain("t3-code");
     expect(empty).not.toContain("id=");
 

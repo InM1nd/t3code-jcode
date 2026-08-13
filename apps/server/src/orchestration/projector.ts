@@ -12,6 +12,7 @@ import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "
 import {
   MessageSentPayloadSchema,
   ProjectBoardItemDeletedPayload,
+  ProjectBoardItemHandoffAppendedPayload,
   ProjectBoardItemUpsertedPayload,
   ProjectCreatedPayload,
   ProjectDeletedPayload,
@@ -324,6 +325,31 @@ export function projectEvent(
                   ...project,
                   boardItems: (project.boardItems ?? []).filter(
                     (item) => item.id !== payload.itemId,
+                  ),
+                  updatedAt: payload.updatedAt,
+                }
+              : project,
+          ),
+        })),
+      );
+
+    case "project.board-item-handoff-appended":
+      return decodeForEvent(
+        ProjectBoardItemHandoffAppendedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          projects: nextBase.projects.map((project) =>
+            project.id === payload.projectId
+              ? {
+                  ...project,
+                  boardItems: (project.boardItems ?? []).map((item) =>
+                    item.id === payload.itemId
+                      ? { ...item, latestHandoff: payload.handoff, updatedAt: payload.updatedAt }
+                      : item,
                   ),
                   updatedAt: payload.updatedAt,
                 }

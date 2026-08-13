@@ -32,6 +32,7 @@ export type CreateProjectInput = CommandInput<"project.create">;
 export type UpdateProjectInput = CommandInput<"project.meta.update">;
 export type DeleteProjectInput = CommandInput<"project.delete">;
 export type UpsertProjectBoardItemInput = CommandInput<"project.board.item.upsert">;
+export type AppendProjectBoardHandoffInput = CommandInput<"project.board.item.handoff.append">;
 export type DeleteProjectBoardItemInput = CommandInput<"project.board.item.delete">;
 export type CreateThreadInput = CommandInput<"thread.create">;
 export type DeleteThreadInput = CommandInput<"thread.delete">;
@@ -125,6 +126,15 @@ export const upsertProjectBoardItem: (input: UpsertProjectBoardItemInput) => Com
     return yield* dispatch({
       ...input,
       type: "project.board.item.upsert",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const appendProjectBoardHandoff: (input: AppendProjectBoardHandoffInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.appendProjectBoardHandoff")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "project.board.item.handoff.append",
       commandId: yield* commandId(input),
     });
   });

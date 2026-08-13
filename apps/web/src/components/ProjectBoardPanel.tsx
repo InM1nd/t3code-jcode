@@ -1,7 +1,7 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ProjectBoardItem, ProjectId, ThreadId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight, ListTodo, Play, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, ListTodo, Play, X } from "lucide-react";
 import { useCallback, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { projectEnvironment } from "~/state/projects";
@@ -15,6 +15,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { Input } from "~/components/ui/input";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Textarea } from "~/components/ui/textarea";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 import {
@@ -28,6 +29,7 @@ import {
 interface ProjectBoardPanelProps {
   environmentId: EnvironmentId;
   projectId: ProjectId;
+  sourceThreadId: ThreadId | null;
 }
 
 function BoardItemRow({
@@ -36,6 +38,7 @@ function BoardItemRow({
   onCycleStatus,
   onDelete,
   onImplement,
+  onOpenDetails,
   onOpenLinkedThread,
 }: {
   item: ProjectBoardItem;
@@ -43,6 +46,7 @@ function BoardItemRow({
   onCycleStatus: (item: ProjectBoardItem) => void;
   onDelete: (item: ProjectBoardItem) => void;
   onImplement: (item: ProjectBoardItem) => void;
+  onOpenDetails: (item: ProjectBoardItem) => void;
   onOpenLinkedThread: (threadId: ThreadId) => void;
 }) {
   const completed = item.status === "completed";
@@ -126,6 +130,14 @@ function BoardItemRow({
       ) : null}
       <button
         type="button"
+        onClick={() => onOpenDetails(item)}
+        className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+        aria-label={`Open details for "${item.title}"`}
+      >
+        <FileText className="size-3" />
+      </button>
+      <button
+        type="button"
         onClick={() => onDelete(item)}
         className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
         aria-label={`Delete "${item.title}"`}
@@ -144,6 +156,7 @@ function BoardSection({
   onCycleStatus,
   onDelete,
   onImplement,
+  onOpenDetails,
   onOpenLinkedThread,
 }: {
   title: string;
@@ -153,6 +166,7 @@ function BoardSection({
   onCycleStatus: (item: ProjectBoardItem) => void;
   onDelete: (item: ProjectBoardItem) => void;
   onImplement: (item: ProjectBoardItem) => void;
+  onOpenDetails: (item: ProjectBoardItem) => void;
   onOpenLinkedThread: (threadId: ThreadId) => void;
 }) {
   return (
@@ -176,6 +190,7 @@ function BoardSection({
             onCycleStatus={onCycleStatus}
             onDelete={onDelete}
             onImplement={onImplement}
+            onOpenDetails={onOpenDetails}
             onOpenLinkedThread={onOpenLinkedThread}
           />
         ))
@@ -184,17 +199,31 @@ function BoardSection({
   );
 }
 
-export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPanelProps) {
+export function ProjectBoardPanel({
+  environmentId,
+  projectId,
+  sourceThreadId,
+}: ProjectBoardPanelProps) {
   const project = useProject(scopeProjectRef(environmentId, projectId));
   const upsertBoardItem = useAtomCommand(projectEnvironment.upsertBoardItem);
   const deleteBoardItem = useAtomCommand(projectEnvironment.deleteBoardItem);
+  const appendBoardHandoff = useAtomCommand(projectEnvironment.appendBoardHandoff);
   const handleNewThread = useNewThreadHandler();
   const router = useRouter();
   const [draftTitle, setDraftTitle] = useState("");
   const [doneOpen, setDoneOpen] = useState(false);
   const [implementingId, setImplementingId] = useState<string | null>(null);
+  const [detailItemId, setDetailItemId] = useState<ProjectBoardItem["id"] | null>(null);
+  const [briefGoal, setBriefGoal] = useState("");
+  const [briefCriteria, setBriefCriteria] = useState("");
+  const [briefFiles, setBriefFiles] = useState("");
+  const [briefNotes, setBriefNotes] = useState("");
+  const [handoffSummary, setHandoffSummary] = useState("");
+  const [handoffDecisions, setHandoffDecisions] = useState("");
+  const [handoffNextStep, setHandoffNextStep] = useState("");
 
   const boardItems = project?.boardItems ?? [];
+  const detailItem = boardItems.find((item) => item.id === detailItemId) ?? null;
   const { inProgressItems, pendingItems, doneItems } = useMemo(
     () => partitionProjectBoardItems(boardItems),
     [boardItems],
@@ -262,6 +291,86 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
     },
     [deleteBoardItem, environmentId, projectId],
   );
+
+  const onOpenDetails = useCallback((item: ProjectBoardItem) => {
+    setDetailItemId(item.id);
+    setBriefGoal(item.brief?.goal ?? "");
+    setBriefCriteria(item.brief?.acceptanceCriteria.join("\n") ?? "");
+    setBriefFiles(item.brief?.importantFiles.join("\n") ?? "");
+    setBriefNotes(item.brief?.notes ?? "");
+    setHandoffSummary("");
+    setHandoffDecisions("");
+    setHandoffNextStep("");
+  }, []);
+
+  const saveBrief = useCallback(async () => {
+    if (!detailItem) return;
+    const list = (value: string) =>
+      value
+        .split("\n")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    const goal = briefGoal.trim();
+    await upsertBoardItem({
+      environmentId,
+      input: {
+        projectId,
+        itemId: detailItem.id,
+        title: detailItem.title,
+        status: detailItem.status,
+        notes: detailItem.notes ?? null,
+        source: detailItem.source,
+        sourceThreadId: detailItem.sourceThreadId ?? null,
+        brief: goal
+          ? {
+              goal,
+              acceptanceCriteria: list(briefCriteria),
+              importantFiles: list(briefFiles),
+              notes: briefNotes.trim() || null,
+            }
+          : null,
+      },
+    });
+  }, [
+    briefCriteria,
+    briefFiles,
+    briefGoal,
+    briefNotes,
+    detailItem,
+    environmentId,
+    projectId,
+    upsertBoardItem,
+  ]);
+
+  const submitHandoff = useCallback(async () => {
+    if (!detailItem || !sourceThreadId || !handoffSummary.trim() || !handoffNextStep.trim()) return;
+    await appendBoardHandoff({
+      environmentId,
+      input: {
+        projectId,
+        itemId: detailItem.id,
+        sourceThreadId,
+        summary: handoffSummary.trim(),
+        decisions: handoffDecisions
+          .split("\n")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+        nextStep: handoffNextStep.trim(),
+      },
+    });
+    setHandoffSummary("");
+    setHandoffDecisions("");
+    setHandoffNextStep("");
+  }, [
+    appendBoardHandoff,
+    detailItem,
+    environmentId,
+    handoffDecisions,
+    handoffNextStep,
+    handoffSummary,
+    projectId,
+    sourceThreadId,
+  ]);
 
   const resolveDraftIdForThread = useCallback(
     (threadId: ThreadId) =>
@@ -377,6 +486,7 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
     onCycleStatus,
     onDelete,
     onImplement,
+    onOpenDetails,
     onOpenLinkedThread,
   };
 
@@ -403,6 +513,97 @@ export function ProjectBoardPanel({ environmentId, projectId }: ProjectBoardPane
           Add
         </button>
       </form>
+      {detailItem ? (
+        <div className="shrink-0 space-y-2 border-b border-border/60 p-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-sm font-medium">{detailItem.title}</p>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setDetailItemId(null)}
+            >
+              Close
+            </button>
+          </div>
+          <Input
+            size="sm"
+            value={briefGoal}
+            onChange={(event) => setBriefGoal(event.target.value)}
+            placeholder="Task goal"
+          />
+          <Textarea
+            size="sm"
+            value={briefCriteria}
+            onChange={(event) => setBriefCriteria(event.target.value)}
+            placeholder="Acceptance criteria (one per line)"
+          />
+          <Textarea
+            size="sm"
+            value={briefFiles}
+            onChange={(event) => setBriefFiles(event.target.value)}
+            placeholder="Important files (one per line)"
+          />
+          <Textarea
+            size="sm"
+            value={briefNotes}
+            onChange={(event) => setBriefNotes(event.target.value)}
+            placeholder="Brief notes"
+          />
+          <button
+            type="button"
+            onClick={() => void saveBrief()}
+            className="cursor-pointer rounded px-2 py-1 text-xs font-medium hover:bg-accent"
+          >
+            Save brief
+          </button>
+          {detailItem.latestHandoff ? (
+            <div className="rounded bg-muted/50 p-2 text-xs">
+              <p className="font-medium">Latest handoff</p>
+              <p className="mt-1">{detailItem.latestHandoff.summary}</p>
+              <p className="mt-1 text-muted-foreground">
+                Next: {detailItem.latestHandoff.nextStep}
+              </p>
+              <button
+                type="button"
+                onClick={() => onOpenLinkedThread(detailItem.latestHandoff!.sourceThreadId)}
+                className="mt-1 cursor-pointer text-muted-foreground underline hover:text-foreground"
+              >
+                Open source thread
+              </button>
+            </div>
+          ) : null}
+          {sourceThreadId ? (
+            <div className="space-y-1 border-t border-border/50 pt-2">
+              <Textarea
+                size="sm"
+                value={handoffSummary}
+                onChange={(event) => setHandoffSummary(event.target.value)}
+                placeholder="Handoff summary"
+              />
+              <Textarea
+                size="sm"
+                value={handoffDecisions}
+                onChange={(event) => setHandoffDecisions(event.target.value)}
+                placeholder="Decisions (one per line)"
+              />
+              <Textarea
+                size="sm"
+                value={handoffNextStep}
+                onChange={(event) => setHandoffNextStep(event.target.value)}
+                placeholder="Concrete next step"
+              />
+              <button
+                type="button"
+                disabled={!handoffSummary.trim() || !handoffNextStep.trim()}
+                onClick={() => void submitHandoff()}
+                className="cursor-pointer rounded px-2 py-1 text-xs font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Add handoff
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {isEmpty ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
           <ListTodo aria-hidden className="size-6 text-muted-foreground/60" />

@@ -58,6 +58,7 @@ import {
   applyJcodeAcpModelSelection,
   currentJcodeModelIdFromSessionSetup,
   makeJcodeAcpRuntime,
+  resolveJcodeAcpProvider,
   resolveJcodeAcpBaseModelId,
 } from "../acp/JcodeAcpSupport.ts";
 import { type JcodeAdapterShape } from "../Services/JcodeAdapter.ts";
@@ -598,11 +599,20 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
             );
           }
 
+          const jcodeProvider = resolveJcodeAcpProvider(jcodeModelSelection);
+          if (!jcodeProvider) {
+            return yield* new ProviderAdapterValidationError({
+              provider: PROVIDER,
+              operation: "startSession",
+              issue: "Choose a Claude, Cursor, or Codex provider for Jcode before starting a turn.",
+            });
+          }
           const requestedStartModelId = jcodeModelSelection?.model
             ? resolveJcodeAcpBaseModelId(jcodeModelSelection.model)
             : undefined;
           const spawnJcodeSettings = {
             ...jcodeSettings,
+            jcodeProvider,
             ...(requestedStartModelId ? { model: requestedStartModelId } : {}),
           };
           const acp = yield* makeJcodeAcpRuntime({

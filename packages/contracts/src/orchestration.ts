@@ -14,6 +14,7 @@ import {
   MessageId,
   NonNegativeInt,
   PositiveInt,
+  ProjectBoardHandoffId,
   ProjectBoardItemId,
   ProjectId,
   ProviderItemId,
@@ -29,6 +30,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getWorkflowScript: "orchestration.getWorkflowScript",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
+  getProjectActivity: "orchestration.getProjectActivity",
   searchThreads: "orchestration.searchThreads",
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
@@ -260,6 +262,24 @@ export type ProjectBoardItemStatus = typeof ProjectBoardItemStatus.Type;
 export const ProjectBoardItemSource = Schema.Literals(["user", "agent"]);
 export type ProjectBoardItemSource = typeof ProjectBoardItemSource.Type;
 
+export const ProjectBoardBrief = Schema.Struct({
+  goal: TrimmedNonEmptyString,
+  acceptanceCriteria: Schema.Array(TrimmedNonEmptyString),
+  importantFiles: Schema.Array(TrimmedNonEmptyString),
+  notes: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ProjectBoardBrief = typeof ProjectBoardBrief.Type;
+
+export const ProjectBoardHandoff = Schema.Struct({
+  id: ProjectBoardHandoffId,
+  sourceThreadId: ThreadId,
+  summary: TrimmedNonEmptyString,
+  decisions: Schema.Array(TrimmedNonEmptyString),
+  nextStep: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+export type ProjectBoardHandoff = typeof ProjectBoardHandoff.Type;
+
 /** Soft cap for turn links stored on each board item. */
 export const PROJECT_BOARD_LINKED_TURN_LIMIT = 20;
 
@@ -268,6 +288,8 @@ export const ProjectBoardItem = Schema.Struct({
   title: TrimmedNonEmptyString,
   status: ProjectBoardItemStatus,
   notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
+  latestHandoff: Schema.optional(Schema.NullOr(ProjectBoardHandoff)),
   source: ProjectBoardItemSource,
   sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Turns that touched this card. Optional for older servers/clients.
@@ -377,6 +399,47 @@ export const OrchestrationCheckpointSummary = Schema.Struct({
   completedAt: IsoDateTime,
 });
 export type OrchestrationCheckpointSummary = typeof OrchestrationCheckpointSummary.Type;
+
+const ProjectActivityBaseFields = {
+  id: EventId,
+  occurredAt: IsoDateTime,
+  threadId: Schema.NullOr(ThreadId),
+  threadTitle: Schema.NullOr(TrimmedNonEmptyString),
+} as const;
+
+export const OrchestrationProjectActivityItem = Schema.Union([
+  Schema.Struct({
+    ...ProjectActivityBaseFields,
+    kind: Schema.Literals(["thread-created", "turn-started", "turn-interrupted"]),
+    modelSelection: Schema.NullOr(ModelSelection),
+  }),
+  Schema.Struct({
+    ...ProjectActivityBaseFields,
+    kind: Schema.Literal("checkpoint"),
+    status: OrchestrationCheckpointStatus,
+    files: Schema.Array(OrchestrationCheckpointFile),
+  }),
+  Schema.Struct({
+    ...ProjectActivityBaseFields,
+    kind: Schema.Literal("error"),
+    summary: TrimmedNonEmptyString,
+  }),
+  Schema.Struct({
+    ...ProjectActivityBaseFields,
+    kind: Schema.Literal("board-updated"),
+    itemId: ProjectBoardItemId,
+    title: TrimmedNonEmptyString,
+    status: ProjectBoardItemStatus,
+  }),
+  Schema.Struct({
+    ...ProjectActivityBaseFields,
+    kind: Schema.Literal("board-handoff"),
+    itemId: ProjectBoardItemId,
+    title: TrimmedNonEmptyString,
+    nextStep: TrimmedNonEmptyString,
+  }),
+]);
+export type OrchestrationProjectActivityItem = typeof OrchestrationProjectActivityItem.Type;
 
 export const OrchestrationThreadActivityTone = Schema.Literals([
   "info",
@@ -722,12 +785,24 @@ const ProjectBoardItemUpsertCommand = Schema.Struct({
   title: TrimmedNonEmptyString,
   status: ProjectBoardItemStatus,
   notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
   source: Schema.optional(ProjectBoardItemSource),
   sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Replace the full linked-turn list when provided.
   linkedTurnIds: Schema.optional(Schema.Array(TurnId)),
   // Append a single turn id (deduped, capped) when provided.
   linkTurnId: Schema.optional(Schema.NullOr(TurnId)),
+});
+
+const ProjectBoardItemHandoffAppendCommand = Schema.Struct({
+  type: Schema.Literal("project.board.item.handoff.append"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+  sourceThreadId: ThreadId,
+  summary: TrimmedNonEmptyString,
+  decisions: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  nextStep: TrimmedNonEmptyString,
 });
 
 const ProjectBoardItemDeleteCommand = Schema.Struct({
@@ -987,6 +1062,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ProjectBoardItemUpsertCommand,
+  ProjectBoardItemHandoffAppendCommand,
   ProjectBoardItemDeleteCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
@@ -1017,6 +1093,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ProjectBoardItemUpsertCommand,
+  ProjectBoardItemHandoffAppendCommand,
   ProjectBoardItemDeleteCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
@@ -1137,6 +1214,7 @@ export const OrchestrationEventType = Schema.Literals([
   "project.meta-updated",
   "project.deleted",
   "project.board-item-upserted",
+  "project.board-item-handoff-appended",
   "project.board-item-deleted",
   "thread.created",
   "thread.deleted",
@@ -1204,6 +1282,14 @@ export const ProjectDeletedPayload = Schema.Struct({
 export const ProjectBoardItemUpsertedPayload = Schema.Struct({
   projectId: ProjectId,
   item: ProjectBoardItem,
+  updatedAt: IsoDateTime,
+});
+
+export const ProjectBoardItemHandoffAppendedPayload = Schema.Struct({
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+  itemTitle: TrimmedNonEmptyString,
+  handoff: ProjectBoardHandoff,
   updatedAt: IsoDateTime,
 });
 
@@ -1454,6 +1540,11 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
+    type: Schema.Literal("project.board-item-handoff-appended"),
+    payload: ProjectBoardItemHandoffAppendedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
     type: Schema.Literal("project.board-item-deleted"),
     payload: ProjectBoardItemDeletedPayload,
   }),
@@ -1678,6 +1769,19 @@ export const OrchestrationGetTurnDiffInput = TurnCountRange.mapFields(
 );
 export type OrchestrationGetTurnDiffInput = typeof OrchestrationGetTurnDiffInput.Type;
 
+export const OrchestrationGetProjectActivityInput = Schema.Struct({
+  projectId: ProjectId,
+  throughSequence: NonNegativeInt,
+});
+export type OrchestrationGetProjectActivityInput = typeof OrchestrationGetProjectActivityInput.Type;
+
+export const OrchestrationGetProjectActivityResult = Schema.Struct({
+  throughSequence: NonNegativeInt,
+  items: Schema.Array(OrchestrationProjectActivityItem),
+});
+export type OrchestrationGetProjectActivityResult =
+  typeof OrchestrationGetProjectActivityResult.Type;
+
 export const OrchestrationGetTurnDiffResult = ThreadTurnDiff;
 export type OrchestrationGetTurnDiffResult = typeof OrchestrationGetTurnDiffResult.Type;
 
@@ -1780,6 +1884,10 @@ export const OrchestrationRpcSchemas = {
   getFullThreadDiff: {
     input: OrchestrationGetFullThreadDiffInput,
     output: OrchestrationGetFullThreadDiffResult,
+  },
+  getProjectActivity: {
+    input: OrchestrationGetProjectActivityInput,
+    output: OrchestrationGetProjectActivityResult,
   },
   searchThreads: {
     input: OrchestrationSearchThreadsInput,

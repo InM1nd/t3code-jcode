@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  resolveJcodeInnerProvider,
   readJcodeProviderSetting,
   resolveJcodeInnerProviderIconKind,
 } from "./jcodeInnerProvider.ts";
+
+describe("resolveJcodeInnerProvider", () => {
+  it("only accepts the providers exposed by the Jcode picker", () => {
+    expect(resolveJcodeInnerProvider("claude")).toMatchObject({ driverKind: "claudeAgent" });
+    expect(resolveJcodeInnerProvider("cursor")).toMatchObject({ driverKind: "cursor" });
+    expect(resolveJcodeInnerProvider("openai")).toMatchObject({ driverKind: "codex" });
+    expect(resolveJcodeInnerProvider("anthropic-api")).toBeNull();
+  });
+});
 
 describe("resolveJcodeInnerProviderIconKind", () => {
   it("maps explicit jcodeProvider values", () => {

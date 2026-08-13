@@ -4,12 +4,14 @@ Project-scoped todos shared across threads. Source of truth is the orchestration
 
 ## Data model
 
-- Contracts: `ProjectBoardItem`, `ProjectBoardItemId`, `PROJECT_BOARD_ITEM_LIMIT` in `packages/contracts`
-- Commands: `project.board.item.upsert`, `project.board.item.delete`
-- Events: `project.board-item-upserted`, `project.board-item-deleted`
+- Contracts: `ProjectBoardItem`, `ProjectBoardBrief`, `ProjectBoardHandoff`, `ProjectBoardItemId`, `ProjectBoardHandoffId`, `PROJECT_BOARD_ITEM_LIMIT` in `packages/contracts`
+- Commands: `project.board.item.upsert`, `project.board.item.handoff.append`, `project.board.item.delete`
+- Events: `project.board-item-upserted`, `project.board-item-handoff-appended`, `project.board-item-deleted`
 - Aggregate: existing `project` kind (`aggregateId = projectId`)
 - Projection: `projection_projects.board_items_json` (migration `041_ProjectionProjectsBoardItems`)
 - Shell: `OrchestrationProjectShell.boardItems` (optional on the wire; treat missing as `[]`)
+
+`brief` and `latestHandoff` are optional/null-compatible fields. Upsert owns the brief; an explicit `null` clears it. Handoff append events are immutable and the projector replaces only `latestHandoff` on the card. Earlier handoffs stay in the orchestration event log and are intentionally not rendered as a history list yet. The decider verifies the source thread belongs to the target project before appending.
 
 ## Live updates
 
@@ -22,8 +24,10 @@ Toolkit under `apps/server/src/mcp/toolkits/board/`:
 - `board_list`
 - `board_digest`
 - `board_upsert`
+- `board_get_brief`
 - `board_set_status`
 - `board_link_turn`
+- `board_handoff`
 - `board_delete`
 
 Each board item may carry `linkedTurnIds` (capped). Agent upsert/status tools append the thread’s latest turn automatically; `board_link_turn` does it explicitly.
@@ -40,7 +44,7 @@ That gives jcode the same `board_*` (and other) MCP tools as Claude/Cursor. Turn
 
 - Web/desktop: right-panel surface `"board"` → `ProjectBoardPanel`
 - Mobile: deferred (phase 2)
-- Client commands: `upsertProjectBoardItem` / `deleteProjectBoardItem` in `packages/client-runtime`
+- Client commands: `upsertProjectBoardItem` / `appendProjectBoardHandoff` / `deleteProjectBoardItem` in `packages/client-runtime`
 
 ### Board → Thread (web)
 

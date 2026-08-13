@@ -1,6 +1,7 @@
 import {
   EventId,
   PROJECT_BOARD_ITEM_LIMIT,
+  ProjectBoardHandoffId,
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
@@ -372,6 +373,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         title: command.title,
         status: command.status,
         notes: command.notes === undefined ? (existing?.notes ?? null) : command.notes,
+        brief: command.brief === undefined ? (existing?.brief ?? null) : command.brief,
+        latestHandoff: existing?.latestHandoff ?? null,
         source: command.source ?? existing?.source ?? "user",
         sourceThreadId:
           command.sourceThreadId === undefined
@@ -396,6 +399,50 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           projectId: command.projectId,
           item,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "project.board.item.handoff.append": {
+      const project = yield* requireProject({ readModel, command, projectId: command.projectId });
+      const item = (project.boardItems ?? []).find((entry) => entry.id === command.itemId);
+      if (!item) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Board item '${command.itemId}' was not found on project '${command.projectId}'.`,
+        });
+      }
+      const thread = yield* requireThread({ readModel, command, threadId: command.sourceThreadId });
+      if (thread.projectId !== command.projectId) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.sourceThreadId}' does not belong to project '${command.projectId}'.`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      const crypto = yield* Crypto.Crypto;
+      const handoffId = ProjectBoardHandoffId.make(yield* crypto.randomUUIDv4.pipe(Effect.orDie));
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "project",
+          aggregateId: command.projectId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "project.board-item-handoff-appended" as const,
+        payload: {
+          projectId: command.projectId,
+          itemId: item.id,
+          itemTitle: item.title,
+          handoff: {
+            id: handoffId,
+            sourceThreadId: command.sourceThreadId,
+            summary: command.summary,
+            decisions: command.decisions ?? [],
+            nextStep: command.nextStep,
+            createdAt: occurredAt,
+          },
           updatedAt: occurredAt,
         },
       };

@@ -55,6 +55,35 @@ function settingsWithProviderInstances(): UnifiedSettings {
 }
 
 describe("instance-scoped model selection", () => {
+  it("uses the selected inner provider's models for Jcode", () => {
+    const baseJcode = provider({
+      provider: ProviderDriverKind.make("jcode"),
+      instanceId: "jcode",
+      models: ["cursor-agent"],
+    });
+    const providers = [
+      {
+        ...baseJcode,
+        models: [{ ...baseJcode.models[0]!, subProvider: "Cursor" }],
+      },
+      provider({
+        provider: ProviderDriverKind.make("cursor"),
+        instanceId: "cursor",
+        models: ["cursor-agent"],
+      }),
+    ];
+
+    expect(
+      resolveAppModelSelectionForInstance(
+        ProviderInstanceId.make("jcode"),
+        settingsWithProviderInstances(),
+        providers,
+        "cursor-agent",
+        [{ id: "jcodeProvider", value: "cursor" }],
+      ),
+    ).toBe("cursor-agent");
+  });
+
   it("preserves server-provided legacy model metadata", () => {
     const baseProvider = provider({
       instanceId: "claudeAgent",

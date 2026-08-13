@@ -42,6 +42,7 @@ import {
   createModelSelection,
   resolvePromptInjectedEffort,
 } from "@t3tools/shared/model";
+import { resolveJcodeInnerProvider } from "@t3tools/shared/jcodeInnerProvider";
 import { indexProjectBoardItemsByTurnId } from "@t3tools/shared/projectBoard";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
 import { consumeBoardItemAwaitingTurnLink } from "~/lib/boardTurnLinkPending";
@@ -148,6 +149,7 @@ import {
 import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
 import { ProjectBoardPanel } from "./ProjectBoardPanel";
+import { ProjectActivityPanel } from "./ProjectActivityPanel";
 import {
   deriveAgentPanelModel,
   foldSubagentActivities,
@@ -250,7 +252,6 @@ import { JcodeAsciiIdle } from "./chat/JcodeAsciiIdle";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
-import { isJcodeDriverKind } from "./chat/ThreadProviderIcons";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
@@ -2635,11 +2636,7 @@ function ChatViewContent(props: ChatViewProps) {
     ? activeProviderStatus
     : null;
   const hasTimelineTopBanner = Boolean(threadError) || visibleProviderStatus !== null;
-  const showJcodeAsciiIdle =
-    isJcodeDriverKind(activeProviderStatus?.driver ?? selectedProvider) &&
-    timelineEntries.length === 0 &&
-    !isWorking &&
-    !threadDetailLoading;
+  const showAsciiIdle = timelineEntries.length === 0 && !isWorking && !threadDetailLoading;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
@@ -3260,6 +3257,10 @@ function ChatViewContent(props: ChatViewProps) {
   const addBoardSurface = useCallback(() => {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "board");
+  }, [activeThreadRef]);
+  const addActivitySurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "activity");
   }, [activeThreadRef]);
   const toggleBoardSurface = useCallback(() => {
     if (!activeThreadRef) return;
@@ -5807,7 +5808,7 @@ function ChatViewContent(props: ChatViewProps) {
   );
 
   const onProviderModelSelect = useCallback(
-    (instanceId: ProviderInstanceId, model: string) => {
+    (instanceId: ProviderInstanceId, model: string, jcodeProvider?: string) => {
       if (!activeThread) return;
       // Look up the configured instance so model normalization and custom
       // model lookup stay scoped to that exact instance. Unknown instance ids
@@ -5835,20 +5836,27 @@ function ChatViewContent(props: ChatViewProps) {
           return;
         }
       }
-      const resolvedModel = resolveAppModelSelectionForInstance(
-        instanceId,
-        settings,
-        providerStatuses,
-        model,
-      );
+      const jcodeInnerProvider =
+        resolvedDriverKind === "jcode" ? resolveJcodeInnerProvider(jcodeProvider) : null;
+      const jcodeModels = jcodeInnerProvider
+        ? (entry?.models.filter(
+            (candidate) => candidate.subProvider === jcodeInnerProvider.label,
+          ) ?? [])
+        : [];
+      const resolvedModel = jcodeInnerProvider
+        ? jcodeModels.some((candidate) => candidate.slug === model)
+          ? model
+          : null
+        : resolveAppModelSelectionForInstance(instanceId, settings, providerStatuses, model);
       if (!resolvedModel) {
         scheduleComposerFocus();
         return;
       }
-      const nextModelSelection: ModelSelection = {
+      const nextModelSelection = createModelSelection(
         instanceId,
-        model: resolvedModel,
-      };
+        resolvedModel,
+        jcodeInnerProvider ? [{ id: "jcodeProvider", value: jcodeInnerProvider.id }] : undefined,
+      );
       const modelChangeBlockReason = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
         hasStartedSession: activeThread.session !== null,
@@ -5881,6 +5889,31 @@ function ChatViewContent(props: ChatViewProps) {
       providerStatuses,
       settings,
     ],
+  );
+  const onJcodeInnerProviderSelect = useCallback(
+    (instanceId: ProviderInstanceId, provider: string) => {
+      const innerProvider = resolveJcodeInnerProvider(provider);
+      const model = innerProvider
+        ? (providerStatuses
+            .find((snapshot) => snapshot.instanceId === instanceId)
+            ?.models.find(
+              (candidate) => candidate.subProvider === innerProvider.label && candidate.isDefault,
+            )?.slug ??
+          providerStatuses
+            .find((snapshot) => snapshot.instanceId === instanceId)
+            ?.models.find((candidate) => candidate.subProvider === innerProvider.label)?.slug)
+        : undefined;
+      if (!model) {
+        toastManager.add({
+          type: "warning",
+          title: "No models available",
+          description: "Sign in to this provider in Jcode, then reopen the model picker.",
+        });
+        return;
+      }
+      onProviderModelSelect(instanceId, model, provider);
+    },
+    [onProviderModelSelect, providerStatuses],
   );
   const onEnvModeChange = useCallback(
     (mode: DraftThreadEnvMode) => {
@@ -6043,7 +6076,16 @@ function ChatViewContent(props: ChatViewProps) {
         threadId={activeThreadRef?.threadId ?? null}
       />
     ) : activeRightPanelSurface?.kind === "board" && activeProject ? (
-      <ProjectBoardPanel environmentId={activeProject.environmentId} projectId={activeProject.id} />
+      <ProjectBoardPanel
+        environmentId={activeProject.environmentId}
+        projectId={activeProject.id}
+        sourceThreadId={activeThreadRef?.threadId ?? null}
+      />
+    ) : activeRightPanelSurface?.kind === "activity" && activeProject ? (
+      <ProjectActivityPanel
+        environmentId={activeProject.environmentId}
+        projectId={activeProject.id}
+      />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&
       activeWorkspaceRoot ? (
@@ -6139,7 +6181,7 @@ function ChatViewContent(props: ChatViewProps) {
             </div>
             {/* Messages Wrapper */}
             <div className="relative flex min-h-0 flex-1 flex-col">
-              {showJcodeAsciiIdle ? <JcodeAsciiIdle /> : null}
+              {showAsciiIdle ? <JcodeAsciiIdle /> : null}
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 agentPanelModel={agentPanelModel}
@@ -6322,6 +6364,7 @@ function ChatViewContent(props: ChatViewProps) {
                               onChangeActivePendingUserInputCustomAnswer
                             }
                             onProviderModelSelect={onProviderModelSelect}
+                            onJcodeInnerProviderSelect={onJcodeInnerProviderSelect}
                             getModelDisabledReason={getModelDisabledReason}
                             toggleInteractionMode={toggleInteractionMode}
                             handleRuntimeModeChange={handleRuntimeModeChange}
@@ -6481,6 +6524,7 @@ function ChatViewContent(props: ChatViewProps) {
           onAddFiles={addFilesSurface}
           onAddAgents={addAgentsSurface}
           onAddBoard={addBoardSurface}
+          onAddActivity={addActivitySurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
@@ -6511,6 +6555,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddFiles={addFilesSurface}
             onAddAgents={addAgentsSurface}
             onAddBoard={addBoardSurface}
+            onAddActivity={addActivitySurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}

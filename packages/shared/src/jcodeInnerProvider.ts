@@ -5,6 +5,16 @@
  * via `-p` / login. T3 surfaces that as a second icon beside Jcode.
  */
 
+import { ProviderDriverKind } from "@t3tools/contracts";
+
+export const JCODE_INNER_PROVIDERS = [
+  { id: "claude", label: "Claude", driverKind: ProviderDriverKind.make("claudeAgent") },
+  { id: "cursor", label: "Cursor", driverKind: ProviderDriverKind.make("cursor") },
+  { id: "openai", label: "Codex", driverKind: ProviderDriverKind.make("codex") },
+] as const;
+
+export type JcodeInnerProvider = (typeof JCODE_INNER_PROVIDERS)[number];
+
 export type JcodeInnerProviderIconKind = "claudeAgent" | "cursor" | "codex" | "grok";
 
 const JCODE_PROVIDER_TO_ICON: Record<string, JcodeInnerProviderIconKind> = {
@@ -20,6 +30,14 @@ const JCODE_PROVIDER_TO_ICON: Record<string, JcodeInnerProviderIconKind> = {
 
 function normalizeToken(value: string | null | undefined): string {
   return value?.trim().toLowerCase() ?? "";
+}
+
+/** The explicit provider choices supported by the Jcode model picker. */
+export function resolveJcodeInnerProvider(
+  value: string | null | undefined,
+): JcodeInnerProvider | null {
+  const token = normalizeToken(value);
+  return JCODE_INNER_PROVIDERS.find((provider) => provider.id === token) ?? null;
 }
 
 function iconKindFromJcodeProvider(jcodeProvider: string): JcodeInnerProviderIconKind | null {

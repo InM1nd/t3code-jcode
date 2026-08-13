@@ -6,7 +6,11 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { JcodeSettings } from "@t3tools/contracts";
 
-import { buildInitialJcodeProviderSnapshot, checkJcodeProviderStatus } from "./JcodeProvider.ts";
+import {
+  buildInitialJcodeProviderSnapshot,
+  checkJcodeProviderStatus,
+  jcodeModelsFromModelList,
+} from "./JcodeProvider.ts";
 
 const decodeJcodeSettings = Schema.decodeSync(JcodeSettings);
 
@@ -34,6 +38,18 @@ describe("buildInitialJcodeProviderSnapshot", () => {
       expect(snapshot.requiresNewThreadForModelChange).toBe(true);
     }),
   );
+});
+
+describe("jcodeModelsFromModelList", () => {
+  it("keeps Jcode reasoning and fast model variants", () => {
+    expect(
+      jcodeModelsFromModelList("cursor", "composer-2\ncomposer-2-fast\ncursor-grok-4.5-high\n"),
+    ).toMatchObject([
+      { slug: "composer-2", subProvider: "Cursor", isDefault: true },
+      { slug: "composer-2-fast", subProvider: "Cursor" },
+      { slug: "cursor-grok-4.5-high", subProvider: "Cursor" },
+    ]);
+  });
 });
 
 it.layer(NodeServices.layer)("checkJcodeProviderStatus", (it) => {
@@ -81,7 +97,7 @@ it.layer(NodeServices.layer)("checkJcodeProviderStatus", (it) => {
     }),
   );
 
-  it.effect("reports an error when ACP model discovery is unavailable", () =>
+  it.effect("falls back to configured models when model discovery is unavailable", () =>
     Effect.gen(function* () {
       const snapshot = yield* Effect.scoped(
         Effect.gen(function* () {
@@ -101,10 +117,10 @@ it.layer(NodeServices.layer)("checkJcodeProviderStatus", (it) => {
         }),
       );
 
-      expect(snapshot.status).toBe("error");
+      expect(snapshot.status).toBe("ready");
       expect(snapshot.installed).toBe(true);
       expect(snapshot.models.map((model) => model.slug)).toEqual(["claude-opus-5"]);
-      expect(snapshot.message).toContain("ACP startup failed");
+      expect(snapshot.message).toBeUndefined();
     }),
   );
 });

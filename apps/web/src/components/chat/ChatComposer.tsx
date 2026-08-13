@@ -19,7 +19,12 @@ import {
 } from "@t3tools/contracts";
 import type { EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
+import { resolveJcodeInnerProvider } from "@t3tools/shared/jcodeInnerProvider";
+import {
+  createModelSelection,
+  getProviderOptionStringSelectionValue,
+  normalizeModelSlug,
+} from "@t3tools/shared/model";
 import {
   memo,
   type ReactNode,
@@ -592,7 +597,12 @@ export interface ChatComposerProps {
     cursorAdjacentToMention: boolean,
   ) => void;
 
-  onProviderModelSelect: (instanceId: ProviderInstanceId, model: string) => void;
+  onProviderModelSelect: (
+    instanceId: ProviderInstanceId,
+    model: string,
+    jcodeProvider?: string,
+  ) => void;
+  onJcodeInnerProviderSelect: (instanceId: ProviderInstanceId, provider: string) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
   toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
@@ -665,6 +675,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onPreviousActivePendingUserInputQuestion,
     onChangeActivePendingUserInputCustomAnswer,
     onProviderModelSelect,
+    onJcodeInnerProviderSelect,
     getModelDisabledReason,
     toggleInteractionMode,
     handleRuntimeModeChange,
@@ -899,6 +910,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [selectedInstanceId, selectedModel, selectedModelOptionsForDispatch],
   );
   const selectedModelForPicker = selectedModel;
+  const selectedJcodeInnerProvider = useMemo(
+    () =>
+      selectedProvider === "jcode"
+        ? resolveJcodeInnerProvider(
+            getProviderOptionStringSelectionValue(
+              composerModelOptions?.[selectedInstanceId],
+              "jcodeProvider",
+            ),
+          )
+        : null,
+    [composerModelOptions, selectedInstanceId, selectedProvider],
+  );
   // Instance-keyed option list so the picker can show each configured
   // instance (built-in + custom) as a first-class sidebar entry. The
   // options are server-reported models plus that exact instance's
@@ -908,10 +931,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   >(() => {
     const out = new Map<ProviderInstanceId, ReadonlyArray<AppModelOption>>();
     for (const entry of providerInstanceEntries) {
+      if (entry.driverKind === "jcode") {
+        const jcodeModels = selectedJcodeInnerProvider
+          ? getAppModelOptionsForInstance(settings, entry).filter(
+              (model) => model.subProvider === selectedJcodeInnerProvider.label,
+            )
+          : [];
+        out.set(entry.instanceId, jcodeModels);
+        continue;
+      }
       out.set(entry.instanceId, getAppModelOptionsForInstance(settings, entry));
     }
     return out;
-  }, [providerInstanceEntries, settings]);
+  }, [providerInstanceEntries, selectedJcodeInnerProvider, settings]);
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
     const currentOptions = modelOptionsByInstance.get(selectedInstanceId) ?? [];
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
@@ -3225,6 +3257,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     instanceEntries={providerInstanceEntries}
                     keybindings={keybindings}
                     modelOptionsByInstance={modelOptionsByInstance}
+                    {...(selectedJcodeInnerProvider
+                      ? { jcodeInnerProvider: selectedJcodeInnerProvider.id }
+                      : {})}
+                    {...(selectedProvider === "jcode" && !selectedJcodeInnerProvider
+                      ? { emptyModelLabel: "Choose Jcode provider" }
+                      : {})}
                     triggerClassName="-ms-px"
                     terminalOpen={terminalOpen}
                     open={isComposerModelPickerOpen}
@@ -3239,6 +3277,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     }}
                     getModelDisabledReason={getModelDisabledReason}
                     onInstanceModelChange={onProviderModelSelect}
+                    onJcodeInnerProviderChange={onJcodeInnerProviderSelect}
                   />
                 )}
 

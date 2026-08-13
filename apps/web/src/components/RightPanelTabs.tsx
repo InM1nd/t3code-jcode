@@ -1,6 +1,16 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { Bot, FileDiff, Files, Globe2, ListTodo, Plus, TerminalSquare, X } from "lucide-react";
+import {
+  Bot,
+  FileDiff,
+  Files,
+  Globe2,
+  History,
+  ListTodo,
+  Plus,
+  TerminalSquare,
+  X,
+} from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -46,6 +56,7 @@ interface RightPanelTabsProps {
   onAddFiles: () => void;
   onAddAgents: () => void;
   onAddBoard: () => void;
+  onAddActivity: () => void;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
@@ -97,6 +108,7 @@ function RightPanelEmptyState(props: {
   onAddFiles: () => void;
   onAddAgents: () => void;
   onAddBoard: () => void;
+  onAddActivity: () => void;
   browserAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
@@ -155,6 +167,15 @@ function RightPanelEmptyState(props: {
       available: true,
       disabledReason: null,
       onClick: props.onAddBoard,
+      badgeCount: 0,
+    },
+    {
+      label: "Activity",
+      description: "Review significant project events.",
+      icon: History,
+      available: true,
+      disabledReason: null,
+      onClick: props.onAddActivity,
       badgeCount: 0,
     },
   ] as const;
@@ -246,6 +267,8 @@ function surfaceTitle(
       return "Agents";
     case "board":
       return "Board";
+    case "activity":
+      return "Activity";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -309,6 +332,8 @@ function SurfaceIcon({
       return <Bot className="size-3 shrink-0" />;
     case "board":
       return <ListTodo className="size-3 shrink-0" />;
+    case "activity":
+      return <History className="size-3 shrink-0" />;
   }
 }
 
@@ -517,6 +542,10 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <ListTodo />
                     Board
                   </SurfaceMenuItem>
+                  <SurfaceMenuItem available onClick={props.onAddActivity}>
+                    <History />
+                    Activity
+                  </SurfaceMenuItem>
                 </MenuPopup>
               </Menu>
             ) : null}
@@ -533,6 +562,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddFiles={props.onAddFiles}
             onAddAgents={props.onAddAgents}
             onAddBoard={props.onAddBoard}
+            onAddActivity={props.onAddActivity}
             browserAvailable={props.browserAvailable}
             diffAvailable={props.diffAvailable}
             filesAvailable={props.filesAvailable}

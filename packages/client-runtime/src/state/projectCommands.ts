@@ -10,11 +10,13 @@ import {
 } from "./runtime.ts";
 import {
   type CreateProjectInput,
+  type AppendProjectBoardHandoffInput,
   type DeleteProjectBoardItemInput,
   type DeleteProjectInput,
   type UpdateProjectInput,
   type UpsertProjectBoardItemInput,
   createProject,
+  appendProjectBoardHandoff,
   deleteProject,
   deleteProjectBoardItem,
   updateProject,
@@ -24,6 +26,7 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 
 export type {
   CreateProjectInput,
+  AppendProjectBoardHandoffInput,
   DeleteProjectBoardItemInput,
   DeleteProjectInput,
   UpdateProjectInput,
@@ -101,6 +104,12 @@ export function createProjectEnvironmentAtoms<R, E>(
     upsertBoardItem: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:project:board-item:upsert",
       execute: (input: UpsertProjectBoardItemInput) => upsertProjectBoardItem(input),
+      scheduler: projectScheduler,
+      concurrency: projectConcurrency,
+    }),
+    appendBoardHandoff: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:project:board-item:handoff:append",
+      execute: (input: AppendProjectBoardHandoffInput) => appendProjectBoardHandoff(input),
       scheduler: projectScheduler,
       concurrency: projectConcurrency,
     }),

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { EnvironmentId, ProjectBoardItem, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ProjectBoardHandoff,
+  ProjectBoardItem,
+  ThreadId,
+} from "@t3tools/contracts";
 
 import {
   buildBoardImplementPrompt,
@@ -87,6 +92,34 @@ describe("buildBoardImplementPrompt", () => {
     expect(prompt).toContain("item-1");
     expect(prompt).toContain("Keep the UI minimal.");
     expect(prompt).toContain("board_set_status");
+  });
+
+  it("includes structured brief and latest handoff", () => {
+    const prompt = buildBoardImplementPrompt(
+      item({
+        id: "item-handoff" as ProjectBoardItem["id"],
+        title: "Handoff UI",
+        status: "pending",
+        brief: {
+          goal: "Continue the task",
+          acceptanceCriteria: ["The next agent knows what to do"],
+          importantFiles: ["ProjectBoardPanel.tsx"],
+          notes: "Keep it compact.",
+        },
+        latestHandoff: {
+          id: "handoff-1" as ProjectBoardHandoff["id"],
+          sourceThreadId: "thread-1" as ThreadId,
+          summary: "The server work is complete.",
+          decisions: ["No separate task model."],
+          nextStep: "Build the detail panel.",
+          createdAt: "2026-08-12T12:00:00.000Z",
+        },
+      }),
+    );
+    expect(prompt).toContain("## Task brief");
+    expect(prompt).toContain("## Latest handoff");
+    expect(prompt).toContain("board_get_brief");
+    expect(prompt).toContain("board_handoff");
   });
 });
 

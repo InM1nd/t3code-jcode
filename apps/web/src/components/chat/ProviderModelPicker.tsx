@@ -32,6 +32,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
   keybindings?: ResolvedKeybindingsConfig;
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>>;
+  jcodeInnerProvider?: string | null | undefined;
+  emptyModelLabel?: string;
   activeProviderIconClassName?: string;
   compact?: boolean;
   disabled?: boolean;
@@ -42,7 +44,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   triggerAriaLabel?: string;
   onOpenChange?: (open: boolean) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
-  onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
+  onInstanceModelChange: (
+    instanceId: ProviderInstanceId,
+    model: string,
+    jcodeProvider?: string,
+  ) => void;
+  onJcodeInnerProviderChange?: (instanceId: ProviderInstanceId, provider: string) => void;
 }) {
   const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
   const isMenuOpen = props.open ?? uncontrolledIsMenuOpen;
@@ -65,8 +72,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const selectedModel =
     selectedInstanceOptions.find((option) => option.slug === props.model) ??
     selectedInstanceOptions[0];
-  const triggerTitle = selectedModel ? getTriggerDisplayModelName(selectedModel) : props.model;
-  const triggerLabel = selectedModel ? getTriggerDisplayModelLabel(selectedModel) : props.model;
+  const triggerTitle = selectedModel
+    ? getTriggerDisplayModelName(selectedModel)
+    : (props.emptyModelLabel ?? props.model);
+  const triggerLabel = selectedModel
+    ? getTriggerDisplayModelLabel(selectedModel)
+    : (props.emptyModelLabel ?? props.model);
   const duplicateDriverCount = props.instanceEntries.filter(
     (entry) => activeEntry !== null && entry.driverKind === activeEntry.driverKind,
   ).length;
@@ -127,9 +138,13 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
     };
   }, [isMenuOpen]);
 
-  const handleInstanceModelChange = (instanceId: ProviderInstanceId, model: string) => {
+  const handleInstanceModelChange = (
+    instanceId: ProviderInstanceId,
+    model: string,
+    jcodeProvider?: string,
+  ) => {
     if (props.disabled) return;
-    props.onInstanceModelChange(instanceId, model);
+    props.onInstanceModelChange(instanceId, model, jcodeProvider);
     setIsMenuOpen(false);
   };
 
@@ -199,12 +214,18 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           instanceEntries={props.instanceEntries}
           {...(props.keybindings ? { keybindings: props.keybindings } : {})}
           modelOptionsByInstance={props.modelOptionsByInstance}
+          {...(props.jcodeInnerProvider !== undefined
+            ? { jcodeInnerProvider: props.jcodeInnerProvider }
+            : {})}
           terminalOpen={props.terminalOpen ?? false}
           onRequestClose={() => setIsMenuOpen(false)}
           {...(props.getModelDisabledReason
             ? { getModelDisabledReason: props.getModelDisabledReason }
             : {})}
           onInstanceModelChange={handleInstanceModelChange}
+          {...(props.onJcodeInnerProviderChange
+            ? { onJcodeInnerProviderChange: props.onJcodeInnerProviderChange }
+            : {})}
         />
       </PopoverPopup>
     </Popover>

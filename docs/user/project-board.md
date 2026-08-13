@@ -20,12 +20,16 @@ In a thread for the project:
 - If an item already has a linked thread, Implement reopens it
 - Delete an item with the × control on the row
 - Items created by an agent show a small **agent** badge
+- Open a card’s details control to add a **Task Brief**: a goal, acceptance criteria, important files, and notes
+- In the same details view, add a **Handoff** with a summary, decisions, and one concrete next step. The card keeps the latest handoff so the next agent can continue immediately.
 
 The board is capped at 100 items per project.
 
 ## Agents
 
-When an agent session is connected through T3 Code’s MCP tools (Claude, Cursor, Codex, Grok, OpenCode), it can list and update the same board with `board_digest`, `board_list`, `board_upsert`, `board_set_status`, `board_link_turn`, and `board_delete`. Changes show up live in the panel for every connected client.
+When an agent session is connected through T3 Code’s MCP tools (Claude, Cursor, Codex, Grok, OpenCode), it can list and update the same board with `board_digest`, `board_list`, `board_get_brief`, `board_upsert`, `board_set_status`, `board_link_turn`, `board_handoff`, and `board_delete`. Changes show up live in the panel for every connected client.
+
+Use `board_get_brief` before starting a card and `board_handoff` when you are transferring work. A handoff is always tied to the agent’s current project thread.
 
 Status mutations automatically link the current thread’s latest turn to the card. Linked turns show a **Board** badge in the chat timeline, and each card shows how many turns are attached.
 

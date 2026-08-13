@@ -16,6 +16,9 @@ release/
 release-mock/
 .t3
 .worktrees/
+.jcode/
+.playwright-mcp/
+.serena/
 .idea/
 apps/web/.playwright
 apps/web/playwright-report

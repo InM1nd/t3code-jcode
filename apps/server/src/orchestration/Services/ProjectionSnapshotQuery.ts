@@ -10,6 +10,8 @@ import type {
   CheckpointRef,
   OrchestrationCheckpointSummary,
   OrchestrationProject,
+  OrchestrationGetProjectActivityInput,
+  OrchestrationGetProjectActivityResult,
   OrchestrationProjectShell,
   OrchestrationReadModel,
   OrchestrationSearchThreadsInput,
@@ -104,6 +106,10 @@ export interface ProjectionSnapshotQueryShape {
   readonly searchThreads: (
     input: OrchestrationSearchThreadsInput,
   ) => Effect.Effect<OrchestrationSearchThreadsResult, ProjectionRepositoryError>;
+
+  readonly getProjectActivity: (
+    input: OrchestrationGetProjectActivityInput,
+  ) => Effect.Effect<OrchestrationGetProjectActivityResult, ProjectionRepositoryError>;
 
   /**
    * Read the latest projection snapshot sequence without hydrating read-model

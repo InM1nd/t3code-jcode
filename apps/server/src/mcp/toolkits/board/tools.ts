@@ -1,5 +1,6 @@
 import {
   ProjectBoardItem,
+  ProjectBoardBrief,
   ProjectBoardItemId,
   ProjectBoardItemStatus,
   ProjectId,
@@ -70,6 +71,19 @@ export const BoardDigestTool = Tool.make("board_digest", {
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, true);
 
+export const BoardGetBriefTool = Tool.make("board_get_brief", {
+  description:
+    "Get the optional task brief and latest handoff for one project board todo in the current thread's project.",
+  parameters: Schema.Struct({ itemId: ProjectBoardItemId }),
+  success: BoardMutateResult,
+  failure: BoardToolError,
+  dependencies,
+})
+  .annotate(Tool.Title, "Get board task brief")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true);
+
 export const BoardUpsertTool = Tool.make("board_upsert", {
   description:
     "Create or update a project board todo. Pass itemId to update an existing item; omit it to create a new one. Status is pending | inProgress | completed. Automatically links the project's current thread latest turn when available.",
@@ -78,12 +92,29 @@ export const BoardUpsertTool = Tool.make("board_upsert", {
     title: TrimmedNonEmptyString,
     status: ProjectBoardItemStatus,
     notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+    brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
   }),
   success: BoardMutateResult,
   failure: BoardToolError,
   dependencies,
 })
   .annotate(Tool.Title, "Upsert project board item")
+  .annotate(Tool.Destructive, false);
+
+export const BoardHandoffTool = Tool.make("board_handoff", {
+  description:
+    "Append a handoff for a project board todo. Capture completed work, decisions, and the concrete next step for the next agent.",
+  parameters: Schema.Struct({
+    itemId: ProjectBoardItemId,
+    summary: TrimmedNonEmptyString,
+    decisions: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+    nextStep: TrimmedNonEmptyString,
+  }),
+  success: BoardMutateResult,
+  failure: BoardToolError,
+  dependencies,
+})
+  .annotate(Tool.Title, "Append board handoff")
   .annotate(Tool.Destructive, false);
 
 export const BoardSetStatusTool = Tool.make("board_set_status", {
@@ -131,7 +162,9 @@ export const BoardDeleteTool = Tool.make("board_delete", {
 export const BoardToolkit = Toolkit.make(
   BoardListTool,
   BoardDigestTool,
+  BoardGetBriefTool,
   BoardUpsertTool,
+  BoardHandoffTool,
   BoardSetStatusTool,
   BoardLinkTurnTool,
   BoardDeleteTool,

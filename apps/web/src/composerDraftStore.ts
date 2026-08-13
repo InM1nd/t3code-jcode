@@ -1012,6 +1012,8 @@ export function deriveEffectiveComposerModelState(input: {
 }): EffectiveComposerModelState {
   const baseModelCandidate =
     input.threadModelSelection?.model ?? input.projectModelSelection?.model ?? null;
+  const baseModelOptions =
+    input.threadModelSelection?.options ?? input.projectModelSelection?.options ?? undefined;
   const baseModel =
     (input.selectedInstanceId
       ? resolveAppModelSelectionForInstance(
@@ -1019,6 +1021,7 @@ export function deriveEffectiveComposerModelState(input: {
           input.settings,
           input.providers,
           baseModelCandidate,
+          baseModelOptions,
         )
       : null) ??
     resolveAppModelSelection(
@@ -1048,6 +1051,7 @@ export function deriveEffectiveComposerModelState(input: {
         input.settings,
         input.providers,
         activeSelection.model,
+        activeSelection.options,
       ) ??
       resolveAppModelSelection(
         input.selectedProvider,

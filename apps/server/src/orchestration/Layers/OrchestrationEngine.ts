@@ -65,6 +65,7 @@ function commandToAggregateRef(command: OrchestrationCommand): {
     case "project.meta.update":
     case "project.delete":
     case "project.board.item.upsert":
+    case "project.board.item.handoff.append":
     case "project.board.item.delete":
       return {
         aggregateKind: "project",

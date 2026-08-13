@@ -588,6 +588,27 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "project.board-item-handoff-appended": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) return;
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems: (existingRow.value.boardItems ?? []).map((item) =>
+              item.id === event.payload.itemId
+                ? {
+                    ...item,
+                    latestHandoff: event.payload.handoff,
+                    updatedAt: event.payload.updatedAt,
+                  }
+                : item,
+            ),
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         default:
           return;
       }

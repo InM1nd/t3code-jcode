@@ -285,6 +285,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               runOnWorktreeCreate: false,
             },
           ],
+          boardItems: [],
           defaultThreadEnvMode: null,
           createdAt: "2026-02-24T00:00:00.000Z",
           updatedAt: "2026-02-24T00:00:01.000Z",
@@ -405,6 +406,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               runOnWorktreeCreate: false,
             },
           ],
+          boardItems: [],
           defaultThreadEnvMode: null,
           createdAt: "2026-02-24T00:00:00.000Z",
           updatedAt: "2026-02-24T00:00:01.000Z",
@@ -1832,6 +1834,85 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.deepStrictEqual(
         (yield* snapshotQuery.searchThreads({ query: "user needle" })).matches,
         [],
+      );
+    }),
+  );
+
+  it.effect("returns the newest 100 significant events for only the requested project", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM orchestration_events`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode,
+          interaction_mode, branch, worktree_path, created_at, updated_at, deleted_at
+        )
+        VALUES
+          (
+            'thread-activity-1', 'project-activity-1', 'Activity thread',
+            '{"instanceId":"codex","model":"gpt-5-codex"}', 'full-access',
+            'default', NULL, NULL, '2026-08-11T00:00:00.000Z',
+            '2026-08-11T00:00:00.000Z', NULL
+          ),
+          (
+            'thread-activity-2', 'project-activity-2', 'Other project thread',
+            '{"instanceId":"codex","model":"gpt-5-codex"}', 'full-access',
+            'default', NULL, NULL, '2026-08-11T00:00:00.000Z',
+            '2026-08-11T00:00:00.000Z', NULL
+          )
+      `;
+
+      yield* Effect.forEach(
+        Array.from({ length: 105 }, (_, index) => index),
+        (index) => sql`
+          INSERT INTO orchestration_events (
+            event_id, aggregate_kind, stream_id, stream_version, event_type,
+            occurred_at, actor_kind, payload_json, metadata_json
+          )
+          VALUES (
+            ${`event-activity-${index}`}, 'thread', 'thread-activity-1', ${index},
+            'thread.turn-interrupt-requested', '2026-08-11T10:00:00.000Z', 'user',
+            '{"threadId":"thread-activity-1","createdAt":"2026-08-11T10:00:00.000Z"}', '{}'
+          )
+        `,
+        { discard: true },
+      );
+      yield* sql`
+        INSERT INTO orchestration_events (
+          event_id, aggregate_kind, stream_id, stream_version, event_type,
+          occurred_at, actor_kind, payload_json, metadata_json
+        )
+        VALUES
+          (
+            'event-other-project', 'thread', 'thread-activity-2', 0,
+            'thread.turn-interrupt-requested', '2026-08-11T10:01:00.000Z', 'user',
+            '{"threadId":"thread-activity-2","createdAt":"2026-08-11T10:01:00.000Z"}', '{}'
+          ),
+          (
+            'event-noisy-tool', 'thread', 'thread-activity-1', 105,
+            'thread.activity-appended', '2026-08-11T10:02:00.000Z', 'agent',
+            '{"threadId":"thread-activity-1","activity":{"id":"activity-noisy-tool","tone":"tool","kind":"tool.completed","summary":"Read file","payload":{},"turnId":null,"createdAt":"2026-08-11T10:02:00.000Z"}}', '{}'
+          )
+      `;
+
+      const result = yield* snapshotQuery.getProjectActivity({
+        projectId: asProjectId("project-activity-1"),
+        throughSequence: Number.MAX_SAFE_INTEGER,
+      });
+
+      assert.strictEqual(result.items.length, 100);
+      assert.strictEqual(result.items[0]?.id, asEventId("event-activity-104"));
+      assert.strictEqual(result.items[99]?.id, asEventId("event-activity-5"));
+      assert.strictEqual(
+        result.items.some((item) => item.id === "event-other-project"),
+        false,
+      );
+      assert.strictEqual(
+        result.items.some((item) => item.id === "event-noisy-tool"),
+        false,
       );
     }),
   );

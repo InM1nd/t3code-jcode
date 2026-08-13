@@ -1,4 +1,4 @@
-import { type JcodeSettings, ProviderDriverKind } from "@t3tools/contracts";
+import { type JcodeSettings, type ModelSelection, ProviderDriverKind } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -6,7 +6,8 @@ import * as Scope from "effect/Scope";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/schema";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+import { resolveJcodeInnerProvider } from "@t3tools/shared/jcodeInnerProvider";
+import { getModelSelectionStringOptionValue, normalizeModelSlug } from "@t3tools/shared/model";
 
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 
@@ -83,6 +84,14 @@ export function resolveJcodeAcpBaseModelId(model: string | null | undefined): st
   const trimmed = model?.trim();
   const base = trimmed && trimmed.length > 0 ? trimmed : "claude-opus-5";
   return normalizeModelSlug(base, JCODE_DRIVER_KIND) ?? "claude-opus-5";
+}
+
+export function resolveJcodeAcpProvider(
+  modelSelection: ModelSelection | null | undefined,
+): string | undefined {
+  return resolveJcodeInnerProvider(
+    getModelSelectionStringOptionValue(modelSelection, "jcodeProvider"),
+  )?.id;
 }
 
 export function currentJcodeModelIdFromSessionSetup(

@@ -3,8 +3,22 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   applyJcodeAcpModelSelection,
   buildJcodeAcpSpawnInput,
+  resolveJcodeAcpProvider,
   resolveJcodeAcpBaseModelId,
 } from "./JcodeAcpSupport.ts";
+
+describe("resolveJcodeAcpProvider", () => {
+  it("requires an explicit provider selection", () => {
+    expect(resolveJcodeAcpProvider(undefined)).toBeUndefined();
+    expect(
+      resolveJcodeAcpProvider({
+        instanceId: "jcode" as never,
+        model: "gpt-5.5",
+        options: [{ id: "jcodeProvider", value: "cursor" }],
+      }),
+    ).toBe("cursor");
+  });
+});
 
 describe("resolveJcodeAcpBaseModelId", () => {
   it("normalizes empty and custom Jcode model ids", () => {

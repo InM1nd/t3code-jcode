@@ -5,6 +5,7 @@ import {
   MessageId,
   NonNegativeInt,
   OrchestrationCheckpointFile,
+  OrchestrationGetProjectActivityInput,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
   OrchestrationThreadSearchSource,
@@ -57,6 +58,7 @@ import {
   decodeThreadDetailPageCursor,
   encodeThreadDetailPageCursor,
 } from "../threadDetailCursor.ts";
+import { mapProjectActivityRows, ProjectActivityEventRow } from "../projectActivity.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import {
@@ -441,6 +443,55 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           deleted_at AS "deletedAt"
         FROM projection_threads
         ORDER BY created_at ASC, thread_id ASC
+      `,
+  });
+
+  const listProjectActivityRows = SqlSchema.findAll({
+    Request: OrchestrationGetProjectActivityInput,
+    Result: ProjectActivityEventRow,
+    execute: ({ projectId, throughSequence }) =>
+      sql`
+        SELECT
+          events.event_id AS "id",
+          events.event_type AS "eventType",
+          events.occurred_at AS "occurredAt",
+          CASE
+            WHEN events.aggregate_kind = 'thread' THEN events.stream_id
+            WHEN events.event_type = 'project.board-item-handoff-appended'
+              THEN json_extract(events.payload_json, '$.handoff.sourceThreadId')
+            ELSE json_extract(events.payload_json, '$.item.sourceThreadId')
+          END AS "threadId",
+          threads.title AS "threadTitle",
+          events.payload_json AS "payload"
+        FROM orchestration_events events
+        LEFT JOIN projection_threads threads
+          ON threads.thread_id = CASE
+            WHEN events.aggregate_kind = 'thread' THEN events.stream_id
+            WHEN events.event_type = 'project.board-item-handoff-appended'
+              THEN json_extract(events.payload_json, '$.handoff.sourceThreadId')
+            ELSE json_extract(events.payload_json, '$.item.sourceThreadId')
+          END
+        WHERE events.sequence <= ${throughSequence}
+          AND (
+            (events.aggregate_kind = 'project' AND events.stream_id = ${projectId})
+            OR (events.aggregate_kind = 'thread' AND threads.project_id = ${projectId})
+          )
+          AND (
+            events.event_type IN (
+              'thread.created',
+              'thread.turn-start-requested',
+              'thread.turn-interrupt-requested',
+              'thread.turn-diff-completed',
+              'project.board-item-upserted',
+              'project.board-item-handoff-appended'
+            )
+            OR (
+              events.event_type = 'thread.activity-appended'
+              AND json_extract(events.payload_json, '$.activity.tone') = 'error'
+            )
+          )
+        ORDER BY events.sequence DESC
+        LIMIT 100
       `,
   });
 
@@ -2162,6 +2213,23 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     };
   });
 
+  const getProjectActivity: ProjectionSnapshotQueryShape["getProjectActivity"] = Effect.fn(
+    "ProjectionSnapshotQuery.getProjectActivity",
+  )(function* (input) {
+    const rows = yield* listProjectActivityRows(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.getProjectActivity:query",
+          "ProjectionSnapshotQuery.getProjectActivity:decodeRows",
+        ),
+      ),
+    );
+    return {
+      throughSequence: input.throughSequence,
+      items: mapProjectActivityRows(rows),
+    };
+  });
+
   const getActiveProjectByWorkspaceRoot: ProjectionSnapshotQueryShape["getActiveProjectByWorkspaceRoot"] =
     (workspaceRoot) =>
       getActiveProjectRowByWorkspaceRoot({ workspaceRoot }).pipe(
@@ -2679,6 +2747,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getShellSnapshot,
     getArchivedShellSnapshot,
     searchThreads,
+    getProjectActivity,
     getSnapshotSequence,
     getCounts,
     getActiveProjectByWorkspaceRoot,
