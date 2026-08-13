@@ -385,6 +385,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.linkedTurnIds !== undefined ? { linkedTurnIds: command.linkedTurnIds } : {}),
           ...(command.linkTurnId !== undefined ? { linkTurnId: command.linkTurnId } : {}),
         }),
+        archivedAt: existing?.archivedAt ?? null,
         createdAt: existing?.createdAt ?? occurredAt,
         updatedAt: occurredAt,
       };
@@ -469,6 +470,57 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           commandId: command.commandId,
         })),
         type: "project.board-item-deleted" as const,
+        payload: {
+          projectId: command.projectId,
+          itemId: command.itemId,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "project.board.item.archive": {
+      const project = yield* requireProject({ readModel, command, projectId: command.projectId });
+      if (!(project.boardItems ?? []).some((item) => item.id === command.itemId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Board item '${command.itemId}' was not found on project '${command.projectId}'.`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "project",
+          aggregateId: command.projectId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "project.board-item-archived" as const,
+        payload: {
+          projectId: command.projectId,
+          itemId: command.itemId,
+          archivedAt: occurredAt,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "project.board.item.restore": {
+      const project = yield* requireProject({ readModel, command, projectId: command.projectId });
+      if (!(project.boardItems ?? []).some((item) => item.id === command.itemId)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Board item '${command.itemId}' was not found on project '${command.projectId}'.`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "project",
+          aggregateId: command.projectId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "project.board-item-restored" as const,
         payload: {
           projectId: command.projectId,
           itemId: command.itemId,

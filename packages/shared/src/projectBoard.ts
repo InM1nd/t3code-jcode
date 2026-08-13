@@ -36,12 +36,20 @@ export function indexProjectBoardItemsByTurnId(
 
 function statusSectionLabel(status: ProjectBoardItemStatus): string {
   switch (status) {
+    case "backlog":
+      return "Backlog";
+    case "ready":
+      return "Ready";
     case "inProgress":
       return "In progress";
-    case "pending":
-      return "Pending";
+    case "inReview":
+      return "In review";
+    case "blocked":
+      return "Blocked";
     case "completed":
       return "Done";
+    case "cancelled":
+      return "Cancelled";
   }
 }
 
@@ -49,18 +57,28 @@ function statusSectionLabel(status: ProjectBoardItemStatus): string {
  * Compact board digest for humans and agents — not a full dump of notes.
  */
 export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>): string {
-  const inProgress = items.filter((item) => item.status === "inProgress");
-  const pending = items.filter((item) => item.status === "pending");
-  const done = items.filter((item) => item.status === "completed");
+  const activeItems = items.filter((item) => !item.archivedAt);
+  const statuses: ReadonlyArray<ProjectBoardItemStatus> = [
+    "backlog",
+    "ready",
+    "inProgress",
+    "inReview",
+    "blocked",
+    "completed",
+    "cancelled",
+  ];
+  const byStatus = Object.fromEntries(
+    statuses.map((status) => [status, activeItems.filter((item) => item.status === status)]),
+  ) as Record<ProjectBoardItemStatus, ProjectBoardItem[]>;
 
-  if (items.length === 0) {
+  if (activeItems.length === 0) {
     return ["Project board digest", "", "Board is empty."].join("\n");
   }
 
   const lines = [
     "Project board digest",
     "",
-    `Totals: ${inProgress.length} in progress, ${pending.length} pending, ${done.length} done (${items.length} total).`,
+    `Totals: ${byStatus.inProgress.length} in progress, ${byStatus.backlog.length} backlog, ${byStatus.ready.length} ready, ${byStatus.inReview.length} in review, ${byStatus.blocked.length} blocked, ${byStatus.completed.length} done, ${byStatus.cancelled.length} cancelled (${activeItems.length} total).`,
   ];
 
   const appendSection = (status: ProjectBoardItemStatus, sectionItems: ProjectBoardItem[]) => {
@@ -74,12 +92,12 @@ export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>)
     }
   };
 
-  appendSection("inProgress", inProgress);
-  appendSection("pending", pending);
-  // Keep done short: only recent-ish titles, still listed for orientation.
-  appendSection("completed", done.slice(0, 10));
-  if (done.length > 10) {
-    lines.push(`- …and ${done.length - 10} more done`);
+  for (const status of statuses) {
+    const sectionItems = status === "completed" ? byStatus[status].slice(0, 10) : byStatus[status];
+    appendSection(status, sectionItems);
+  }
+  if (byStatus.completed.length > 10) {
+    lines.push(`- …and ${byStatus.completed.length - 10} more done`);
   }
 
   return lines.join("\n");

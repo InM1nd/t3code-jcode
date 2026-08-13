@@ -62,7 +62,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
           projectId,
           itemId: asItemId("item-1"),
           title: "Ship board",
-          status: "pending",
+          status: "backlog",
           source: "user",
         },
         readModel,
@@ -74,7 +74,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
         throw new Error("expected board upsert event");
       }
       expect(event.payload.item.title).toBe("Ship board");
-      expect(event.payload.item.status).toBe("pending");
+      expect(event.payload.item.status).toBe("backlog");
       expect(event.payload.item.source).toBe("user");
 
       const next = yield* projectEvent(readModel, event);
@@ -98,7 +98,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
           projectId,
           itemId: asItemId("item-1"),
           title: "Draft",
-          status: "pending",
+          status: "backlog",
         },
         readModel,
       });
@@ -133,6 +133,86 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
     }),
   );
 
+  it.effect("archives and restores a board item without changing its status", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const projectId = asProjectId("project-board-archive");
+      const itemId = asItemId("item-archive");
+      let readModel = yield* projectEvent(
+        createEmptyReadModel(now),
+        createProjectEvent({ sequence: 1, projectId, now }),
+      );
+      const created = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.upsert",
+          commandId: CommandId.make("cmd-board-create-archive"),
+          projectId,
+          itemId,
+          title: "Needs review",
+          status: "blocked",
+        },
+        readModel,
+      });
+      const createdEvent = Array.isArray(created) ? created[0] : created;
+      if (!createdEvent) throw new Error("missing create");
+      readModel = yield* projectEvent(readModel, createdEvent);
+
+      const archived = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.archive",
+          commandId: CommandId.make("cmd-board-archive"),
+          projectId,
+          itemId,
+        },
+        readModel,
+      });
+      const archivedEvent = Array.isArray(archived) ? archived[0] : archived;
+      expect(archivedEvent?.type).toBe("project.board-item-archived");
+      if (!archivedEvent) throw new Error("missing archive");
+      readModel = yield* projectEvent(readModel, archivedEvent);
+      expect(readModel.projects[0]?.boardItems?.[0]).toMatchObject({
+        status: "blocked",
+        archivedAt: expect.any(String),
+      });
+
+      const updated = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.upsert",
+          commandId: CommandId.make("cmd-board-update-archived"),
+          projectId,
+          itemId,
+          title: "Ready for review",
+          status: "inReview",
+        },
+        readModel,
+      });
+      const updatedEvent = Array.isArray(updated) ? updated[0] : updated;
+      if (!updatedEvent) throw new Error("missing update");
+      readModel = yield* projectEvent(readModel, updatedEvent);
+      expect(readModel.projects[0]?.boardItems?.[0]?.archivedAt).toBe(
+        archivedEvent.payload.archivedAt,
+      );
+
+      const restored = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.restore",
+          commandId: CommandId.make("cmd-board-restore"),
+          projectId,
+          itemId,
+        },
+        readModel,
+      });
+      const restoredEvent = Array.isArray(restored) ? restored[0] : restored;
+      expect(restoredEvent?.type).toBe("project.board-item-restored");
+      if (!restoredEvent) throw new Error("missing restore");
+      readModel = yield* projectEvent(readModel, restoredEvent);
+      expect(readModel.projects[0]?.boardItems?.[0]).toMatchObject({
+        status: "inReview",
+        archivedAt: null,
+      });
+    }),
+  );
+
   it.effect("deletes a board item", () =>
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
@@ -149,7 +229,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
           projectId,
           itemId: asItemId("item-1"),
           title: "Temporary",
-          status: "pending",
+          status: "backlog",
         },
         readModel,
       });
@@ -260,7 +340,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
             projectId,
             itemId: asItemId(`item-${index}`),
             title: `Item ${index}`,
-            status: "pending",
+            status: "backlog",
           },
           readModel,
         });
@@ -276,7 +356,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
           projectId,
           itemId: asItemId("item-overflow"),
           title: "Too many",
-          status: "pending",
+          status: "backlog",
         },
         readModel,
       }).pipe(Effect.flip);

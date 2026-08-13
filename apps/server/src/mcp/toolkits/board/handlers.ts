@@ -29,6 +29,13 @@ function errorMessage(error: { readonly message?: string } | unknown): string {
   return String(error);
 }
 
+export function listProjectBoardItems(
+  items: ReadonlyArray<ProjectBoardItem>,
+  includeArchived = false,
+): ReadonlyArray<ProjectBoardItem> {
+  return includeArchived ? items : items.filter((item) => !item.archivedAt);
+}
+
 const requireBoardScope = Effect.fn("BoardToolkit.requireScope")(function* () {
   const invocation = yield* McpInvocationContext.McpInvocationContext;
   if (!invocation.capabilities.has("board")) {
@@ -142,15 +149,26 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
     );
 });
 
+const dispatchBoardLifecycle = Effect.fn("BoardToolkit.dispatchBoardLifecycle")(function* (input: {
+  readonly type: "project.board.item.archive" | "project.board.item.restore";
+  readonly projectId: ProjectId;
+  readonly itemId: ProjectBoardItemId;
+}) {
+  const engine = yield* OrchestrationEngineService;
+  yield* engine
+    .dispatch({ ...input, commandId: yield* nextCommandId() })
+    .pipe(Effect.mapError((error) => new BoardToolError({ message: errorMessage(error) })));
+});
+
 const handlers = {
-  board_list: (_input: unknown) =>
+  board_list: (input: { readonly includeArchived?: boolean | undefined }) =>
     Effect.gen(function* () {
       const scope = yield* requireBoardScope();
       const projectId = yield* resolveProjectId(scope.threadId);
       const project = yield* loadBoard(projectId);
       return {
         projectId,
-        items: project.boardItems ?? [],
+        items: listProjectBoardItems(project.boardItems ?? [], input.includeArchived),
       };
     }),
 
@@ -159,13 +177,17 @@ const handlers = {
       const scope = yield* requireBoardScope();
       const projectId = yield* resolveProjectId(scope.threadId);
       const project = yield* loadBoard(projectId);
-      const items = project.boardItems ?? [];
+      const items = listProjectBoardItems(project.boardItems ?? []);
       return {
         projectId,
         digest: formatProjectBoardDigest(items),
+        backlogCount: items.filter((item) => item.status === "backlog").length,
+        readyCount: items.filter((item) => item.status === "ready").length,
         inProgressCount: items.filter((item) => item.status === "inProgress").length,
-        pendingCount: items.filter((item) => item.status === "pending").length,
+        inReviewCount: items.filter((item) => item.status === "inReview").length,
+        blockedCount: items.filter((item) => item.status === "blocked").length,
         completedCount: items.filter((item) => item.status === "completed").length,
+        cancelledCount: items.filter((item) => item.status === "cancelled").length,
         totalCount: items.length,
       };
     }),
@@ -331,6 +353,38 @@ const handlers = {
           ),
         );
       return { projectId, item: null };
+    }),
+
+  board_archive: (input: { readonly itemId: ProjectBoardItemId }) =>
+    Effect.gen(function* () {
+      const scope = yield* requireBoardScope();
+      const projectId = yield* resolveProjectId(scope.threadId);
+      yield* dispatchBoardLifecycle({
+        type: "project.board.item.archive",
+        projectId,
+        itemId: input.itemId,
+      });
+      const project = yield* loadBoard(projectId);
+      return {
+        projectId,
+        item: (project.boardItems ?? []).find((item) => item.id === input.itemId) ?? null,
+      };
+    }),
+
+  board_restore: (input: { readonly itemId: ProjectBoardItemId }) =>
+    Effect.gen(function* () {
+      const scope = yield* requireBoardScope();
+      const projectId = yield* resolveProjectId(scope.threadId);
+      yield* dispatchBoardLifecycle({
+        type: "project.board.item.restore",
+        projectId,
+        itemId: input.itemId,
+      });
+      const project = yield* loadBoard(projectId);
+      return {
+        projectId,
+        item: (project.boardItems ?? []).find((item) => item.id === input.itemId) ?? null,
+      };
     }),
 } satisfies Parameters<typeof BoardToolkit.toLayer>[0];
 

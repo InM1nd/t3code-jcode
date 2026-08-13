@@ -12,6 +12,8 @@ import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "
 import {
   MessageSentPayloadSchema,
   ProjectBoardItemDeletedPayload,
+  ProjectBoardItemArchivedPayload,
+  ProjectBoardItemRestoredPayload,
   ProjectBoardItemHandoffAppendedPayload,
   ProjectBoardItemUpsertedPayload,
   ProjectCreatedPayload,
@@ -349,6 +351,56 @@ export function projectEvent(
                   boardItems: (project.boardItems ?? []).map((item) =>
                     item.id === payload.itemId
                       ? { ...item, latestHandoff: payload.handoff, updatedAt: payload.updatedAt }
+                      : item,
+                  ),
+                  updatedAt: payload.updatedAt,
+                }
+              : project,
+          ),
+        })),
+      );
+
+    case "project.board-item-archived":
+      return decodeForEvent(
+        ProjectBoardItemArchivedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          projects: nextBase.projects.map((project) =>
+            project.id === payload.projectId
+              ? {
+                  ...project,
+                  boardItems: (project.boardItems ?? []).map((item) =>
+                    item.id === payload.itemId
+                      ? { ...item, archivedAt: payload.archivedAt, updatedAt: payload.updatedAt }
+                      : item,
+                  ),
+                  updatedAt: payload.updatedAt,
+                }
+              : project,
+          ),
+        })),
+      );
+
+    case "project.board-item-restored":
+      return decodeForEvent(
+        ProjectBoardItemRestoredPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          projects: nextBase.projects.map((project) =>
+            project.id === payload.projectId
+              ? {
+                  ...project,
+                  boardItems: (project.boardItems ?? []).map((item) =>
+                    item.id === payload.itemId
+                      ? { ...item, archivedAt: null, updatedAt: payload.updatedAt }
                       : item,
                   ),
                   updatedAt: payload.updatedAt,

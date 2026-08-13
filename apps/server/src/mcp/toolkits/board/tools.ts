@@ -34,9 +34,13 @@ const BoardListResult = Schema.Struct({
 const BoardDigestResult = Schema.Struct({
   projectId: ProjectId,
   digest: Schema.String,
+  backlogCount: Schema.Number,
+  readyCount: Schema.Number,
   inProgressCount: Schema.Number,
-  pendingCount: Schema.Number,
+  inReviewCount: Schema.Number,
+  blockedCount: Schema.Number,
   completedCount: Schema.Number,
+  cancelledCount: Schema.Number,
   totalCount: Schema.Number,
 });
 
@@ -48,7 +52,7 @@ const BoardMutateResult = Schema.Struct({
 export const BoardListTool = Tool.make("board_list", {
   description:
     "List the project board todos for the current thread's project. These items are shared across all threads in the project.",
-  parameters: Schema.Struct({}),
+  parameters: Schema.Struct({ includeArchived: Schema.optional(Schema.Boolean) }),
   success: BoardListResult,
   failure: BoardToolError,
   dependencies,
@@ -86,7 +90,7 @@ export const BoardGetBriefTool = Tool.make("board_get_brief", {
 
 export const BoardUpsertTool = Tool.make("board_upsert", {
   description:
-    "Create or update a project board todo. Pass itemId to update an existing item; omit it to create a new one. Status is pending | inProgress | completed. Automatically links the project's current thread latest turn when available.",
+    "Create or update a project board todo. Pass itemId to update an existing item; omit it to create a new one. Automatically links the project's current thread latest turn when available.",
   parameters: Schema.Struct({
     itemId: Schema.optional(ProjectBoardItemId),
     title: TrimmedNonEmptyString,
@@ -159,6 +163,28 @@ export const BoardDeleteTool = Tool.make("board_delete", {
   .annotate(Tool.Title, "Delete project board item")
   .annotate(Tool.Destructive, true);
 
+export const BoardArchiveTool = Tool.make("board_archive", {
+  description: "Archive a project board todo without changing its status.",
+  parameters: Schema.Struct({ itemId: ProjectBoardItemId }),
+  success: BoardMutateResult,
+  failure: BoardToolError,
+  dependencies,
+})
+  .annotate(Tool.Title, "Archive project board item")
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true);
+
+export const BoardRestoreTool = Tool.make("board_restore", {
+  description: "Restore an archived project board todo without changing its status.",
+  parameters: Schema.Struct({ itemId: ProjectBoardItemId }),
+  success: BoardMutateResult,
+  failure: BoardToolError,
+  dependencies,
+})
+  .annotate(Tool.Title, "Restore project board item")
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true);
+
 export const BoardToolkit = Toolkit.make(
   BoardListTool,
   BoardDigestTool,
@@ -167,5 +193,7 @@ export const BoardToolkit = Toolkit.make(
   BoardHandoffTool,
   BoardSetStatusTool,
   BoardLinkTurnTool,
+  BoardArchiveTool,
+  BoardRestoreTool,
   BoardDeleteTool,
 );

@@ -58,13 +58,22 @@ describe("formatProjectBoardDigest", () => {
         notes: "secret details",
         linkedTurnIds: ["t1" as TurnId],
       }),
-      item({ id: "i2" as ProjectBoardItem["id"], title: "Next", status: "pending" }),
+      item({ id: "i2" as ProjectBoardItem["id"], title: "Next", status: "backlog" }),
       item({ id: "i3" as ProjectBoardItem["id"], title: "Done", status: "completed" }),
+      item({
+        id: "i4" as ProjectBoardItem["id"],
+        title: "Archived task",
+        status: "cancelled",
+        archivedAt: "2026-01-02T00:00:00.000Z",
+      }),
     ]);
-    expect(digest).toContain("1 in progress, 1 pending, 1 done");
+    expect(digest).toContain("1 in progress");
+    expect(digest).toContain("1 backlog");
+    expect(digest).toContain("1 done");
     expect(digest).toContain("WIP");
     expect(digest).toContain("1 linked turn");
     expect(digest).not.toContain("secret details");
+    expect(digest).not.toContain("Archived task");
   });
 });
 
@@ -74,13 +83,13 @@ describe("indexProjectBoardItemsByTurnId", () => {
       item({
         id: "i1" as ProjectBoardItem["id"],
         title: "A",
-        status: "pending",
+        status: "backlog",
         linkedTurnIds: ["t1" as TurnId, "t2" as TurnId],
       }),
       item({
         id: "i2" as ProjectBoardItem["id"],
         title: "B",
-        status: "pending",
+        status: "backlog",
         linkedTurnIds: ["t2" as TurnId],
       }),
     ]);
