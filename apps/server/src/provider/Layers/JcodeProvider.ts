@@ -164,19 +164,25 @@ const runJcodeModelListCommand = (
     );
   });
 
+export const discoverJcodeModelsForProvider = (
+  jcodeSettings: JcodeSettings,
+  providerId: string,
+  environment: NodeJS.ProcessEnv,
+) =>
+  runJcodeModelListCommand(jcodeSettings, providerId, environment).pipe(
+    Effect.timeoutOption(JCODE_MODEL_LIST_TIMEOUT_MS),
+    Effect.map((result) =>
+      Option.isSome(result) && result.value.code === 0
+        ? jcodeModelsFromModelList(providerId, result.value.stdout)
+        : [],
+    ),
+    Effect.catchCause(() => Effect.succeed([])),
+  );
+
 const discoverJcodeModels = (jcodeSettings: JcodeSettings, environment: NodeJS.ProcessEnv) =>
   Effect.forEach(
     JCODE_INNER_PROVIDERS,
-    (provider) =>
-      runJcodeModelListCommand(jcodeSettings, provider.id, environment).pipe(
-        Effect.timeoutOption(JCODE_MODEL_LIST_TIMEOUT_MS),
-        Effect.map((result) =>
-          Option.isSome(result) && result.value.code === 0
-            ? jcodeModelsFromModelList(provider.id, result.value.stdout)
-            : [],
-        ),
-        Effect.catchCause(() => Effect.succeed([])),
-      ),
+    (provider) => discoverJcodeModelsForProvider(jcodeSettings, provider.id, environment),
     { concurrency: "unbounded" },
   ).pipe(Effect.map((groups) => groups.flat()));
 

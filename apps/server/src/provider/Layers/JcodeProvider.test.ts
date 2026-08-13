@@ -43,11 +43,14 @@ describe("buildInitialJcodeProviderSnapshot", () => {
 describe("jcodeModelsFromModelList", () => {
   it("keeps Jcode reasoning and fast model variants", () => {
     expect(
-      jcodeModelsFromModelList("cursor", "composer-2\ncomposer-2-fast\ncursor-grok-4.5-high\n"),
+      jcodeModelsFromModelList(
+        "cursor",
+        "composer-2\ncomposer-2-fast\ncursor-grok-4.6-high-fast\n",
+      ),
     ).toMatchObject([
       { slug: "composer-2", subProvider: "Cursor", isDefault: true },
       { slug: "composer-2-fast", subProvider: "Cursor" },
-      { slug: "cursor-grok-4.5-high", subProvider: "Cursor" },
+      { slug: "cursor-grok-4.6-high-fast", subProvider: "Cursor" },
     ]);
   });
 });

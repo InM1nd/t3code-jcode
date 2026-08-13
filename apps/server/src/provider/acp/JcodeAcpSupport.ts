@@ -1,4 +1,4 @@
-import { type JcodeSettings, type ModelSelection, ProviderDriverKind } from "@t3tools/contracts";
+import { type JcodeSettings, type ModelSelection } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -7,18 +7,17 @@ import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawne
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveJcodeInnerProvider } from "@t3tools/shared/jcodeInnerProvider";
-import { getModelSelectionStringOptionValue, normalizeModelSlug } from "@t3tools/shared/model";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
 
-const JCODE_DRIVER_KIND = ProviderDriverKind.make("jcode");
 /** Placeholder required by AcpSessionRuntimeOptions; jcode rejects `authenticate`. */
 const JCODE_AUTH_METHOD_UNUSED = "jcode";
 
 type JcodeAcpRuntimeJcodeSettings = Pick<
   JcodeSettings,
   "binaryPath" | "model" | "providerProfile" | "jcodeProvider"
->;
+> & { readonly socketPath?: string };
 
 interface JcodeAcpRuntimeInput extends Omit<
   AcpSessionRuntime.AcpSessionRuntimeOptions,
@@ -38,6 +37,9 @@ export function buildJcodeAcpSpawnInput(
   const providerProfile = jcodeSettings?.providerProfile?.trim();
   const jcodeProvider = jcodeSettings?.jcodeProvider?.trim();
   const args: Array<string> = ["acp", "--no-selfdev"];
+  if (jcodeSettings?.socketPath?.trim()) {
+    args.push("--socket", jcodeSettings.socketPath.trim());
+  }
   if (jcodeProvider) {
     args.push("-p", jcodeProvider);
   }
@@ -82,8 +84,7 @@ export const makeJcodeAcpRuntime = (
 
 export function resolveJcodeAcpBaseModelId(model: string | null | undefined): string {
   const trimmed = model?.trim();
-  const base = trimmed && trimmed.length > 0 ? trimmed : "claude-opus-5";
-  return normalizeModelSlug(base, JCODE_DRIVER_KIND) ?? "claude-opus-5";
+  return trimmed && trimmed.length > 0 ? trimmed : "claude-opus-5";
 }
 
 export function resolveJcodeAcpProvider(
@@ -105,11 +106,14 @@ export function currentJcodeModelIdFromSessionSetup(
 
 /**
  * jcode rejects ACP `session/set_model`. Model is selected only via spawn `-m`
- * (see `buildJcodeAcpSpawnInput`). This helper only resolves the bookkeeping id.
+ * (see `buildJcodeAcpSpawnInput`). This helper validates the reported id.
  */
 export function applyJcodeAcpModelSelection(input: {
   readonly currentModelId: string | undefined;
   readonly requestedModelId: string | undefined;
 }): string | undefined {
-  return input.requestedModelId ?? input.currentModelId;
+  if (input.requestedModelId !== undefined && input.currentModelId !== input.requestedModelId) {
+    return undefined;
+  }
+  return input.currentModelId ?? input.requestedModelId;
 }

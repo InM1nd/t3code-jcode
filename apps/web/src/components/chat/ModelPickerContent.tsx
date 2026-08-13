@@ -40,6 +40,11 @@ import {
   type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
+import {
+  JCODE_INNER_PROVIDERS,
+  resolveJcodeInnerProvider,
+} from "@t3tools/shared/jcodeInnerProvider";
+import { resolveJcodeModelVariants } from "./jcodeModelVariants";
 
 type ModelPickerItem = {
   slug: string;
@@ -275,6 +280,23 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     selectedInstanceId === "favorites" ? null : (entryByInstanceId.get(selectedInstanceId) ?? null);
   const showJcodeProviderPicker =
     selectedEntry?.driverKind === "jcode" && props.onJcodeInnerProviderChange !== undefined;
+  const jcodeVariants = useMemo(() => {
+    const innerProvider = resolveJcodeInnerProvider(props.jcodeInnerProvider);
+    if (!showJcodeProviderPicker || !innerProvider || selectedInstanceId === "favorites")
+      return null;
+    return resolveJcodeModelVariants(
+      (modelOptionsByInstance.get(selectedInstanceId) ?? []).filter(
+        (model) => model.subProvider === innerProvider.label,
+      ),
+      props.model,
+    );
+  }, [
+    modelOptionsByInstance,
+    props.jcodeInnerProvider,
+    props.model,
+    selectedInstanceId,
+    showJcodeProviderPicker,
+  ]);
   const instanceOrder = useMemo(
     () => instanceEntries.map((entry) => entry.instanceId),
     [instanceEntries],
@@ -443,10 +465,16 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       // normalization rules, so pass the driver kind here.
       const resolvedModel = resolveSelectableModel(entry.driverKind, modelSlug, options);
       if (resolvedModel) {
+        const selectedOption = options.find((option) => option.slug === resolvedModel);
+        const selectedJcodeProvider = JCODE_INNER_PROVIDERS.find(
+          (provider) => provider.label === selectedOption?.subProvider,
+        )?.id;
         onInstanceModelChange(
           instanceId,
           resolvedModel,
-          entry.driverKind === "jcode" ? (props.jcodeInnerProvider ?? undefined) : undefined,
+          entry.driverKind === "jcode"
+            ? (selectedJcodeProvider ?? props.jcodeInnerProvider ?? undefined)
+            : undefined,
         );
       }
     },
@@ -679,30 +707,91 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             )}
           >
             {showJcodeProviderPicker ? (
-              <div className="flex items-center gap-1 border-b border-border/70 px-3 py-2">
-                <span className="mr-1 text-xs text-muted-foreground">Jcode via</span>
-                {[
-                  ["claude", "Claude"],
-                  ["cursor", "Cursor"],
-                  ["openai", "Codex"],
-                ].map(([provider, label]) => (
-                  <button
-                    key={provider}
-                    type="button"
-                    className={cn(
-                      "rounded px-2 py-1 text-xs transition-colors hover:bg-muted",
-                      props.jcodeInnerProvider === provider &&
-                        "bg-muted font-medium text-foreground",
-                    )}
-                    onClick={() => {
-                      if (selectedEntry && provider) {
-                        props.onJcodeInnerProviderChange?.(selectedEntry.instanceId, provider);
-                      }
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="border-b border-border/70 px-3 py-2">
+                <div className="flex items-center gap-1">
+                  <span className="mr-1 text-xs text-muted-foreground">Jcode via</span>
+                  {[
+                    ["claude", "Claude"],
+                    ["cursor", "Cursor"],
+                    ["openai", "Codex"],
+                  ].map(([provider, label]) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      className={cn(
+                        "rounded px-2 py-1 text-xs transition-colors hover:bg-muted",
+                        props.jcodeInnerProvider === provider &&
+                          "bg-muted font-medium text-foreground",
+                      )}
+                      onClick={() => {
+                        if (selectedEntry && provider) {
+                          props.onJcodeInnerProviderChange?.(selectedEntry.instanceId, provider);
+                        }
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {jcodeVariants && selectedEntry ? (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {jcodeVariants.reasoning.length > 1 ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">Reasoning</span>
+                        {jcodeVariants.reasoning.map((reasoning) => {
+                          const slug = jcodeVariants.slugForReasoning(reasoning);
+                          return slug ? (
+                            <button
+                              key={reasoning}
+                              type="button"
+                              className={cn(
+                                "rounded px-1.5 py-1 text-xs hover:bg-muted",
+                                reasoning === jcodeVariants.selectedReasoning &&
+                                  "bg-muted font-medium",
+                              )}
+                              onClick={() =>
+                                onInstanceModelChange(
+                                  selectedEntry.instanceId,
+                                  slug,
+                                  props.jcodeInnerProvider ?? undefined,
+                                )
+                              }
+                            >
+                              {reasoning}
+                            </button>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : null}
+                    {jcodeVariants.speed.length > 1 ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">Speed</span>
+                        {jcodeVariants.speed.map((speed) => {
+                          const slug = jcodeVariants.slugForSpeed(speed);
+                          return slug ? (
+                            <button
+                              key={speed}
+                              type="button"
+                              className={cn(
+                                "rounded px-1.5 py-1 text-xs hover:bg-muted",
+                                speed === jcodeVariants.selectedSpeed && "bg-muted font-medium",
+                              )}
+                              onClick={() =>
+                                onInstanceModelChange(
+                                  selectedEntry.instanceId,
+                                  slug,
+                                  props.jcodeInnerProvider ?? undefined,
+                                )
+                              }
+                            >
+                              {speed}
+                            </button>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {/* Search bar */}
