@@ -262,7 +262,34 @@ export type ProjectFaviconPath = typeof ProjectFaviconPath.Type;
 /** Soft cap so shell snapshots stay small when the board rides on project-upserted. */
 export const PROJECT_BOARD_ITEM_LIMIT = 100;
 
-export const ProjectBoardItemStatus = Schema.Literals(["pending", "inProgress", "completed"]);
+const CanonicalProjectBoardItemStatus = Schema.Literals([
+  "backlog",
+  "ready",
+  "inProgress",
+  "inReview",
+  "blocked",
+  "completed",
+  "cancelled",
+]);
+
+export const ProjectBoardItemStatus = Schema.Literals([
+  "pending",
+  "backlog",
+  "ready",
+  "inProgress",
+  "inReview",
+  "blocked",
+  "completed",
+  "cancelled",
+]).pipe(
+  Schema.decodeTo(
+    CanonicalProjectBoardItemStatus,
+    SchemaTransformation.transformOrFail({
+      decode: (status) => Effect.succeed(status === "pending" ? "backlog" : status),
+      encode: Effect.succeed,
+    }),
+  ),
+);
 export type ProjectBoardItemStatus = typeof ProjectBoardItemStatus.Type;
 
 export const ProjectBoardItemSource = Schema.Literals(["user", "agent"]);
@@ -300,6 +327,7 @@ export const ProjectBoardItem = Schema.Struct({
   sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Turns that touched this card. Optional for older servers/clients.
   linkedTurnIds: Schema.optional(Schema.Array(TurnId)),
+  archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -818,6 +846,20 @@ const ProjectBoardItemDeleteCommand = Schema.Struct({
   itemId: ProjectBoardItemId,
 });
 
+const ProjectBoardItemArchiveCommand = Schema.Struct({
+  type: Schema.Literal("project.board.item.archive"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+});
+
+const ProjectBoardItemRestoreCommand = Schema.Struct({
+  type: Schema.Literal("project.board.item.restore"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+});
+
 const ThreadCreateCommand = Schema.Struct({
   type: Schema.Literal("thread.create"),
   commandId: CommandId,
@@ -1070,6 +1112,8 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectBoardItemUpsertCommand,
   ProjectBoardItemHandoffAppendCommand,
   ProjectBoardItemDeleteCommand,
+  ProjectBoardItemArchiveCommand,
+  ProjectBoardItemRestoreCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -1101,6 +1145,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectBoardItemUpsertCommand,
   ProjectBoardItemHandoffAppendCommand,
   ProjectBoardItemDeleteCommand,
+  ProjectBoardItemArchiveCommand,
+  ProjectBoardItemRestoreCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
   ThreadArchiveCommand,
@@ -1222,6 +1268,8 @@ export const OrchestrationEventType = Schema.Literals([
   "project.board-item-upserted",
   "project.board-item-handoff-appended",
   "project.board-item-deleted",
+  "project.board-item-archived",
+  "project.board-item-restored",
   "thread.created",
   "thread.deleted",
   "thread.archived",
@@ -1300,6 +1348,19 @@ export const ProjectBoardItemHandoffAppendedPayload = Schema.Struct({
 });
 
 export const ProjectBoardItemDeletedPayload = Schema.Struct({
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+  updatedAt: IsoDateTime,
+});
+
+export const ProjectBoardItemArchivedPayload = Schema.Struct({
+  projectId: ProjectId,
+  itemId: ProjectBoardItemId,
+  archivedAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const ProjectBoardItemRestoredPayload = Schema.Struct({
   projectId: ProjectId,
   itemId: ProjectBoardItemId,
   updatedAt: IsoDateTime,
@@ -1553,6 +1614,16 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("project.board-item-deleted"),
     payload: ProjectBoardItemDeletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("project.board-item-archived"),
+    payload: ProjectBoardItemArchivedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("project.board-item-restored"),
+    payload: ProjectBoardItemRestoredPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
