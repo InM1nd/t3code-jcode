@@ -127,9 +127,15 @@ export const RuntimeMode = Schema.Literals([
 ]);
 export type RuntimeMode = typeof RuntimeMode.Type;
 export const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
-export const ProviderInteractionMode = Schema.Literals(["default", "plan"]);
+export const ProviderInteractionMode = Schema.Literals([
+  "default",
+  "build",
+  "plan",
+  "debug",
+  "swarm",
+]);
 export type ProviderInteractionMode = typeof ProviderInteractionMode.Type;
-export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "default";
+export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "build";
 export const ProviderRequestKind = Schema.Literals(["command", "file-read", "file-change"]);
 export type ProviderRequestKind = typeof ProviderRequestKind.Type;
 export const AssistantDeliveryMode = Schema.Literals(["buffered", "streaming"]);

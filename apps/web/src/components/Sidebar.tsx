@@ -92,7 +92,11 @@ import {
   buildSidebarProjectSnapshots,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
-import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
+import {
+  legacyProjectCwdPreferenceKey,
+  resolveProjectExpanded,
+  useUiStateStore,
+} from "../uiStateStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
@@ -121,6 +125,8 @@ import {
   buildBulkTitleRegenerationContextMenuItem,
   formatWorkingDurationLabel,
   firstValidTimestampMs,
+  getVisibleThreadsForProject,
+  groupSidebarThreadEntriesByProject,
   hasUnseenCompletion,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
@@ -182,6 +188,14 @@ import {
 // stays behind an explicit Show more.
 const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
+
+function projectExpansionPreferenceKeys(project: SidebarProjectSnapshot): string[] {
+  return [
+    project.projectKey,
+    ...project.memberProjects.map((member) => member.physicalProjectKey),
+    ...project.memberProjects.map((member) => legacyProjectCwdPreferenceKey(member.workspaceRoot)),
+  ];
+}
 
 function compactSidebarTimeLabel(label: string): string {
   if (label === "just now") return "now";
@@ -1617,6 +1631,8 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
+  const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
+  const setProjectExpanded = useUiStateStore((store) => store.setProjectExpanded);
   const threads = useThreadShells();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -1810,6 +1826,17 @@ export default function Sidebar() {
       ),
     [projectGroups],
   );
+  const projectGroupByMemberKey = useMemo(
+    () =>
+      new Map(
+        projectGroups.flatMap((group) =>
+          group.memberProjectRefs.map(
+            (projectRef) => [`${projectRef.environmentId}:${projectRef.projectId}`, group] as const,
+          ),
+        ),
+      ),
+    [projectGroups],
+  );
 
   // now is quantized to the minute so effectiveSettled memoization doesn't
   // churn on every render; auto-settle thresholds are day-granular anyway.
@@ -1862,6 +1889,10 @@ export default function Sidebar() {
             ),
           ),
     [scopedProjectGroup],
+  );
+  const visibleProjectGroups = useMemo(
+    () => (scopedProjectGroup === null ? projectGroups : [scopedProjectGroup]),
+    [projectGroups, scopedProjectGroup],
   );
   useEffect(() => {
     if (projectScopeKey !== null && scopedProjectGroup === null) {
@@ -2061,73 +2092,131 @@ export default function Sidebar() {
     return () => window.clearTimeout(id);
   }, [snoozedThreads]);
 
-  // The settled tail renders in pages: history shouldn't dominate the
-  // sidebar, and the common lookups are recent. Expansion resets when the
-  // filter context changes so a scope/search flip never inherits a deep
-  // page state.
-  const [settledVisibleCount, setSettledVisibleCount] = useState(SETTLED_TAIL_INITIAL_COUNT);
-  const settledResetKey = projectScopeKey ?? "all";
-  const lastSettledResetKeyRef = useRef(settledResetKey);
-  if (lastSettledResetKeyRef.current !== settledResetKey) {
-    lastSettledResetKeyRef.current = settledResetKey;
-    setSettledVisibleCount(SETTLED_TAIL_INITIAL_COUNT);
-  }
-  const visibleSettledThreads = useMemo(() => {
-    if (settledThreads.length <= settledVisibleCount) return settledThreads;
-    const visible = settledThreads.slice(0, settledVisibleCount);
-    // The open thread must never hide under "Show more": navigating into a
-    // deep settled thread (search, deep link) pulls its row into the visible
-    // tail so the highlight and the un-settle affordance stay reachable.
-    if (routeThreadKey !== null) {
-      const routeThread = settledThreads
-        .slice(settledVisibleCount)
-        .find(
-          (thread) =>
-            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
-        );
-      if (routeThread !== undefined) visible.push(routeThread);
+  const [optimisticPinnedOrder, setOptimisticPinnedOrder] = useState<{
+    readonly order: readonly string[];
+    readonly keysAtDrop: ReadonlyMap<string, string | null>;
+    readonly assignedKeys: ReadonlyMap<string, string>;
+  } | null>(null);
+  const orderedPinnedThreads = useMemo(() => {
+    if (optimisticPinnedOrder === null) return pinnedThreads;
+    return orderItemsByPreferredIds({
+      items: pinnedThreads,
+      preferredIds: optimisticPinnedOrder.order,
+      getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+    });
+  }, [optimisticPinnedOrder, pinnedThreads]);
+  useEffect(() => {
+    if (optimisticPinnedOrder === null) return;
+    const canonical = pinnedThreads.filter((thread) =>
+      reorderablePinnedKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+    );
+    const canonicalKeys = canonical.map((thread) =>
+      scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+    );
+    const membershipChanged =
+      canonicalKeys.length !== optimisticPinnedOrder.order.length ||
+      canonicalKeys.some((key) => !optimisticPinnedOrder.order.includes(key));
+    const foreignKeyLanded = canonical.some((thread, index) => {
+      const threadKey = canonicalKeys[index]!;
+      const currentKey = thread.pinOrderKey ?? null;
+      if (currentKey === optimisticPinnedOrder.keysAtDrop.get(threadKey)) return false;
+      return currentKey !== optimisticPinnedOrder.assignedKeys.get(threadKey);
+    });
+    const currentKeyByThreadKey = new Map(
+      canonical.map((thread, index) => [canonicalKeys[index]!, thread.pinOrderKey ?? null]),
+    );
+    const allAssignmentsLanded = [...optimisticPinnedOrder.assignedKeys].every(
+      ([threadKey, orderKey]) => currentKeyByThreadKey.get(threadKey) === orderKey,
+    );
+    const orderConfirmed =
+      !membershipChanged &&
+      canonicalKeys.every((key, index) => key === optimisticPinnedOrder.order[index]);
+    if (membershipChanged || foreignKeyLanded || allAssignmentsLanded || orderConfirmed) {
+      setOptimisticPinnedOrder(null);
     }
-    return visible;
-  }, [routeThreadKey, settledThreads, settledVisibleCount]);
-  const hiddenSettledCount = settledThreads.length - visibleSettledThreads.length;
-  const showMoreSettled = useCallback(
-    () => setSettledVisibleCount((count) => count + SETTLED_TAIL_PAGE_COUNT),
-    [],
+  }, [optimisticPinnedOrder, pinnedThreads, reorderablePinnedKeys]);
+
+  const [expandedSettledProjectKeys, setExpandedSettledProjectKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
   );
-  const [settledShelfExpanded, setSettledShelfExpanded] = useState(true);
-  const toggleSettledShelf = useCallback(() => setSettledShelfExpanded((value) => !value), []);
-  const renderedSettledThreads = useMemo(() => {
-    if (settledShelfExpanded) return visibleSettledThreads;
-    if (routeThreadKey === null) return [];
-    const routeThread = visibleSettledThreads.find(
-      (thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
-    );
-    return routeThread === undefined ? [] : [routeThread];
-  }, [routeThreadKey, settledShelfExpanded, visibleSettledThreads]);
+  const projectThreadGroups = useMemo(() => {
+    const groups = groupSidebarThreadEntriesByProject({
+      projects: visibleProjectGroups,
+      entries: [
+        ...orderedPinnedThreads.map((thread) => ({ thread, section: "pinned" as const })),
+        ...activeThreads.map((thread) => ({ thread, section: "active" as const })),
+        ...snoozedThreads.map((thread) => ({ thread, section: "snoozed" as const })),
+        ...settledThreads.map((thread) => ({ thread, section: "settled" as const })),
+      ],
+    });
 
-  // The snoozed shelf is collapsed by default: out of the way, never gone.
-  // Collapsed threads don't render (and so don't participate in jump
-  // shortcuts or multi-select), matching the settled tail's paging model.
-  const [snoozedShelfExpanded, setSnoozedShelfExpanded] = useState(false);
-  const toggleSnoozedShelf = useCallback(() => setSnoozedShelfExpanded((value) => !value), []);
-  const visibleSnoozedThreads = useMemo(() => {
-    if (snoozedShelfExpanded) return snoozedThreads;
-    // The open thread must never vanish behind the collapsed shelf: a
-    // snoozed thread reached by route (deep link, open before snoozing
-    // elsewhere) keeps its row — with highlight and wake affordance — same
-    // exception the settled tail's "Show more" makes.
-    if (routeThreadKey === null) return [];
-    const routeThread = snoozedThreads.find(
-      (thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
-    );
-    return routeThread === undefined ? [] : [routeThread];
-  }, [routeThreadKey, snoozedShelfExpanded, snoozedThreads]);
+    return groups.map(({ project, entries }) => {
+      const projectHasRouteThread = entries.some(
+        ({ thread }) =>
+          scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === routeThreadKey,
+      );
+      const isExpanded =
+        projectHasRouteThread ||
+        resolveProjectExpanded(projectExpandedById, projectExpansionPreferenceKeys(project));
+      const settledEntries = entries.filter((entry) => entry.section === "settled");
+      const settledPreview = getVisibleThreadsForProject({
+        threads: settledEntries,
+        activeThreadKey: routeThreadKey,
+        getThreadKey: ({ thread }) =>
+          scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+        isThreadListExpanded: expandedSettledProjectKeys.has(project.projectKey),
+        previewLimit: SETTLED_TAIL_INITIAL_COUNT,
+      });
+      const visibleEntries = isExpanded
+        ? [
+            ...entries.filter((entry) => entry.section !== "settled"),
+            ...settledPreview.visibleThreads,
+          ]
+        : [];
 
+      return {
+        project,
+        entries,
+        isExpanded,
+        projectHasRouteThread,
+        visibleEntries,
+        hiddenSettledCount: settledPreview.hiddenThreads.length,
+      };
+    });
+  }, [
+    activeThreads,
+    expandedSettledProjectKeys,
+    orderedPinnedThreads,
+    projectExpandedById,
+    routeThreadKey,
+    settledThreads,
+    snoozedThreads,
+    visibleProjectGroups,
+  ]);
   const orderedThreads = useMemo(
-    () => [...pinnedThreads, ...activeThreads, ...visibleSnoozedThreads, ...renderedSettledThreads],
-    [pinnedThreads, activeThreads, visibleSnoozedThreads, renderedSettledThreads],
+    () => projectThreadGroups.flatMap((group) => group.visibleEntries.map(({ thread }) => thread)),
+    [projectThreadGroups],
+  );
+  const toggleProjectExpansion = useCallback(
+    (project: SidebarProjectSnapshot, isExpanded: boolean) => {
+      if (isExpanded) {
+        clearSelection();
+      }
+      setProjectExpanded(projectExpansionPreferenceKeys(project), !isExpanded);
+    },
+    [clearSelection, setProjectExpanded],
+  );
+  const showMoreSettledForProject = useCallback((projectKey: string) => {
+    setExpandedSettledProjectKeys((current) => new Set(current).add(projectKey));
+  }, []);
+  const expandThreadProject = useCallback(
+    (thread: EnvironmentThreadShell) => {
+      const project = projectGroupByMemberKey.get(`${thread.environmentId}:${thread.projectId}`);
+      if (project) {
+        setProjectExpanded(projectExpansionPreferenceKeys(project), true);
+      }
+    },
+    [projectGroupByMemberKey, setProjectExpanded],
   );
   const orderedThreadKeys = useMemo(
     () =>
@@ -2237,10 +2326,11 @@ export default function Sidebar() {
   }, []);
   const selectThreadSearchResult = useCallback(
     (thread: EnvironmentThreadShell) => {
+      expandThreadProject(thread);
       clearThreadSearch();
       navigateToThread(scopeThreadRef(thread.environmentId, thread.id));
     },
-    [clearThreadSearch, navigateToThread],
+    [clearThreadSearch, expandThreadProject, navigateToThread],
   );
   const handleThreadSearchKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -2460,61 +2550,6 @@ export default function Sidebar() {
   const pinnedDndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
-  const [optimisticPinnedOrder, setOptimisticPinnedOrder] = useState<{
-    readonly order: readonly string[];
-    /** pinOrderKey per thread as of the drop — the baseline that tells a
-        concurrent client's write apart from one of our own landing. */
-    readonly keysAtDrop: ReadonlyMap<string, string | null>;
-    /** The keys this drop writes (one per planned assignment). The
-        override holds until all of them appear in canonical state. */
-    readonly assignedKeys: ReadonlyMap<string, string>;
-  } | null>(null);
-  const orderedPinnedThreads = useMemo(() => {
-    if (optimisticPinnedOrder === null) return pinnedThreads;
-    return orderItemsByPreferredIds({
-      items: pinnedThreads,
-      preferredIds: optimisticPinnedOrder.order,
-      getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-    });
-  }, [optimisticPinnedOrder, pinnedThreads]);
-  useEffect(() => {
-    if (optimisticPinnedOrder === null) return;
-    const canonical = pinnedThreads.filter((thread) =>
-      reorderablePinnedKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
-    );
-    const canonicalKeys = canonical.map((thread) =>
-      scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-    );
-    // The override represents one drop against one snapshot of the world.
-    // Release it when the world moves on: membership changed (pin/unpin/
-    // snooze/wake — the override can't say where members it never saw
-    // belong), a key changed to something we did NOT write (a concurrent
-    // client's reorder that must win), every key we wrote has landed, or
-    // canonical already matches. Releasing on the FIRST landed key instead
-    // of the last exposes the half-written order mid-materialization and
-    // the block visibly reshuffles once per write.
-    const membershipChanged =
-      canonicalKeys.length !== optimisticPinnedOrder.order.length ||
-      canonicalKeys.some((key) => !optimisticPinnedOrder.order.includes(key));
-    const foreignKeyLanded = canonical.some((thread, index) => {
-      const threadKey = canonicalKeys[index]!;
-      const currentKey = thread.pinOrderKey ?? null;
-      if (currentKey === optimisticPinnedOrder.keysAtDrop.get(threadKey)) return false;
-      return currentKey !== optimisticPinnedOrder.assignedKeys.get(threadKey);
-    });
-    const currentKeyByThreadKey = new Map(
-      canonical.map((thread, index) => [canonicalKeys[index]!, thread.pinOrderKey ?? null]),
-    );
-    const allAssignmentsLanded = [...optimisticPinnedOrder.assignedKeys].every(
-      ([threadKey, orderKey]) => currentKeyByThreadKey.get(threadKey) === orderKey,
-    );
-    const orderConfirmed =
-      !membershipChanged &&
-      canonicalKeys.every((key, index) => key === optimisticPinnedOrder.order[index]);
-    if (membershipChanged || foreignKeyLanded || allAssignmentsLanded || orderConfirmed) {
-      setOptimisticPinnedOrder(null);
-    }
-  }, [optimisticPinnedOrder, pinnedThreads, reorderablePinnedKeys]);
   const attemptPin = useCallback(
     (threadRef: ScopedThreadRef) => {
       void (async () => {
@@ -3569,14 +3604,7 @@ export default function Sidebar() {
                       />
                     );
                   };
-                  // Draft block above everything, then the pinned block:
-                  // full cards above the inbox, closed by a thin divider (the
-                  // pin glyphs carry the meaning, so no header text). Both
-                  // vanish entirely at count 0.
-                  // Pinned rows render in the one shared pinned order; only
-                  // reorder-capable rows register as sortable (legacy-server
-                  // pins render in place as plain rows).
-                  const items: ReactNode[] = [
+                  return [
                     <SidebarDraftBlock
                       key="draft-sessions"
                       projectDisplayNameByKey={projectDisplayNameByKey}
@@ -3601,122 +3629,91 @@ export default function Sidebar() {
                           .filter((threadKey) => reorderablePinnedKeys.has(threadKey))}
                         strategy={verticalListSortingStrategy}
                       >
-                        {orderedPinnedThreads.map((thread) => {
-                          const threadKey = scopedThreadKey(
-                            scopeThreadRef(thread.environmentId, thread.id),
-                          );
-                          if (!reorderablePinnedKeys.has(threadKey)) {
-                            return renderThreadRow(thread, "pinned");
-                          }
+                        {projectThreadGroups.map((group) => {
+                          const hasActiveWork = group.entries.some(({ thread }) => {
+                            const status = resolveSidebarThreadStatus(thread);
+                            return status !== "ready" && status !== "monitoring";
+                          });
                           return (
-                            <SortablePinnedThreadRow key={threadKey} id={threadKey}>
-                              {(bag) => renderThreadRow(thread, "pinned", bag)}
-                            </SortablePinnedThreadRow>
+                            <li key={group.project.projectKey} className="list-none">
+                              <button
+                                type="button"
+                                data-thread-selection-safe
+                                aria-expanded={group.isExpanded}
+                                data-testid={`sidebar-project-toggle-${group.project.projectKey}`}
+                                onClick={() =>
+                                  toggleProjectExpansion(group.project, group.isExpanded)
+                                }
+                                className="mb-1 mt-2 flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                              >
+                                <ChevronDownIcon
+                                  aria-hidden
+                                  className={cn(
+                                    "size-3 shrink-0 transition-transform",
+                                    !group.isExpanded && "-rotate-90",
+                                  )}
+                                />
+                                <FolderIcon aria-hidden className="size-3.5 shrink-0" />
+                                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                  {group.project.displayName}
+                                </span>
+                                {hasActiveWork ? (
+                                  <CircleDashedIcon
+                                    aria-label="Project has active work"
+                                    className="size-3.5 shrink-0 text-primary"
+                                  />
+                                ) : null}
+                                <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground/65">
+                                  {group.entries.length}
+                                </span>
+                              </button>
+                              {group.isExpanded ? (
+                                <ul role="list" className="flex flex-col gap-px">
+                                  {group.visibleEntries.map(({ thread, section }) => {
+                                    const threadKey = scopedThreadKey(
+                                      scopeThreadRef(thread.environmentId, thread.id),
+                                    );
+                                    if (
+                                      section !== "pinned" ||
+                                      !reorderablePinnedKeys.has(threadKey)
+                                    ) {
+                                      return renderThreadRow(thread, section);
+                                    }
+                                    return (
+                                      <SortablePinnedThreadRow key={threadKey} id={threadKey}>
+                                        {(bag) => renderThreadRow(thread, section, bag)}
+                                      </SortablePinnedThreadRow>
+                                    );
+                                  })}
+                                  {group.hiddenSettledCount > 0 ? (
+                                    <li className="list-none">
+                                      <button
+                                        type="button"
+                                        data-thread-selection-safe
+                                        onClick={() =>
+                                          showMoreSettledForProject(group.project.projectKey)
+                                        }
+                                        className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                                      >
+                                        <PlusIcon aria-hidden className="size-4 shrink-0" />
+                                        Show{" "}
+                                        {Math.min(
+                                          group.hiddenSettledCount,
+                                          SETTLED_TAIL_PAGE_COUNT,
+                                        )}{" "}
+                                        more
+                                      </button>
+                                    </li>
+                                  ) : null}
+                                </ul>
+                              ) : null}
+                            </li>
                           );
                         })}
                       </SortableContext>
                     </DndContext>,
                   ];
-                  if (pinnedThreads.length > 0) {
-                    items.push(
-                      <li
-                        key="pinned-divider"
-                        aria-hidden
-                        data-testid="sidebar-pinned-divider"
-                        className="mx-2.5 my-1.5 h-px list-none bg-sidebar-border/60"
-                      />,
-                    );
-                  }
-                  for (const thread of activeThreads) {
-                    items.push(renderThreadRow(thread, "active"));
-                  }
-                  // Snoozed shelf: between the inbox and Settled — out of the
-                  // way, never gone. The header always renders while anything
-                  // is snoozed (the count is the whole footprint when
-                  // collapsed); rows only when expanded. Vanishes entirely at
-                  // count 0.
-                  if (snoozedThreads.length > 0) {
-                    items.push(
-                      <li
-                        key="snoozed-shelf-header"
-                        data-thread-selection-safe
-                        className="list-none"
-                      >
-                        <button
-                          type="button"
-                          onClick={toggleSnoozedShelf}
-                          aria-expanded={snoozedShelfExpanded}
-                          data-testid="sidebar-snoozed-shelf-toggle"
-                          className="mb-1 mt-3 flex w-full cursor-pointer items-center gap-2 px-2.5 text-left"
-                        >
-                          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                            {snoozedShelfExpanded
-                              ? "Snoozed"
-                              : `Snoozed (${snoozedThreads.length})`}
-                          </span>
-                          <span className="h-px flex-1 bg-blue-500/20 dark:bg-blue-400/15" />
-                          <ChevronDownIcon
-                            aria-hidden
-                            className={cn(
-                              "size-3 text-blue-600 transition-transform dark:text-blue-400",
-                              snoozedShelfExpanded && "rotate-180",
-                            )}
-                          />
-                        </button>
-                      </li>,
-                    );
-                    for (const thread of visibleSnoozedThreads) {
-                      items.push(renderThreadRow(thread, "snoozed"));
-                    }
-                  }
-                  if (settledThreads.length > 0) {
-                    items.push(
-                      <li
-                        key="settled-shelf-header"
-                        data-thread-selection-safe
-                        className="list-none"
-                      >
-                        <button
-                          type="button"
-                          onClick={toggleSettledShelf}
-                          aria-expanded={settledShelfExpanded}
-                          data-testid="sidebar-settled-shelf-toggle"
-                          className="mb-1 mt-3 flex w-full cursor-pointer items-center gap-2 px-2.5 text-left"
-                        >
-                          <span className="text-xs font-medium text-muted-foreground/50">
-                            {settledShelfExpanded
-                              ? "Settled"
-                              : `Settled (${settledThreads.length})`}
-                          </span>
-                          <span className="h-px flex-1 bg-sidebar-border/60" />
-                          <ChevronDownIcon
-                            aria-hidden
-                            className={cn(
-                              "size-3 text-muted-foreground/50 transition-transform",
-                              settledShelfExpanded && "rotate-180",
-                            )}
-                          />
-                        </button>
-                      </li>,
-                    );
-                  }
-                  for (const thread of renderedSettledThreads) {
-                    items.push(renderThreadRow(thread, "settled"));
-                  }
-                  return items;
                 })()}
-                {settledShelfExpanded && hiddenSettledCount > 0 ? (
-                  <li className="list-none">
-                    <button
-                      type="button"
-                      onClick={showMoreSettled}
-                      className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-sidebar-muted-foreground/55 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                    >
-                      <PlusIcon aria-hidden className="size-4 shrink-0" />
-                      Show {Math.min(hiddenSettledCount, SETTLED_TAIL_PAGE_COUNT)} more
-                    </button>
-                  </li>
-                ) : null}
               </ul>
             </TooltipProvider>
           ) : null}

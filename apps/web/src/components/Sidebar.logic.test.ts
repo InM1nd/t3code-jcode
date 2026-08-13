@@ -22,6 +22,7 @@ import {
   resolveWorkingStartedAt,
   searchSidebarThreadsByTitle,
   formatWorkingDurationLabel,
+  groupSidebarThreadEntriesByProject,
   shouldNavigateAfterProjectRemoval,
   shouldClearThreadSelectionOnMouseDown,
   sortLogicalProjectsForSidebar,
@@ -1194,7 +1195,8 @@ describe("getVisibleThreadsForProject", () => {
 
     const result = getVisibleThreadsForProject({
       threads,
-      activeThreadId: ThreadId.make("thread-8"),
+      activeThreadKey: ThreadId.make("thread-8"),
+      getThreadKey: (thread) => thread.id,
       isThreadListExpanded: false,
       previewLimit: 6,
     });
@@ -1221,7 +1223,8 @@ describe("getVisibleThreadsForProject", () => {
 
     const result = getVisibleThreadsForProject({
       threads,
-      activeThreadId: ThreadId.make("thread-8"),
+      activeThreadKey: ThreadId.make("thread-8"),
+      getThreadKey: (thread) => thread.id,
       isThreadListExpanded: true,
       previewLimit: 6,
     });
@@ -1231,6 +1234,24 @@ describe("getVisibleThreadsForProject", () => {
       threads.map((thread) => thread.id),
     );
     expect(result.hiddenThreads).toEqual([]);
+  });
+
+  it("uses scoped keys so an active remote row is kept when raw ids collide", () => {
+    const threads = [
+      { environmentId: "environment-local", id: "same-id" },
+      { environmentId: "environment-local", id: "thread-2" },
+      { environmentId: "environment-remote", id: "same-id" },
+    ];
+
+    const result = getVisibleThreadsForProject({
+      threads,
+      activeThreadKey: "environment-remote:same-id",
+      getThreadKey: (thread) => `${thread.environmentId}:${thread.id}`,
+      isThreadListExpanded: false,
+      previewLimit: 2,
+    });
+
+    expect(result.visibleThreads).toEqual([threads[0], threads[1], threads[2]]);
   });
 });
 
@@ -1615,5 +1636,76 @@ describe("sortLogicalProjectsForSidebar", () => {
         (project) => project.projectKey,
       ),
     ).toEqual(["logical-newer", "logical-older"]);
+  });
+});
+
+describe("groupSidebarThreadEntriesByProject", () => {
+  it("keeps every lifecycle state inside its logical project and skips orphan threads", () => {
+    const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+    const marswalkProjectId = ProjectId.make("project-marswalk");
+    const cyclopProjectId = ProjectId.make("project-cyclop");
+    const marswalk = {
+      ...makeProject({ id: marswalkProjectId, title: "marswalk" }),
+      projectKey: "marswalk",
+      memberProjectRefs: [
+        { environmentId: localEnvironmentId, projectId: marswalkProjectId },
+        { environmentId: remoteEnvironmentId, projectId: marswalkProjectId },
+      ],
+    };
+    const cyclop = {
+      ...makeProject({ id: cyclopProjectId, title: "Cyclop" }),
+      projectKey: "cyclop",
+      memberProjectRefs: [{ environmentId: localEnvironmentId, projectId: cyclopProjectId }],
+    };
+
+    const groups = groupSidebarThreadEntriesByProject({
+      projects: [marswalk, cyclop],
+      entries: [
+        {
+          thread: makeThread({ id: ThreadId.make("pin"), projectId: marswalkProjectId }),
+          section: "pinned",
+        },
+        {
+          thread: makeThread({
+            id: ThreadId.make("remote-snooze"),
+            environmentId: remoteEnvironmentId,
+            projectId: marswalkProjectId,
+          }),
+          section: "snoozed",
+        },
+        {
+          thread: makeThread({ id: ThreadId.make("settled"), projectId: marswalkProjectId }),
+          section: "settled",
+        },
+        {
+          thread: makeThread({ id: ThreadId.make("active"), projectId: cyclopProjectId }),
+          section: "active",
+        },
+        {
+          thread: makeThread({
+            id: ThreadId.make("orphan"),
+            projectId: ProjectId.make("project-missing"),
+          }),
+          section: "active",
+        },
+      ],
+    });
+
+    expect(
+      groups.map(({ project, entries }) => [
+        project.projectKey,
+        entries.map(({ thread, section }) => [thread.id, section]),
+      ]),
+    ).toEqual([
+      [
+        "marswalk",
+        [
+          [ThreadId.make("pin"), "pinned"],
+          [ThreadId.make("remote-snooze"), "snoozed"],
+          [ThreadId.make("settled"), "settled"],
+        ],
+      ],
+      ["cyclop", [[ThreadId.make("active"), "active"]]],
+    ]);
   });
 });

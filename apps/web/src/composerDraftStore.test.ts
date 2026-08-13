@@ -751,7 +751,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       worktreePath: "/tmp/worktree-test",
       envMode: "worktree",
       runtimeMode: "full-access",
-      interactionMode: "default",
+      interactionMode: "build",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     expect(useComposerDraftStore.getState().getDraftThread(draftId)).toMatchObject({
@@ -762,7 +762,7 @@ describe("composerDraftStore project draft thread mapping", () => {
       worktreePath: "/tmp/worktree-test",
       envMode: "worktree",
       runtimeMode: "full-access",
-      interactionMode: "default",
+      interactionMode: "build",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
   });

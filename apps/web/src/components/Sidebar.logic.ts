@@ -48,6 +48,18 @@ type LogicalSidebarProject = SidebarProject & {
   }[];
 };
 
+export type SidebarThreadSection = "pinned" | "active" | "snoozed" | "settled";
+
+export type SidebarThreadEntry<TThread> = {
+  readonly thread: TThread;
+  readonly section: SidebarThreadSection;
+};
+
+export type SidebarProjectThreadGroup<TProject, TThread> = {
+  readonly project: TProject;
+  readonly entries: readonly SidebarThreadEntry<TThread>[];
+};
+
 export type ThreadTraversalDirection = "previous" | "next";
 
 export async function archiveSelectedThreadEntries<
@@ -715,9 +727,10 @@ export function resolveProjectStatusIndicator(
   return highestPriorityStatus;
 }
 
-export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input: {
+export function getVisibleThreadsForProject<T>(input: {
   threads: readonly T[];
-  activeThreadId: T["id"] | undefined;
+  activeThreadKey: string | null | undefined;
+  getThreadKey: (thread: T) => string;
   isThreadListExpanded: boolean;
   previewLimit: number;
 }): {
@@ -725,7 +738,7 @@ export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input:
   visibleThreads: T[];
   hiddenThreads: T[];
 } {
-  const { activeThreadId, isThreadListExpanded, previewLimit, threads } = input;
+  const { activeThreadKey, getThreadKey, isThreadListExpanded, previewLimit, threads } = input;
   const hasHiddenThreads = threads.length > previewLimit;
 
   if (!hasHiddenThreads || isThreadListExpanded) {
@@ -737,7 +750,10 @@ export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input:
   }
 
   const previewThreads = threads.slice(0, previewLimit);
-  if (!activeThreadId || previewThreads.some((thread) => thread.id === activeThreadId)) {
+  if (
+    !activeThreadKey ||
+    previewThreads.some((thread) => getThreadKey(thread) === activeThreadKey)
+  ) {
     return {
       hasHiddenThreads: true,
       hiddenThreads: threads.slice(previewLimit),
@@ -745,7 +761,7 @@ export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input:
     };
   }
 
-  const activeThread = threads.find((thread) => thread.id === activeThreadId);
+  const activeThread = threads.find((thread) => getThreadKey(thread) === activeThreadKey);
   if (!activeThread) {
     return {
       hasHiddenThreads: true,
@@ -754,13 +770,59 @@ export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input:
     };
   }
 
-  const visibleThreadIds = new Set([...previewThreads, activeThread].map((thread) => thread.id));
+  const visibleThreadKeys = new Set([...previewThreads, activeThread].map(getThreadKey));
 
   return {
     hasHiddenThreads: true,
-    hiddenThreads: threads.filter((thread) => !visibleThreadIds.has(thread.id)),
-    visibleThreads: threads.filter((thread) => visibleThreadIds.has(thread.id)),
+    hiddenThreads: threads.filter((thread) => !visibleThreadKeys.has(getThreadKey(thread))),
+    visibleThreads: threads.filter((thread) => visibleThreadKeys.has(getThreadKey(thread))),
   };
+}
+
+export function groupSidebarThreadEntriesByProject<
+  TProject extends {
+    readonly projectKey: string;
+    readonly memberProjectRefs: readonly {
+      readonly environmentId: string;
+      readonly projectId: string;
+    }[];
+  },
+  TThread extends {
+    readonly environmentId: string;
+    readonly projectId: string;
+  },
+>(input: {
+  projects: readonly TProject[];
+  entries: readonly SidebarThreadEntry<TThread>[];
+}): SidebarProjectThreadGroup<TProject, TThread>[] {
+  const projectKeyByRef = new Map<string, string>();
+  for (const project of input.projects) {
+    for (const projectRef of project.memberProjectRefs) {
+      projectKeyByRef.set(
+        `${projectRef.environmentId}\0${projectRef.projectId}`,
+        project.projectKey,
+      );
+    }
+  }
+
+  const entriesByProjectKey = new Map<string, SidebarThreadEntry<TThread>[]>();
+  for (const entry of input.entries) {
+    const projectKey = projectKeyByRef.get(
+      `${entry.thread.environmentId}\0${entry.thread.projectId}`,
+    );
+    if (!projectKey) continue;
+    const existing = entriesByProjectKey.get(projectKey);
+    if (existing) {
+      existing.push(entry);
+    } else {
+      entriesByProjectKey.set(projectKey, [entry]);
+    }
+  }
+
+  return input.projects.flatMap((project) => {
+    const entries = entriesByProjectKey.get(project.projectKey);
+    return entries?.length ? [{ project, entries }] : [];
+  });
 }
 
 export function getFallbackThreadIdAfterDelete<

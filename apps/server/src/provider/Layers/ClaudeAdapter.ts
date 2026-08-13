@@ -75,6 +75,7 @@ import * as Stream from "effect/Stream";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { prependWorkModeInstruction, resolveWorkMode } from "../WorkMode.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
@@ -1187,7 +1188,10 @@ function buildPromptText(
   const caps = getClaudeModelCapabilities(claudeModel);
 
   const promptEffort = resolvePromptInjectedEffort(caps, rawEffort);
-  return applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
+  return prependWorkModeInstruction(
+    input.interactionMode,
+    applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort),
+  );
 }
 
 function buildUserMessage(input: {
@@ -4344,12 +4348,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     // "plan" maps directly to the SDK's "plan" permission mode;
     // "default" restores the session's original permission mode.
     // When interactionMode is absent we leave the current mode unchanged.
-    if (input.interactionMode === "plan") {
+    const nativeInteractionMode = resolveWorkMode(input.interactionMode)?.nativeInteractionMode;
+    if (nativeInteractionMode === "plan") {
       yield* Effect.tryPromise({
         try: () => context.query.setPermissionMode("plan"),
         catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
       });
-    } else if (input.interactionMode === "default") {
+    } else if (nativeInteractionMode === "default") {
       yield* Effect.tryPromise({
         try: () => context.query.setPermissionMode(context.basePermissionMode ?? "default"),
         catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),

@@ -4,6 +4,7 @@
 
 - [Install and first run](./user/install.md)
 - [Permission modes](./user/permission-modes.md)
+- [Work modes](./user/work-modes.md)
 - [Keyboard shortcuts](./user/keybindings.md)
 - [Organizing threads](./user/thread-sidebar.md)
 - [Customize a project icon](./user/project-settings.md)

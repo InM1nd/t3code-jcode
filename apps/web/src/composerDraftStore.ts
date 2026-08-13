@@ -1585,8 +1585,10 @@ function normalizePersistedDraftThreads(
           ? candidateDraftThread.runtimeMode
           : DEFAULT_RUNTIME_MODE,
         interactionMode:
+          candidateDraftThread.interactionMode === "build" ||
           candidateDraftThread.interactionMode === "plan" ||
-          candidateDraftThread.interactionMode === "default"
+          candidateDraftThread.interactionMode === "debug" ||
+          candidateDraftThread.interactionMode === "swarm"
             ? candidateDraftThread.interactionMode
             : DEFAULT_INTERACTION_MODE,
         branch: typeof branch === "string" ? branch : null,
@@ -2935,7 +2937,12 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             return;
           }
           const nextInteractionMode =
-            interactionMode === "plan" || interactionMode === "default" ? interactionMode : null;
+            interactionMode === "build" ||
+            interactionMode === "plan" ||
+            interactionMode === "debug" ||
+            interactionMode === "swarm"
+              ? interactionMode
+              : null;
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey];
             if (!existing && nextInteractionMode === null) {
