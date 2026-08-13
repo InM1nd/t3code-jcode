@@ -25,6 +25,9 @@ describe("resolveJcodeAcpBaseModelId", () => {
     expect(resolveJcodeAcpBaseModelId(undefined)).toBe("claude-opus-5");
     expect(resolveJcodeAcpBaseModelId("   ")).toBe("claude-opus-5");
     expect(resolveJcodeAcpBaseModelId("  gpt-5.5  ")).toBe("gpt-5.5");
+    expect(resolveJcodeAcpBaseModelId("  cursor-grok-4.6-high-fast  ")).toBe(
+      "cursor-grok-4.6-high-fast",
+    );
   });
 });
 
@@ -45,6 +48,7 @@ describe("buildJcodeAcpSpawnInput", () => {
           model: "gpt-5.5",
           providerProfile: "my-gateway",
           jcodeProvider: "openai",
+          socketPath: "/tmp/jcode-session.sock",
         },
         "/tmp/project",
         { PATH: "/usr/bin" },
@@ -54,6 +58,8 @@ describe("buildJcodeAcpSpawnInput", () => {
       args: [
         "acp",
         "--no-selfdev",
+        "--socket",
+        "/tmp/jcode-session.sock",
         "-p",
         "openai",
         "--provider-profile",
@@ -68,13 +74,13 @@ describe("buildJcodeAcpSpawnInput", () => {
 });
 
 describe("applyJcodeAcpModelSelection", () => {
-  it("prefers the requested model id for bookkeeping", () => {
+  it("rejects a reported model that differs from the requested exact slug", () => {
     expect(
       applyJcodeAcpModelSelection({
         currentModelId: "claude-opus-5",
         requestedModelId: "gpt-5.5",
       }),
-    ).toBe("gpt-5.5");
+    ).toBeUndefined();
   });
 
   it("keeps the current model when nothing is requested", () => {
