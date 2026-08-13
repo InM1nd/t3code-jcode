@@ -1,8 +1,13 @@
 # Organizing threads
 
-Pin a thread from its context menu to keep it in the pinned section above your active work.
-Pinned threads are shown independently of their project, including when you connect to more than
-one environment.
+On web and desktop, the sidebar groups each project's chats together. Select a project header to
+collapse or expand its history; T3 Code remembers that choice on this device. Pins, active chats,
+snoozed chats, and settled chats remain in their project and keep their usual actions.
+
+A project with a long settled history shows recent chats first. Select **Show more** inside that
+project to reveal older settled chats.
+
+Pin a thread from its context menu to keep it at the top of its project's history.
 
 On web and desktop, drag a pinned thread to change its position. On mobile, open the thread's menu
 and choose **Move up** or **Move down**. The order is stored by the server and appears on your
