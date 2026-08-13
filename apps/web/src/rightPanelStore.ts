@@ -8,7 +8,7 @@
  * workspace paths, and diff/files remain singleton surfaces.
  */
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import type { ProjectBoardItemId, ScopedThreadRef } from "@t3tools/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -47,12 +47,12 @@ export type RightPanelSurface =
       revealRequestId: number;
     }
   | { id: "agents"; kind: "agents" }
-  | { id: "board"; kind: "board" }
+  | { id: "board"; kind: "board"; selectedItemId: ProjectBoardItemId | null }
   | { id: "activity"; kind: "activity" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
-// v9 removed the "plan" surface kind (plans render inline in the transcript).
-const RIGHT_PANEL_STORAGE_VERSION = 9;
+// v10 adds the selected Board item to the Board surface.
+const RIGHT_PANEL_STORAGE_VERSION = 10;
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -75,6 +75,7 @@ interface RightPanelStoreState {
   activateTerminal: (ref: ScopedThreadRef, surfaceId: string, terminalId: string) => void;
   closeTerminal: (ref: ScopedThreadRef, surfaceId: string, terminalId: string) => void;
   activateSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
+  selectBoardItem: (ref: ScopedThreadRef, itemId: ProjectBoardItemId | null) => void;
   closeSurface: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeOtherSurfaces: (ref: ScopedThreadRef, surfaceId: string) => void;
   closeSurfacesToRight: (ref: ScopedThreadRef, surfaceId: string) => void;
@@ -105,7 +106,7 @@ const singletonSurface = (
     case "agents":
       return { id: "agents", kind };
     case "board":
-      return { id: "board", kind };
+      return { id: "board", kind, selectedItemId: null };
     case "activity":
       return { id: "activity", kind };
   }
@@ -189,6 +190,13 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                     // Dropped surface kind: plans now render inline in the
                     // transcript (v9).
                     if ((surface as { kind?: string }).kind === "plan") return [];
+                    if (surface.kind === "board") {
+                      const selectedItemId =
+                        "selectedItemId" in surface && typeof surface.selectedItemId === "string"
+                          ? (surface.selectedItemId as ProjectBoardItemId)
+                          : null;
+                      return [{ ...surface, selectedItemId }];
+                    }
                     if (surface.kind === "file") {
                       const revealLine =
                         typeof surface.revealLine === "number" &&
@@ -399,6 +407,15 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
               ? { ...current, isOpen: true, activeSurfaceId: surfaceId }
               : current,
           ),
+        })),
+      selectBoardItem: (ref, itemId) =>
+        set((state) => ({
+          byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) => ({
+            ...current,
+            surfaces: current.surfaces.map((surface) =>
+              surface.kind === "board" ? { ...surface, selectedItemId: itemId } : surface,
+            ),
+          })),
         })),
       closeSurface: (ref, surfaceId) =>
         set((state) => ({

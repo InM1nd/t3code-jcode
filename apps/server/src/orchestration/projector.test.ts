@@ -39,6 +39,90 @@ function makeEvent(input: {
 }
 
 describe("orchestration projector", () => {
+  it("projects Board archive and restore independently from status", async () => {
+    const createdAt = "2026-08-13T10:00:00.000Z";
+    const archivedAt = "2026-08-13T11:00:00.000Z";
+    let model = createEmptyReadModel(createdAt);
+    for (const event of [
+      makeEvent({
+        sequence: 1,
+        type: "project.created",
+        aggregateKind: "project",
+        aggregateId: "project-board",
+        occurredAt: createdAt,
+        commandId: "cmd-project",
+        payload: {
+          projectId: "project-board",
+          title: "Board",
+          workspaceRoot: "/tmp/board",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt,
+          updatedAt: createdAt,
+        },
+      }),
+      makeEvent({
+        sequence: 2,
+        type: "project.board-item-upserted",
+        aggregateKind: "project",
+        aggregateId: "project-board",
+        occurredAt: createdAt,
+        commandId: "cmd-upsert",
+        payload: {
+          projectId: "project-board",
+          item: {
+            id: "item-1",
+            title: "Blocked task",
+            status: "blocked",
+            source: "user",
+            createdAt,
+            updatedAt: createdAt,
+          },
+          updatedAt: createdAt,
+        },
+      }),
+      makeEvent({
+        sequence: 3,
+        type: "project.board.item.archived",
+        aggregateKind: "project",
+        aggregateId: "project-board",
+        occurredAt: archivedAt,
+        commandId: "cmd-archive",
+        payload: {
+          projectId: "project-board",
+          itemId: "item-1",
+          archivedAt,
+          updatedAt: archivedAt,
+        },
+      }),
+    ]) {
+      model = await Effect.runPromise(projectEvent(model, event));
+    }
+    expect(model.projects[0]?.boardItems?.[0]).toMatchObject({
+      status: "blocked",
+      archivedAt,
+    });
+
+    model = await Effect.runPromise(
+      projectEvent(
+        model,
+        makeEvent({
+          sequence: 4,
+          type: "project.board.item.restored",
+          aggregateKind: "project",
+          aggregateId: "project-board",
+          occurredAt: archivedAt,
+          commandId: "cmd-restore",
+          payload: { projectId: "project-board", itemId: "item-1", updatedAt: archivedAt },
+        }),
+      ),
+    );
+    expect(model.projects[0]?.boardItems?.[0]).toMatchObject({
+      status: "blocked",
+      archivedAt: null,
+    });
+  });
+
   it("applies thread.created events", async () => {
     const now = "2026-01-01T00:00:00.000Z";
     const model = createEmptyReadModel(now);

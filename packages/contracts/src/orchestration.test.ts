@@ -13,6 +13,8 @@ import {
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
   ProjectCreatedPayload,
+  ProjectBoardItem,
+  ProjectBoardItemStatus,
   ProjectMetaUpdatedPayload,
   OrchestrationProposedPlan,
   OrchestrationSession,
@@ -57,6 +59,32 @@ const decodeThreadCreatedPayload = Schema.decodeUnknownEffect(ThreadCreatedPaylo
 const decodeOrchestrationCommand = Schema.decodeUnknownEffect(OrchestrationCommand);
 const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
 const decodeThreadMetaUpdatedPayload = Schema.decodeUnknownEffect(ThreadMetaUpdatedPayload);
+
+it("decodes Board lifecycle statuses and legacy pending items", () => {
+  const now = "2026-08-13T12:00:00.000Z";
+  const base = {
+    id: "item-1",
+    title: "Board item",
+    source: "user",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  assert.strictEqual(Schema.decodeUnknownSync(ProjectBoardItemStatus)("blocked"), "blocked");
+  assert.strictEqual(Schema.decodeUnknownSync(ProjectBoardItemStatus)("cancelled"), "cancelled");
+  assert.strictEqual(
+    Schema.decodeUnknownSync(ProjectBoardItem)({ ...base, status: "pending" }).status,
+    "backlog",
+  );
+  assert.strictEqual(
+    Schema.decodeUnknownSync(ProjectBoardItem)({
+      ...base,
+      status: "completed",
+      archivedAt: now,
+    }).archivedAt,
+    now,
+  );
+});
 
 it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
   Effect.gen(function* () {

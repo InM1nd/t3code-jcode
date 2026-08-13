@@ -5,6 +5,8 @@ import {
   ProjectBoardItemUpsertedPayload as ContractsProjectBoardItemUpsertedPayloadSchema,
   ProjectBoardItemHandoffAppendedPayload as ContractsProjectBoardItemHandoffAppendedPayloadSchema,
   ProjectBoardItemDeletedPayload as ContractsProjectBoardItemDeletedPayloadSchema,
+  ProjectBoardItemArchivedPayload as ContractsProjectBoardItemArchivedPayloadSchema,
+  ProjectBoardItemRestoredPayload as ContractsProjectBoardItemRestoredPayloadSchema,
   ThreadCreatedPayload as ContractsThreadCreatedPayloadSchema,
   ThreadArchivedPayload as ContractsThreadArchivedPayloadSchema,
   ThreadSettledPayload as ContractsThreadSettledPayloadSchema,
@@ -40,6 +42,8 @@ export const ProjectBoardItemUpsertedPayload = ContractsProjectBoardItemUpserted
 export const ProjectBoardItemHandoffAppendedPayload =
   ContractsProjectBoardItemHandoffAppendedPayloadSchema;
 export const ProjectBoardItemDeletedPayload = ContractsProjectBoardItemDeletedPayloadSchema;
+export const ProjectBoardItemArchivedPayload = ContractsProjectBoardItemArchivedPayloadSchema;
+export const ProjectBoardItemRestoredPayload = ContractsProjectBoardItemRestoredPayloadSchema;
 
 export const ThreadCreatedPayload = ContractsThreadCreatedPayloadSchema;
 export const ThreadArchivedPayload = ContractsThreadArchivedPayloadSchema;

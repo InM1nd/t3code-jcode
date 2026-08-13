@@ -8,12 +8,19 @@ import type {
 /** Cycle open/done statuses for the board row control. */
 export function nextProjectBoardItemStatus(status: ProjectBoardItemStatus): ProjectBoardItemStatus {
   switch (status) {
-    case "pending":
+    case "backlog":
+      return "ready";
+    case "ready":
       return "inProgress";
     case "inProgress":
+      return "inReview";
+    case "inReview":
       return "completed";
+    case "blocked":
+      return "ready";
     case "completed":
-      return "pending";
+    case "cancelled":
+      return "backlog";
   }
 }
 
@@ -33,23 +40,65 @@ export function findDraftIdForThread(input: {
   return null;
 }
 
-export function partitionProjectBoardItems(items: ReadonlyArray<ProjectBoardItem>): {
-  inProgressItems: ProjectBoardItem[];
-  pendingItems: ProjectBoardItem[];
-  doneItems: ProjectBoardItem[];
+export const PROJECT_BOARD_STATUS_ORDER: ReadonlyArray<ProjectBoardItemStatus> = [
+  "backlog",
+  "ready",
+  "inProgress",
+  "inReview",
+  "blocked",
+  "completed",
+  "cancelled",
+];
+
+export function groupProjectBoardItems(items: ReadonlyArray<ProjectBoardItem>): {
+  active: Record<ProjectBoardItemStatus, ProjectBoardItem[]>;
+  archived: ProjectBoardItem[];
 } {
-  const inProgressItems: ProjectBoardItem[] = [];
-  const pendingItems: ProjectBoardItem[] = [];
-  const doneItems: ProjectBoardItem[] = [];
+  const active: Record<ProjectBoardItemStatus, ProjectBoardItem[]> = {
+    backlog: [],
+    ready: [],
+    inProgress: [],
+    inReview: [],
+    blocked: [],
+    completed: [],
+    cancelled: [],
+  };
+  const archived: ProjectBoardItem[] = [];
   for (const item of items) {
-    if (item.status === "inProgress") inProgressItems.push(item);
-    else if (item.status === "pending") pendingItems.push(item);
-    else doneItems.push(item);
+    if (item.archivedAt) archived.push(item);
+    else active[item.status].push(item);
   }
-  inProgressItems.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
-  pendingItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  doneItems.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return { inProgressItems, pendingItems, doneItems };
+  for (const status of PROJECT_BOARD_STATUS_ORDER) {
+    active[status].sort((a, b) =>
+      status === "completed" || status === "cancelled"
+        ? b.updatedAt.localeCompare(a.updatedAt)
+        : a.createdAt.localeCompare(b.createdAt),
+    );
+  }
+  archived.sort((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
+  return { active, archived };
+}
+
+export interface BoardItemDraft {
+  title: string;
+  notes: string;
+  status: ProjectBoardItemStatus;
+  briefGoal: string;
+  briefCriteria: string;
+  briefFiles: string;
+  briefNotes: string;
+}
+
+export function createBoardItemDraft(item: ProjectBoardItem): BoardItemDraft {
+  return {
+    title: item.title,
+    notes: item.notes ?? "",
+    status: item.status,
+    briefGoal: item.brief?.goal ?? "",
+    briefCriteria: item.brief?.acceptanceCriteria.join("\n") ?? "",
+    briefFiles: item.brief?.importantFiles.join("\n") ?? "",
+    briefNotes: item.brief?.notes ?? "",
+  };
 }
 
 export function buildBoardImplementPrompt(item: ProjectBoardItem): string {
@@ -90,11 +139,19 @@ export function buildBoardImplementPrompt(item: ProjectBoardItem): string {
 
 export function projectBoardStatusLabel(status: ProjectBoardItemStatus): string {
   switch (status) {
-    case "pending":
-      return "Pending";
+    case "backlog":
+      return "Backlog";
+    case "ready":
+      return "Ready";
     case "inProgress":
       return "In progress";
+    case "inReview":
+      return "In review";
+    case "blocked":
+      return "Blocked";
     case "completed":
       return "Done";
+    case "cancelled":
+      return "Cancelled";
   }
 }

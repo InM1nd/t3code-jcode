@@ -34,6 +34,8 @@ export type DeleteProjectInput = CommandInput<"project.delete">;
 export type UpsertProjectBoardItemInput = CommandInput<"project.board.item.upsert">;
 export type AppendProjectBoardHandoffInput = CommandInput<"project.board.item.handoff.append">;
 export type DeleteProjectBoardItemInput = CommandInput<"project.board.item.delete">;
+export type ArchiveProjectBoardItemInput = CommandInput<"project.board.item.archive">;
+export type RestoreProjectBoardItemInput = CommandInput<"project.board.item.restore">;
 export type CreateThreadInput = CommandInput<"thread.create">;
 export type DeleteThreadInput = CommandInput<"thread.delete">;
 export type ArchiveThreadInput = CommandInput<"thread.archive">;
@@ -144,6 +146,24 @@ export const deleteProjectBoardItem: (input: DeleteProjectBoardItemInput) => Com
     return yield* dispatch({
       ...input,
       type: "project.board.item.delete",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const archiveProjectBoardItem: (input: ArchiveProjectBoardItemInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.archiveProjectBoardItem")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "project.board.item.archive",
+      commandId: yield* commandId(input),
+    });
+  });
+
+export const restoreProjectBoardItem: (input: RestoreProjectBoardItemInput) => CommandEffect =
+  Effect.fn("EnvironmentCommands.restoreProjectBoardItem")(function* (input) {
+    return yield* dispatch({
+      ...input,
+      type: "project.board.item.restore",
       commandId: yield* commandId(input),
     });
   });

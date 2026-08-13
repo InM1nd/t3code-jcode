@@ -6072,6 +6072,10 @@ function ChatViewContent(props: ChatViewProps) {
         environmentId={activeProject.environmentId}
         projectId={activeProject.id}
         sourceThreadId={activeThreadRef?.threadId ?? null}
+        selectedItemId={activeRightPanelSurface.selectedItemId}
+        onSelectItem={(itemId) =>
+          useRightPanelStore.getState().selectBoardItem(activeThreadRef, itemId)
+        }
       />
     ) : activeRightPanelSurface?.kind === "activity" && activeProject ? (
       <ProjectActivityPanel
