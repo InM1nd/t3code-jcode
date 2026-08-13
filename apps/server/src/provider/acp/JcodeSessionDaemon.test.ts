@@ -83,4 +83,50 @@ describe("startJcodeSessionDaemon", () => {
       expect(yield* Ref.get(killCount)).toBe(1);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
+
+  it.effect("fails promptly with bounded child output when the owned daemon exits early", () =>
+    Effect.gen(function* () {
+      const killCount = yield* Ref.make(0);
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-jcode-daemon-" });
+      const socketPath = path.join(directory, "thread-exit.sock");
+      const spawner = ChildProcessSpawner.make(() =>
+        Effect.gen(function* () {
+          const handle = ChildProcessSpawner.makeHandle({
+            pid: ChildProcessSpawner.ProcessId(43),
+            exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(9)),
+            isRunning: Effect.succeed(false),
+            kill: () => Ref.update(killCount, (count) => count + 1),
+            unref: Effect.succeed(Effect.void),
+            stdin: Sink.drain,
+            stdout: Stream.empty,
+            stderr: Stream.fromIterable([new TextEncoder().encode("authentication failed")]),
+            all: Stream.fromIterable([new TextEncoder().encode("authentication failed")]),
+            getInputFd: () => Sink.drain,
+            getOutputFd: () => Stream.empty,
+          });
+          yield* Effect.addFinalizer(() => handle.kill().pipe(Effect.ignore));
+          return handle;
+        }),
+      );
+
+      const error = yield* Effect.scoped(
+        startJcodeSessionDaemon(
+          {
+            threadId: "thread-exit",
+            provider: "cursor",
+            model: "cursor-grok-4.6-high-fast",
+            socketPath,
+          },
+          spawner,
+        ).pipe(Effect.flip),
+      );
+
+      expect(error).toBeInstanceOf(Error);
+      expect(String(error)).toContain("exited with code 9");
+      expect(String(error)).toContain("authentication failed");
+      expect(yield* Ref.get(killCount)).toBe(1);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });

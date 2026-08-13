@@ -10,6 +10,7 @@ import {
   type ThreadId,
   type TurnId,
 } from "@t3tools/contracts";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { type ChatMessage, type SessionPhase, type Thread, type ThreadShell } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
 import * as Schema from "effect/Schema";
@@ -421,7 +422,9 @@ export function getStartedThreadModelChangeBlockReason(input: {
   };
   if (
     currentModelSelection.instanceId === input.nextModelSelection.instanceId &&
-    currentModelSelection.model === input.nextModelSelection.model
+    currentModelSelection.model === input.nextModelSelection.model &&
+    getModelSelectionStringOptionValue(currentModelSelection, "jcodeProvider") ===
+      getModelSelectionStringOptionValue(input.nextModelSelection, "jcodeProvider")
   ) {
     return null;
   }

@@ -24,16 +24,17 @@ Confirmed against `jcode v0.75.0`: ACP over stdio uses newline-delimited JSON-RP
 | `jcode api-bridge` + `@1jehuang/jcode-sdk` | Parallel architecture; revisit if ACP is insufficient |
 | TUI stdout parsing                         | Fragile; forbidden for MVP                            |
 
-Spawn shape (defaults):
+Session startup uses two owned child processes and a dedicated socket:
 
 ```text
-<binaryPath|jcode> [--quiet] acp [-C <cwd>] [-m <model>] [--provider-profile <name>] [-p <provider>] [--socket <path>]
+<binaryPath|jcode> serve --no-selfdev -p <provider> -m <exact-model-slug> --socket <session-socket>
+<binaryPath|jcode> [--quiet] acp [-C <cwd>] [-m <exact-model-slug>] [--provider-profile <name>] [-p <provider>] --socket <session-socket>
 ```
 
 Process `cwd` and ACP `session/new.cwd` both use the T3 thread/worktree path
 (`AcpSessionRuntime` already passes `options.cwd` into `session/new`).
 
-## Isolation (shared daemon)
+## Isolation (per-session daemon)
 
 jcode ACP is “backed by the Jcode daemon”. Findings from local probes on
 `jcode v0.75.0`:
@@ -42,11 +43,12 @@ jcode ACP is “backed by the Jcode daemon”. Findings from local probes on
 2. jcode **rejects** ACP `authenticate` (`Unsupported ACP method`). T3’s
    `AcpSessionRuntime` therefore supports `skipAuthenticate: true` for this
    driver only.
-3. `session/new` works against a shared daemon with distinct `sessionId`s per
-   call. Isolation is **per ACP session `cwd`**, not one agent per workspace.
-4. Stale default sockets under `$TMPDIR` can surface as `Address already in
-use` during daemon boot; clearing stale `jcode.sock` / using a fresh
-   `--socket` recovers.
+3. T3 starts one scoped `jcode serve` daemon per provider session, bound to a
+   short temporary socket. The ACP subprocess connects to that same socket.
+   This prevents an ambient/shared daemon from silently supplying a different
+   provider or model.
+4. T3 removes only its session socket and stops only the child handle it
+   spawned. It never searches for or kills Jcode processes by name.
 5. Prompting without configured model credentials fails with a clear
    “no usable provider” error until `jcode login`.
 6. Non-empty ACP `session/new.mcpServers` is rejected (`ACP mcpServers are not
@@ -56,11 +58,17 @@ supported yet`). Configure MCP in `~/.jcode/mcp.json` or project-local
    managed stdio `t3-code` entry into the project `.jcode/mcp.json` that proxies
    to T3 HTTP `/mcp`. Turns also get a short `<project_board>` hint for `board_*`.
 7. ACP `session/set_model` is rejected (`Model switching is not available for
-this provider`). Model selection is applied only via spawn `-m` (settings
-   and/or the thread’s selected model at session start).
+this provider`). Provider and model selection are applied only at daemon
+   startup. Changing either route component requires a new provider session.
+8. ACP v0.75 setup/model state reports the selected model but has no
+   `provider` or `resolvedProvider` field. T3 verifies the exact reported model;
+   provider verification relies on the isolated daemon argv plus the matching
+   socket as the binding invariant. Do not invent an ACP provider field.
 
-MVP guarantee: each T3 thread’s jcode session is created with that thread’s
-worktree cwd. Spawn always includes `--no-selfdev`. Do not auto-start swarm.
+MVP guarantee: each T3 provider session owns an isolated daemon created with
+the selected inner provider, exact discovered model slug, and that thread’s
+worktree cwd. Daemon startup always includes `--no-selfdev`. Do not auto-start
+swarm.
 
 ## Out of scope (MVP)
 
@@ -77,7 +85,8 @@ UI (provider instance "Jcode")
   -> orchestration.dispatch (existing)
   -> ProviderCommandReactor (existing)
   -> JcodeAdapter (ACP runtime events -> ProviderRuntimeEvent)
-  -> jcode acp subprocess
+  -> isolated jcode serve subprocess + socket
+  -> jcode acp subprocess on the same socket
 ```
 
 Files (mirror Grok/Cursor ACP stack):
@@ -100,7 +109,6 @@ Auth stays in jcode. Probe should:
 ## Future work
 
 1. Resume across T3 restarts
-2. Optional per-instance `--socket`
-3. Richer model catalog from jcode session model state / `jcode model`
-4. api-bridge path if ACP gaps appear
-5. Approvals/permissions polish beyond generic ACP mapping
+2. Richer model catalog from jcode session model state / `jcode model`
+3. api-bridge path if ACP gaps appear
+4. Approvals/permissions polish beyond generic ACP mapping
