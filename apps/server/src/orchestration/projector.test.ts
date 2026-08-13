@@ -83,7 +83,7 @@ describe("orchestration projector", () => {
       }),
       makeEvent({
         sequence: 3,
-        type: "project.board-item-archived",
+        type: "project.board.item.archived",
         aggregateKind: "project",
         aggregateId: "project-board",
         occurredAt: archivedAt,
@@ -108,7 +108,7 @@ describe("orchestration projector", () => {
         model,
         makeEvent({
           sequence: 4,
-          type: "project.board-item-restored",
+          type: "project.board.item.restored",
           aggregateKind: "project",
           aggregateId: "project-board",
           occurredAt: archivedAt,

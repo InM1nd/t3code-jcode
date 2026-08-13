@@ -167,7 +167,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
         readModel,
       });
       const archivedEvent = Array.isArray(archived) ? archived[0] : archived;
-      expect(archivedEvent?.type).toBe("project.board-item-archived");
+      expect(archivedEvent?.type).toBe("project.board.item.archived");
       if (!archivedEvent) throw new Error("missing archive");
       readModel = yield* projectEvent(readModel, archivedEvent);
       expect(readModel.projects[0]?.boardItems?.[0]).toMatchObject({
@@ -203,7 +203,7 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
         readModel,
       });
       const restoredEvent = Array.isArray(restored) ? restored[0] : restored;
-      expect(restoredEvent?.type).toBe("project.board-item-restored");
+      expect(restoredEvent?.type).toBe("project.board.item.restored");
       if (!restoredEvent) throw new Error("missing restore");
       readModel = yield* projectEvent(readModel, restoredEvent);
       expect(readModel.projects[0]?.boardItems?.[0]).toMatchObject({

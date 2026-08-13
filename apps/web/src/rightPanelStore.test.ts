@@ -1,5 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { type EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { type EnvironmentId, ProjectBoardItemId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -184,6 +184,24 @@ describe("rightPanelStore", () => {
       isOpen: true,
       activeSurfaceId: "activity",
       surfaces: [{ id: "activity", kind: "activity" }],
+    });
+  });
+
+  it("stores the selected Board item on the Board surface", () => {
+    useRightPanelStore.getState().open(refA, "board");
+    useRightPanelStore.getState().selectBoardItem(refA, ProjectBoardItemId.make("board-item-1"));
+
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      id: "board",
+      kind: "board",
+      selectedItemId: "board-item-1",
+    });
+
+    useRightPanelStore.getState().selectBoardItem(refA, null);
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      id: "board",
+      kind: "board",
+      selectedItemId: null,
     });
   });
 

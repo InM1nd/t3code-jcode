@@ -13,21 +13,23 @@ In a thread for the project:
 ## Use the board
 
 - Add an item with the input at the top of the panel
-- Items are grouped into **In progress**, **Pending**, and a collapsible **Done** section
-- Check an item to mark it done; uncheck to reopen it as pending
-- Click the status chip to cycle `Pending → In progress → Done → Pending`
+- Items are grouped into **Backlog**, **Ready**, **In progress**, **In review**, **Blocked**, **Done**, and **Cancelled**
+- Check an item to mark it done; uncheck to return it to the backlog
+- Click the status chip to advance it through the workflow
 - Press the play control on a row to **Implement** it: opens a new thread with a seeded prompt, marks the item in progress, and links that thread on the card
 - If an item already has a linked thread, Implement reopens it
-- Delete an item with the × control on the row
+- Select an item to edit its title, notes, status, and task brief, or to review its source, timestamps, linked turns, and latest handoff
+- Archive an item without changing its status. Archived items appear in the collapsed **Archive** section and can be restored later
+- Delete an item from its row or detail view
 - Items created by an agent show a small **agent** badge
-- Open a card’s details control to add a **Task Brief**: a goal, acceptance criteria, important files, and notes
+- In task details, add a **Task Brief**: a goal, acceptance criteria, important files, and notes
 - In the same details view, add a **Handoff** with a summary, decisions, and one concrete next step. The card keeps the latest handoff so the next agent can continue immediately.
 
 The board is capped at 100 items per project.
 
 ## Agents
 
-When an agent session is connected through T3 Code’s MCP tools (Claude, Cursor, Codex, Grok, OpenCode), it can list and update the same board with `board_digest`, `board_list`, `board_get_brief`, `board_upsert`, `board_set_status`, `board_link_turn`, `board_handoff`, and `board_delete`. Changes show up live in the panel for every connected client.
+When an agent session is connected through T3 Code’s MCP tools (Claude, Cursor, Codex, Grok, OpenCode), it can list and update the same board with `board_digest`, `board_list`, `board_get_brief`, `board_upsert`, `board_set_status`, `board_link_turn`, `board_handoff`, `board_archive`, `board_restore`, and `board_delete`. Changes show up live in the panel for every connected client. Lists and digests hide archived items by default; `board_list` can include them when requested.
 
 Use `board_get_brief` before starting a card and `board_handoff` when you are transferring work. A handoff is always tied to the agent’s current project thread.
 

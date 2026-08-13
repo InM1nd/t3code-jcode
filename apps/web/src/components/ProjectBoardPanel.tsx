@@ -1,8 +1,21 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import type { EnvironmentId, ProjectBoardItem, ProjectId, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  ProjectBoardItem,
+  ProjectBoardItemId,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight, FileText, ListTodo, Play, X } from "lucide-react";
-import { useCallback, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Archive, ChevronDown, ChevronRight, ListTodo, Play, RotateCcw, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
 import { projectEnvironment } from "~/state/projects";
 import { readThreadShell, useProject } from "~/state/entities";
@@ -20,9 +33,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 import {
   buildBoardImplementPrompt,
+  createBoardItemDraft,
   findDraftIdForThread,
+  groupProjectBoardItems,
   nextProjectBoardItemStatus,
-  partitionProjectBoardItems,
+  PROJECT_BOARD_STATUS_ORDER,
   projectBoardStatusLabel,
 } from "./ProjectBoardPanel.logic";
 
@@ -30,6 +45,8 @@ interface ProjectBoardPanelProps {
   environmentId: EnvironmentId;
   projectId: ProjectId;
   sourceThreadId: ThreadId | null;
+  selectedItemId: ProjectBoardItemId | null;
+  onSelectItem: (itemId: ProjectBoardItemId | null) => void;
 }
 
 function BoardItemRow({
@@ -37,6 +54,8 @@ function BoardItemRow({
   onToggleDone,
   onCycleStatus,
   onDelete,
+  onArchive,
+  onRestore,
   onImplement,
   onOpenDetails,
   onOpenLinkedThread,
@@ -45,6 +64,8 @@ function BoardItemRow({
   onToggleDone: (item: ProjectBoardItem) => void;
   onCycleStatus: (item: ProjectBoardItem) => void;
   onDelete: (item: ProjectBoardItem) => void;
+  onArchive: (item: ProjectBoardItem) => void;
+  onRestore: (item: ProjectBoardItem) => void;
   onImplement: (item: ProjectBoardItem) => void;
   onOpenDetails: (item: ProjectBoardItem) => void;
   onOpenLinkedThread: (threadId: ThreadId) => void;
@@ -52,7 +73,13 @@ function BoardItemRow({
   const completed = item.status === "completed";
   const linkedThreadId = item.sourceThreadId ?? null;
   return (
-    <div className="group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-accent/50">
+    <div
+      className="group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-accent/50"
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("button")) return;
+        onOpenDetails(item);
+      }}
+    >
       <Checkbox
         checked={completed}
         onCheckedChange={() => onToggleDone(item)}
@@ -61,14 +88,16 @@ function BoardItemRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span
+          <button
+            type="button"
+            onClick={() => onOpenDetails(item)}
             className={cn(
-              "truncate text-sm",
+              "min-w-0 cursor-pointer truncate text-left text-sm",
               completed && "text-muted-foreground line-through decoration-muted-foreground/60",
             )}
           >
             {item.title}
-          </span>
+          </button>
           <button
             type="button"
             onClick={() => onCycleStatus(item)}
@@ -111,7 +140,7 @@ function BoardItemRow({
           </div>
         )}
       </div>
-      {!completed ? (
+      {!completed && !item.archivedAt ? (
         <Tooltip>
           <TooltipTrigger
             render={
@@ -130,15 +159,22 @@ function BoardItemRow({
       ) : null}
       <button
         type="button"
-        onClick={() => onOpenDetails(item)}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (item.archivedAt) onRestore(item);
+          else onArchive(item);
+        }}
         className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-        aria-label={`Open details for "${item.title}"`}
+        aria-label={`${item.archivedAt ? "Restore" : "Archive"} "${item.title}"`}
       >
-        <FileText className="size-3" />
+        {item.archivedAt ? <RotateCcw className="size-3" /> : <Archive className="size-3" />}
       </button>
       <button
         type="button"
-        onClick={() => onDelete(item)}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete(item);
+        }}
         className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
         aria-label={`Delete "${item.title}"`}
       >
@@ -155,6 +191,8 @@ function BoardSection({
   onToggleDone,
   onCycleStatus,
   onDelete,
+  onArchive,
+  onRestore,
   onImplement,
   onOpenDetails,
   onOpenLinkedThread,
@@ -165,6 +203,8 @@ function BoardSection({
   onToggleDone: (item: ProjectBoardItem) => void;
   onCycleStatus: (item: ProjectBoardItem) => void;
   onDelete: (item: ProjectBoardItem) => void;
+  onArchive: (item: ProjectBoardItem) => void;
+  onRestore: (item: ProjectBoardItem) => void;
   onImplement: (item: ProjectBoardItem) => void;
   onOpenDetails: (item: ProjectBoardItem) => void;
   onOpenLinkedThread: (threadId: ThreadId) => void;
@@ -189,6 +229,8 @@ function BoardSection({
             onToggleDone={onToggleDone}
             onCycleStatus={onCycleStatus}
             onDelete={onDelete}
+            onArchive={onArchive}
+            onRestore={onRestore}
             onImplement={onImplement}
             onOpenDetails={onOpenDetails}
             onOpenLinkedThread={onOpenLinkedThread}
@@ -203,31 +245,36 @@ export function ProjectBoardPanel({
   environmentId,
   projectId,
   sourceThreadId,
+  selectedItemId,
+  onSelectItem,
 }: ProjectBoardPanelProps) {
   const project = useProject(scopeProjectRef(environmentId, projectId));
   const upsertBoardItem = useAtomCommand(projectEnvironment.upsertBoardItem);
   const deleteBoardItem = useAtomCommand(projectEnvironment.deleteBoardItem);
+  const archiveBoardItem = useAtomCommand(projectEnvironment.archiveBoardItem);
+  const restoreBoardItem = useAtomCommand(projectEnvironment.restoreBoardItem);
   const appendBoardHandoff = useAtomCommand(projectEnvironment.appendBoardHandoff);
   const handleNewThread = useNewThreadHandler();
   const router = useRouter();
   const [draftTitle, setDraftTitle] = useState("");
-  const [doneOpen, setDoneOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [implementingId, setImplementingId] = useState<string | null>(null);
-  const [detailItemId, setDetailItemId] = useState<ProjectBoardItem["id"] | null>(null);
-  const [briefGoal, setBriefGoal] = useState("");
-  const [briefCriteria, setBriefCriteria] = useState("");
-  const [briefFiles, setBriefFiles] = useState("");
-  const [briefNotes, setBriefNotes] = useState("");
+  const [itemDraft, setItemDraft] = useState<ReturnType<typeof createBoardItemDraft> | null>(null);
   const [handoffSummary, setHandoffSummary] = useState("");
   const [handoffDecisions, setHandoffDecisions] = useState("");
   const [handoffNextStep, setHandoffNextStep] = useState("");
 
   const boardItems = project?.boardItems ?? [];
-  const detailItem = boardItems.find((item) => item.id === detailItemId) ?? null;
-  const { inProgressItems, pendingItems, doneItems } = useMemo(
-    () => partitionProjectBoardItems(boardItems),
-    [boardItems],
-  );
+  const detailItem = boardItems.find((item) => item.id === selectedItemId) ?? null;
+  const groupedItems = useMemo(() => groupProjectBoardItems(boardItems), [boardItems]);
+
+  useEffect(() => {
+    setItemDraft(detailItem ? createBoardItemDraft(detailItem) : null);
+  }, [detailItem?.id]);
+
+  useEffect(() => {
+    if (project && selectedItemId && !detailItem) onSelectItem(null);
+  }, [detailItem, onSelectItem, project, selectedItemId]);
 
   const upsertItemStatus = useCallback(
     async (
@@ -262,7 +309,7 @@ export function ProjectBoardPanel({
         projectId,
         itemId: newProjectBoardItemId(),
         title,
-        status: "pending",
+        status: "backlog",
         source: "user",
       },
     });
@@ -270,7 +317,7 @@ export function ProjectBoardPanel({
 
   const onToggleDone = useCallback(
     async (item: ProjectBoardItem) => {
-      await upsertItemStatus(item, item.status === "completed" ? "pending" : "completed");
+      await upsertItemStatus(item, item.status === "completed" ? "backlog" : "completed");
     },
     [upsertItemStatus],
   );
@@ -288,59 +335,64 @@ export function ProjectBoardPanel({
         environmentId,
         input: { projectId, itemId: item.id },
       });
+      if (selectedItemId === item.id) onSelectItem(null);
     },
-    [deleteBoardItem, environmentId, projectId],
+    [deleteBoardItem, environmentId, onSelectItem, projectId, selectedItemId],
   );
 
-  const onOpenDetails = useCallback((item: ProjectBoardItem) => {
-    setDetailItemId(item.id);
-    setBriefGoal(item.brief?.goal ?? "");
-    setBriefCriteria(item.brief?.acceptanceCriteria.join("\n") ?? "");
-    setBriefFiles(item.brief?.importantFiles.join("\n") ?? "");
-    setBriefNotes(item.brief?.notes ?? "");
-    setHandoffSummary("");
-    setHandoffDecisions("");
-    setHandoffNextStep("");
-  }, []);
+  const onOpenDetails = useCallback(
+    (item: ProjectBoardItem) => {
+      onSelectItem(item.id);
+      setHandoffSummary("");
+      setHandoffDecisions("");
+      setHandoffNextStep("");
+    },
+    [onSelectItem],
+  );
+
+  const onArchive = useCallback(
+    async (item: ProjectBoardItem) => {
+      await archiveBoardItem({ environmentId, input: { projectId, itemId: item.id } });
+    },
+    [archiveBoardItem, environmentId, projectId],
+  );
+
+  const onRestore = useCallback(
+    async (item: ProjectBoardItem) => {
+      await restoreBoardItem({ environmentId, input: { projectId, itemId: item.id } });
+    },
+    [environmentId, projectId, restoreBoardItem],
+  );
 
   const saveBrief = useCallback(async () => {
-    if (!detailItem) return;
+    if (!detailItem || !itemDraft) return;
     const list = (value: string) =>
       value
         .split("\n")
         .map((entry) => entry.trim())
         .filter(Boolean);
-    const goal = briefGoal.trim();
+    const goal = itemDraft.briefGoal.trim();
     await upsertBoardItem({
       environmentId,
       input: {
         projectId,
         itemId: detailItem.id,
-        title: detailItem.title,
-        status: detailItem.status,
-        notes: detailItem.notes ?? null,
+        title: itemDraft.title.trim(),
+        status: itemDraft.status,
+        notes: itemDraft.notes.trim() || null,
         source: detailItem.source,
         sourceThreadId: detailItem.sourceThreadId ?? null,
         brief: goal
           ? {
               goal,
-              acceptanceCriteria: list(briefCriteria),
-              importantFiles: list(briefFiles),
-              notes: briefNotes.trim() || null,
+              acceptanceCriteria: list(itemDraft.briefCriteria),
+              importantFiles: list(itemDraft.briefFiles),
+              notes: itemDraft.briefNotes.trim() || null,
             }
           : null,
       },
     });
-  }, [
-    briefCriteria,
-    briefFiles,
-    briefGoal,
-    briefNotes,
-    detailItem,
-    environmentId,
-    projectId,
-    upsertBoardItem,
-  ]);
+  }, [detailItem, environmentId, projectId, itemDraft, upsertBoardItem]);
 
   const submitHandoff = useCallback(async () => {
     if (!detailItem || !sourceThreadId || !handoffSummary.trim() || !handoffNextStep.trim()) return;
@@ -478,13 +530,18 @@ export function ProjectBoardPanel({
     );
   }
 
-  const isEmpty =
-    inProgressItems.length === 0 && pendingItems.length === 0 && doneItems.length === 0;
+  const activeCount = PROJECT_BOARD_STATUS_ORDER.reduce(
+    (total, status) => total + groupedItems.active[status].length,
+    0,
+  );
+  const isEmpty = activeCount === 0 && groupedItems.archived.length === 0;
 
   const rowHandlers = {
     onToggleDone,
     onCycleStatus,
     onDelete,
+    onArchive,
+    onRestore,
     onImplement,
     onOpenDetails,
     onOpenLinkedThread,
@@ -492,163 +549,242 @@ export function ProjectBoardPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <form
-        onSubmit={onDraftSubmit}
-        className="flex shrink-0 items-center gap-2 border-b border-border/60 px-2 py-2"
-      >
-        <Input
-          size="sm"
-          value={draftTitle}
-          onChange={(event) => setDraftTitle(event.target.value)}
-          onKeyDown={onDraftKeyDown}
-          placeholder="Add item…"
-          aria-label="Add board item"
-          className="min-w-0 flex-1"
-        />
-        <button
-          type="submit"
-          disabled={draftTitle.trim().length === 0}
-          className="cursor-pointer shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Add
-        </button>
-      </form>
-      {detailItem ? (
-        <div className="shrink-0 space-y-2 border-b border-border/60 p-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-medium">{detailItem.title}</p>
-            <button
-              type="button"
-              className="text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setDetailItemId(null)}
-            >
-              Close
-            </button>
-          </div>
-          <Input
-            size="sm"
-            value={briefGoal}
-            onChange={(event) => setBriefGoal(event.target.value)}
-            placeholder="Task goal"
-          />
-          <Textarea
-            size="sm"
-            value={briefCriteria}
-            onChange={(event) => setBriefCriteria(event.target.value)}
-            placeholder="Acceptance criteria (one per line)"
-          />
-          <Textarea
-            size="sm"
-            value={briefFiles}
-            onChange={(event) => setBriefFiles(event.target.value)}
-            placeholder="Important files (one per line)"
-          />
-          <Textarea
-            size="sm"
-            value={briefNotes}
-            onChange={(event) => setBriefNotes(event.target.value)}
-            placeholder="Brief notes"
-          />
-          <button
-            type="button"
-            onClick={() => void saveBrief()}
-            className="cursor-pointer rounded px-2 py-1 text-xs font-medium hover:bg-accent"
-          >
-            Save brief
-          </button>
-          {detailItem.latestHandoff ? (
-            <div className="rounded bg-muted/50 p-2 text-xs">
-              <p className="font-medium">Latest handoff</p>
-              <p className="mt-1">{detailItem.latestHandoff.summary}</p>
-              <p className="mt-1 text-muted-foreground">
-                Next: {detailItem.latestHandoff.nextStep}
-              </p>
-              <button
-                type="button"
-                onClick={() => onOpenLinkedThread(detailItem.latestHandoff!.sourceThreadId)}
-                className="mt-1 cursor-pointer text-muted-foreground underline hover:text-foreground"
-              >
-                Open source thread
-              </button>
-            </div>
-          ) : null}
-          {sourceThreadId ? (
-            <div className="space-y-1 border-t border-border/50 pt-2">
-              <Textarea
-                size="sm"
-                value={handoffSummary}
-                onChange={(event) => setHandoffSummary(event.target.value)}
-                placeholder="Handoff summary"
-              />
-              <Textarea
-                size="sm"
-                value={handoffDecisions}
-                onChange={(event) => setHandoffDecisions(event.target.value)}
-                placeholder="Decisions (one per line)"
-              />
-              <Textarea
-                size="sm"
-                value={handoffNextStep}
-                onChange={(event) => setHandoffNextStep(event.target.value)}
-                placeholder="Concrete next step"
-              />
-              <button
-                type="button"
-                disabled={!handoffSummary.trim() || !handoffNextStep.trim()}
-                onClick={() => void submitHandoff()}
-                className="cursor-pointer rounded px-2 py-1 text-xs font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Add handoff
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {isEmpty ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-          <ListTodo aria-hidden className="size-6 text-muted-foreground/60" />
-          <p className="text-sm font-medium">No board items</p>
-          <p className="max-w-56 text-xs text-muted-foreground">
-            Track project todos here. Use Implement to start a thread from an item.
-          </p>
-        </div>
-      ) : (
+      {detailItem && itemDraft ? (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-3 p-2">
-            <BoardSection
-              title="In progress"
-              items={inProgressItems}
-              {...(pendingItems.length > 0 ? { emptyLabel: "Nothing in progress" } : {})}
-              {...rowHandlers}
+          <div className="space-y-3 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">Task details</p>
+              <button
+                type="button"
+                className="cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => onSelectItem(null)}
+              >
+                Back to board
+              </button>
+            </div>
+            <Input
+              size="sm"
+              value={itemDraft.title}
+              onChange={(event) => setItemDraft({ ...itemDraft, title: event.target.value })}
+              placeholder="Title"
             />
-            <BoardSection
-              title="Pending"
-              items={pendingItems}
-              {...(inProgressItems.length > 0 ? { emptyLabel: "Nothing pending" } : {})}
-              {...rowHandlers}
+            <Textarea
+              size="sm"
+              value={itemDraft.notes}
+              onChange={(event) => setItemDraft({ ...itemDraft, notes: event.target.value })}
+              placeholder="Notes"
             />
-            {doneItems.length > 0 ? (
-              <Collapsible open={doneOpen} onOpenChange={setDoneOpen}>
-                <CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground hover:bg-accent/50 hover:text-foreground">
-                  {doneOpen ? (
-                    <ChevronDown aria-hidden className="size-3" />
-                  ) : (
-                    <ChevronRight aria-hidden className="size-3" />
-                  )}
-                  Done
-                  <span className="ml-1 tabular-nums text-muted-foreground/70">
-                    {doneItems.length}
-                  </span>
-                </CollapsibleTrigger>
-                <CollapsiblePanel>
-                  {doneItems.map((item) => (
-                    <BoardItemRow key={item.id} item={item} {...rowHandlers} />
-                  ))}
-                </CollapsiblePanel>
-              </Collapsible>
+            <select
+              value={itemDraft.status}
+              onChange={(event) =>
+                setItemDraft({
+                  ...itemDraft,
+                  status: event.target.value as ProjectBoardItem["status"],
+                })
+              }
+              className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+              aria-label="Task status"
+            >
+              {PROJECT_BOARD_STATUS_ORDER.map((status) => (
+                <option key={status} value={status}>
+                  {projectBoardStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+            <Input
+              size="sm"
+              value={itemDraft.briefGoal}
+              onChange={(event) => setItemDraft({ ...itemDraft, briefGoal: event.target.value })}
+              placeholder="Task goal"
+            />
+            <Textarea
+              size="sm"
+              value={itemDraft.briefCriteria}
+              onChange={(event) =>
+                setItemDraft({ ...itemDraft, briefCriteria: event.target.value })
+              }
+              placeholder="Acceptance criteria (one per line)"
+            />
+            <Textarea
+              size="sm"
+              value={itemDraft.briefFiles}
+              onChange={(event) => setItemDraft({ ...itemDraft, briefFiles: event.target.value })}
+              placeholder="Important files (one per line)"
+            />
+            <Textarea
+              size="sm"
+              value={itemDraft.briefNotes}
+              onChange={(event) => setItemDraft({ ...itemDraft, briefNotes: event.target.value })}
+              placeholder="Brief notes"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={!itemDraft.title.trim()}
+                onClick={() => void saveBrief()}
+                className="cursor-pointer rounded bg-foreground px-2 py-1 text-xs font-medium text-background disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setItemDraft(createBoardItemDraft(detailItem))}
+                className="cursor-pointer rounded px-2 py-1 text-xs font-medium hover:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void (detailItem.archivedAt ? onRestore(detailItem) : onArchive(detailItem))
+                }
+                className="cursor-pointer rounded px-2 py-1 text-xs font-medium hover:bg-accent"
+              >
+                {detailItem.archivedAt ? "Restore" : "Archive"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDelete(detailItem)}
+                className="cursor-pointer rounded px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/10"
+              >
+                Delete
+              </button>
+            </div>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-border/50 pt-3 text-xs">
+              <dt className="text-muted-foreground">Source</dt>
+              <dd>{detailItem.source}</dd>
+              <dt className="text-muted-foreground">Created</dt>
+              <dd>{detailItem.createdAt}</dd>
+              <dt className="text-muted-foreground">Updated</dt>
+              <dd>{detailItem.updatedAt}</dd>
+              {detailItem.archivedAt ? (
+                <>
+                  <dt className="text-muted-foreground">Archived</dt>
+                  <dd>{detailItem.archivedAt}</dd>
+                </>
+              ) : null}
+              <dt className="text-muted-foreground">Linked turns</dt>
+              <dd>{detailItem.linkedTurnIds?.join(", ") || "None"}</dd>
+            </dl>
+            {detailItem.latestHandoff ? (
+              <div className="rounded bg-muted/50 p-2 text-xs">
+                <p className="font-medium">Latest handoff</p>
+                <p className="mt-1">{detailItem.latestHandoff.summary}</p>
+                {detailItem.latestHandoff.decisions.length > 0 ? (
+                  <p className="mt-1">Decisions: {detailItem.latestHandoff.decisions.join(", ")}</p>
+                ) : null}
+                <p className="mt-1 text-muted-foreground">
+                  Next: {detailItem.latestHandoff.nextStep}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onOpenLinkedThread(detailItem.latestHandoff!.sourceThreadId)}
+                  className="mt-1 cursor-pointer text-muted-foreground underline hover:text-foreground"
+                >
+                  Open source thread
+                </button>
+              </div>
+            ) : null}
+            {sourceThreadId ? (
+              <div className="space-y-1 border-t border-border/50 pt-2">
+                <Textarea
+                  size="sm"
+                  value={handoffSummary}
+                  onChange={(event) => setHandoffSummary(event.target.value)}
+                  placeholder="Handoff summary"
+                />
+                <Textarea
+                  size="sm"
+                  value={handoffDecisions}
+                  onChange={(event) => setHandoffDecisions(event.target.value)}
+                  placeholder="Decisions (one per line)"
+                />
+                <Textarea
+                  size="sm"
+                  value={handoffNextStep}
+                  onChange={(event) => setHandoffNextStep(event.target.value)}
+                  placeholder="Concrete next step"
+                />
+                <button
+                  type="button"
+                  disabled={!handoffSummary.trim() || !handoffNextStep.trim()}
+                  onClick={() => void submitHandoff()}
+                  className="cursor-pointer rounded px-2 py-1 text-xs font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Add handoff
+                </button>
+              </div>
             ) : null}
           </div>
         </ScrollArea>
+      ) : (
+        <>
+          <form
+            onSubmit={onDraftSubmit}
+            className="flex shrink-0 items-center gap-2 border-b border-border/60 px-2 py-2"
+          >
+            <Input
+              size="sm"
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              onKeyDown={onDraftKeyDown}
+              placeholder="Add item…"
+              aria-label="Add board item"
+              className="min-w-0 flex-1"
+            />
+            <button
+              type="submit"
+              disabled={draftTitle.trim().length === 0}
+              className="cursor-pointer shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Add
+            </button>
+          </form>
+          {isEmpty ? (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+              <ListTodo aria-hidden className="size-6 text-muted-foreground/60" />
+              <p className="text-sm font-medium">No board items</p>
+              <p className="max-w-56 text-xs text-muted-foreground">
+                Track project todos here. Use Implement to start a thread from an item.
+              </p>
+            </div>
+          ) : (
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="flex flex-col gap-3 p-2">
+                {PROJECT_BOARD_STATUS_ORDER.map((status) =>
+                  groupedItems.active[status].length > 0 ? (
+                    <BoardSection
+                      key={status}
+                      title={projectBoardStatusLabel(status)}
+                      items={groupedItems.active[status]}
+                      {...rowHandlers}
+                    />
+                  ) : null,
+                )}
+                {groupedItems.archived.length > 0 ? (
+                  <Collapsible open={archiveOpen} onOpenChange={setArchiveOpen}>
+                    <CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground hover:bg-accent/50 hover:text-foreground">
+                      {archiveOpen ? (
+                        <ChevronDown aria-hidden className="size-3" />
+                      ) : (
+                        <ChevronRight aria-hidden className="size-3" />
+                      )}
+                      Archive
+                      <span className="ml-1 tabular-nums text-muted-foreground/70">
+                        {groupedItems.archived.length}
+                      </span>
+                    </CollapsibleTrigger>
+                    <CollapsiblePanel>
+                      {groupedItems.archived.map((item) => (
+                        <BoardItemRow key={item.id} item={item} {...rowHandlers} />
+                      ))}
+                    </CollapsiblePanel>
+                  </Collapsible>
+                ) : null}
+              </div>
+            </ScrollArea>
+          )}
+        </>
       )}
     </div>
   );

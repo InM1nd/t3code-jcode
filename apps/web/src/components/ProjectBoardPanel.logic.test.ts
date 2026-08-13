@@ -8,9 +8,10 @@ import type {
 
 import {
   buildBoardImplementPrompt,
+  createBoardItemDraft,
   findDraftIdForThread,
+  groupProjectBoardItems,
   nextProjectBoardItemStatus,
-  partitionProjectBoardItems,
   projectBoardStatusLabel,
 } from "./ProjectBoardPanel.logic";
 
@@ -29,15 +30,17 @@ function item(
 }
 
 describe("nextProjectBoardItemStatus", () => {
-  it("cycles pending → inProgress → completed → pending", () => {
-    expect(nextProjectBoardItemStatus("pending")).toBe("inProgress");
-    expect(nextProjectBoardItemStatus("inProgress")).toBe("completed");
-    expect(nextProjectBoardItemStatus("completed")).toBe("pending");
+  it("cycles the active workflow", () => {
+    expect(nextProjectBoardItemStatus("backlog")).toBe("ready");
+    expect(nextProjectBoardItemStatus("ready")).toBe("inProgress");
+    expect(nextProjectBoardItemStatus("inProgress")).toBe("inReview");
+    expect(nextProjectBoardItemStatus("inReview")).toBe("completed");
+    expect(nextProjectBoardItemStatus("completed")).toBe("backlog");
   });
 });
 
-describe("partitionProjectBoardItems", () => {
-  it("splits and sorts sections", () => {
+describe("groupProjectBoardItems", () => {
+  it("groups active statuses separately from archived items", () => {
     const items = [
       item({
         id: "done-old" as ProjectBoardItem["id"],
@@ -46,16 +49,15 @@ describe("partitionProjectBoardItems", () => {
         updatedAt: "2026-01-01T00:00:00.000Z",
       }),
       item({
-        id: "pending-b" as ProjectBoardItem["id"],
-        title: "Pending B",
-        status: "pending",
+        id: "backlog" as ProjectBoardItem["id"],
+        title: "Backlog",
+        status: "backlog",
         createdAt: "2026-01-03T00:00:00.000Z",
       }),
       item({
-        id: "pending-a" as ProjectBoardItem["id"],
-        title: "Pending A",
-        status: "pending",
-        createdAt: "2026-01-02T00:00:00.000Z",
+        id: "blocked" as ProjectBoardItem["id"],
+        title: "Blocked",
+        status: "blocked",
       }),
       item({
         id: "wip" as ProjectBoardItem["id"],
@@ -64,17 +66,36 @@ describe("partitionProjectBoardItems", () => {
         updatedAt: "2026-01-04T00:00:00.000Z",
       }),
       item({
-        id: "done-new" as ProjectBoardItem["id"],
-        title: "Done new",
-        status: "completed",
+        id: "archived" as ProjectBoardItem["id"],
+        title: "Archived",
+        status: "cancelled",
+        archivedAt: "2026-01-06T00:00:00.000Z",
         updatedAt: "2026-01-05T00:00:00.000Z",
       }),
     ];
 
-    const partitioned = partitionProjectBoardItems(items);
-    expect(partitioned.inProgressItems.map((entry) => entry.id)).toEqual(["wip"]);
-    expect(partitioned.pendingItems.map((entry) => entry.id)).toEqual(["pending-a", "pending-b"]);
-    expect(partitioned.doneItems.map((entry) => entry.id)).toEqual(["done-new", "done-old"]);
+    const grouped = groupProjectBoardItems(items);
+    expect(grouped.active.inProgress.map((entry) => entry.id)).toEqual(["wip"]);
+    expect(grouped.active.blocked.map((entry) => entry.id)).toEqual(["blocked"]);
+    expect(grouped.active.backlog.map((entry) => entry.id)).toEqual(["backlog"]);
+    expect(grouped.archived.map((entry) => entry.id)).toEqual(["archived"]);
+  });
+});
+
+describe("createBoardItemDraft", () => {
+  it("copies editable task fields", () => {
+    const boardItem = item({
+      id: "draft" as ProjectBoardItem["id"],
+      title: "Draft me",
+      status: "inReview",
+      notes: "Notes",
+    });
+
+    expect(createBoardItemDraft(boardItem)).toMatchObject({
+      title: boardItem.title,
+      notes: "Notes",
+      status: boardItem.status,
+    });
   });
 });
 
@@ -84,7 +105,7 @@ describe("buildBoardImplementPrompt", () => {
       item({
         id: "item-1" as ProjectBoardItem["id"],
         title: "Ship board implement",
-        status: "pending",
+        status: "backlog",
         notes: "Keep the UI minimal.",
       }),
     );
@@ -99,7 +120,7 @@ describe("buildBoardImplementPrompt", () => {
       item({
         id: "item-handoff" as ProjectBoardItem["id"],
         title: "Handoff UI",
-        status: "pending",
+        status: "backlog",
         brief: {
           goal: "Continue the task",
           acceptanceCriteria: ["The next agent knows what to do"],
@@ -125,7 +146,9 @@ describe("buildBoardImplementPrompt", () => {
 
 describe("projectBoardStatusLabel", () => {
   it("labels each status", () => {
-    expect(projectBoardStatusLabel("pending")).toBe("Pending");
+    expect(projectBoardStatusLabel("backlog")).toBe("Backlog");
+    expect(projectBoardStatusLabel("blocked")).toBe("Blocked");
+    expect(projectBoardStatusLabel("inReview")).toBe("In review");
     expect(projectBoardStatusLabel("inProgress")).toBe("In progress");
     expect(projectBoardStatusLabel("completed")).toBe("Done");
   });

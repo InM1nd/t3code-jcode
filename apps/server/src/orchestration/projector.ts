@@ -360,7 +360,7 @@ export function projectEvent(
         })),
       );
 
-    case "project.board-item-archived":
+    case "project.board.item.archived":
       return decodeForEvent(
         ProjectBoardItemArchivedPayload,
         event.payload,
@@ -385,7 +385,7 @@ export function projectEvent(
         })),
       );
 
-    case "project.board-item-restored":
+    case "project.board.item.restored":
       return decodeForEvent(
         ProjectBoardItemRestoredPayload,
         event.payload,

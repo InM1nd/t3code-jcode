@@ -1268,8 +1268,8 @@ export const OrchestrationEventType = Schema.Literals([
   "project.board-item-upserted",
   "project.board-item-handoff-appended",
   "project.board-item-deleted",
-  "project.board-item-archived",
-  "project.board-item-restored",
+  "project.board.item.archived",
+  "project.board.item.restored",
   "thread.created",
   "thread.deleted",
   "thread.archived",
@@ -1617,12 +1617,12 @@ export const OrchestrationEvent = Schema.Union([
   }),
   Schema.Struct({
     ...EventBaseFields,
-    type: Schema.Literal("project.board-item-archived"),
+    type: Schema.Literal("project.board.item.archived"),
     payload: ProjectBoardItemArchivedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
-    type: Schema.Literal("project.board-item-restored"),
+    type: Schema.Literal("project.board.item.restored"),
     payload: ProjectBoardItemRestoredPayload,
   }),
   Schema.Struct({

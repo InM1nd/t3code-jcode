@@ -494,7 +494,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           occurredAt,
           commandId: command.commandId,
         })),
-        type: "project.board-item-archived" as const,
+        type: "project.board.item.archived" as const,
         payload: {
           projectId: command.projectId,
           itemId: command.itemId,
@@ -520,7 +520,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           occurredAt,
           commandId: command.commandId,
         })),
-        type: "project.board-item-restored" as const,
+        type: "project.board.item.restored" as const,
         payload: {
           projectId: command.projectId,
           itemId: command.itemId,
