@@ -30,6 +30,8 @@ describe("resolveJcodeModelVariants", () => {
 
     expect(variants?.slugFor("xhigh", "fast")).toBe("gpt-5.6-luna-xhigh-fast");
     expect(variants?.slugFor("xhigh", "standard")).toBeNull();
+    expect(variants?.slugForReasoning("xhigh")).toBe("gpt-5.6-luna-xhigh-fast");
+    expect(variants?.slugForSpeed("fast")).toBe("gpt-5.6-luna-xhigh-fast");
   });
 
   it("does not add controls for a model without discovered siblings", () => {

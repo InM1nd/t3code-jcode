@@ -29,11 +29,21 @@ export function resolveJcodeModelVariants(
 
   const reasoning = [...new Set(family.map((item) => item.reasoning))];
   const speed = [...new Set(family.map((item) => item.speed))];
+  const slugForReasoning = (nextReasoning: string) =>
+    family.find((item) => item.reasoning === nextReasoning && item.speed === current.speed)?.slug ??
+    family.find((item) => item.reasoning === nextReasoning)?.slug ??
+    null;
+  const slugForSpeed = (nextSpeed: string) =>
+    family.find((item) => item.reasoning === current.reasoning && item.speed === nextSpeed)?.slug ??
+    family.find((item) => item.speed === nextSpeed)?.slug ??
+    null;
   return {
     reasoning,
     speed,
     selectedReasoning: current.reasoning,
     selectedSpeed: current.speed,
+    slugForReasoning,
+    slugForSpeed,
     slugFor: (nextReasoning: string, nextSpeed: string) =>
       family.find((item) => item.reasoning === nextReasoning && item.speed === nextSpeed)?.slug ??
       null,

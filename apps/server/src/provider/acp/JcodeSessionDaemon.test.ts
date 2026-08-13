@@ -11,7 +11,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import { buildJcodeSessionDaemonInput, startJcodeSessionDaemon } from "./JcodeSessionDaemon.ts";
 
 describe("buildJcodeSessionDaemonInput", () => {
-  it("binds an exact provider and model to a dedicated socket", () => {
+  it("binds the startup provider, exact model, and dedicated socket in one command", () => {
     expect(
       buildJcodeSessionDaemonInput({
         threadId: "thread-1",
@@ -19,7 +19,8 @@ describe("buildJcodeSessionDaemonInput", () => {
         model: "cursor-grok-4.6-high-fast",
         socketPath: "/tmp/jcode-thread-1.sock",
       }),
-    ).toMatchObject({
+    ).toEqual({
+      command: "jcode",
       args: [
         "serve",
         "--no-selfdev",
@@ -30,6 +31,7 @@ describe("buildJcodeSessionDaemonInput", () => {
         "--socket",
         "/tmp/jcode-thread-1.sock",
       ],
+      socketPath: "/tmp/jcode-thread-1.sock",
     });
   });
 });

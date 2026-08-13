@@ -739,10 +739,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-muted-foreground">Reasoning</span>
                         {jcodeVariants.reasoning.map((reasoning) => {
-                          const slug = jcodeVariants.slugFor(
-                            reasoning,
-                            jcodeVariants.selectedSpeed,
-                          );
+                          const slug = jcodeVariants.slugForReasoning(reasoning);
                           return slug ? (
                             <button
                               key={reasoning}
@@ -770,10 +767,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-muted-foreground">Speed</span>
                         {jcodeVariants.speed.map((speed) => {
-                          const slug = jcodeVariants.slugFor(
-                            jcodeVariants.selectedReasoning,
-                            speed,
-                          );
+                          const slug = jcodeVariants.slugForSpeed(speed);
                           return slug ? (
                             <button
                               key={speed}
