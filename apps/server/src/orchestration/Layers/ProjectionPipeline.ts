@@ -588,6 +588,33 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "project.board.item.archived":
+        case "project.board.item.restored": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems: (existingRow.value.boardItems ?? []).map((item) =>
+              item.id === event.payload.itemId
+                ? {
+                    ...item,
+                    archivedAt:
+                      event.type === "project.board.item.archived"
+                        ? event.payload.archivedAt
+                        : null,
+                    updatedAt: event.payload.updatedAt,
+                  }
+                : item,
+            ),
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "project.board-item-handoff-appended": {
           const existingRow = yield* projectionProjectRepository.getById({
             projectId: event.payload.projectId,

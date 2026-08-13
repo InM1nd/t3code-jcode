@@ -58,6 +58,7 @@ function statusSectionLabel(status: ProjectBoardItemStatus): string {
  */
 export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>): string {
   const activeItems = items.filter((item) => !item.archivedAt);
+  const archivedCount = items.length - activeItems.length;
   const statuses: ReadonlyArray<ProjectBoardItemStatus> = [
     "backlog",
     "ready",
@@ -72,13 +73,17 @@ export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>)
   ) as Record<ProjectBoardItemStatus, ProjectBoardItem[]>;
 
   if (activeItems.length === 0) {
-    return ["Project board digest", "", "Board is empty."].join("\n");
+    return [
+      "Project board digest",
+      "",
+      archivedCount === 0 ? "Board is empty." : `No active items (${archivedCount} archived).`,
+    ].join("\n");
   }
 
   const lines = [
     "Project board digest",
     "",
-    `Totals: ${byStatus.inProgress.length} in progress, ${byStatus.backlog.length} backlog, ${byStatus.ready.length} ready, ${byStatus.inReview.length} in review, ${byStatus.blocked.length} blocked, ${byStatus.completed.length} done, ${byStatus.cancelled.length} cancelled (${activeItems.length} total).`,
+    `Totals: ${byStatus.inProgress.length} in progress, ${byStatus.backlog.length} backlog, ${byStatus.ready.length} ready, ${byStatus.inReview.length} in review, ${byStatus.blocked.length} blocked, ${byStatus.completed.length} done, ${byStatus.cancelled.length} cancelled (${activeItems.length} active${archivedCount > 0 ? `, ${archivedCount} archived` : ""}).`,
   ];
 
   const appendSection = (status: ProjectBoardItemStatus, sectionItems: ProjectBoardItem[]) => {

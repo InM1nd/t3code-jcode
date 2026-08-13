@@ -12,6 +12,7 @@ import {
   OrchestrationGetProjectActivityResult,
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
+  OrchestrationProjectShell,
   ProjectCreatedPayload,
   ProjectBoardItem,
   ProjectBoardItemStatus,
@@ -47,6 +48,7 @@ const decodeOrchestrationProposedPlan = Schema.decodeUnknownEffect(Orchestration
 const decodeOrchestrationSession = Schema.decodeUnknownEffect(OrchestrationSession);
 const decodeOrchestrationThread = Schema.decodeUnknownEffect(OrchestrationThread);
 const decodeOrchestrationThreadShell = Schema.decodeUnknownEffect(OrchestrationThreadShell);
+const decodeOrchestrationProjectShell = Schema.decodeUnknownEffect(OrchestrationProjectShell);
 const encodeThreadCreatedPayload = Schema.encodeEffect(ThreadCreatedPayload);
 
 function getOptionValue(
@@ -85,6 +87,33 @@ it("decodes Board lifecycle statuses and legacy pending items", () => {
     now,
   );
 });
+
+it.effect("decodes a legacy project shell with pending Board items as backlog", () =>
+  Effect.gen(function* () {
+    const now = "2026-08-13T12:00:00.000Z";
+    const shell = yield* decodeOrchestrationProjectShell({
+      id: "project-legacy-board",
+      title: "Legacy Board",
+      workspaceRoot: "/tmp/legacy-board",
+      defaultModelSelection: null,
+      scripts: [],
+      boardItems: [
+        {
+          id: "item-legacy-pending",
+          title: "Persisted pending item",
+          status: "pending",
+          source: "user",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    assert.strictEqual(shell.boardItems?.[0]?.status, "backlog");
+  }),
+);
 
 it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
   Effect.gen(function* () {

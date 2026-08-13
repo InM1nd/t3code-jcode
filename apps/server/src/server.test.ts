@@ -24,6 +24,7 @@ import {
   type OrchestrationEvent,
   ORCHESTRATION_WS_METHODS,
   type PreviewEvent,
+  ProjectBoardItemId,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -6749,6 +6750,87 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const [first] = Array.from(items);
       assert.equal(first?.kind, "project-removed");
       assert.equal(first?.kind === "project-removed" ? first.projectId : null, projectId);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("subscribeShell publishes project upserts for Board archive and restore events", () =>
+    Effect.gen(function* () {
+      const archivedProjectId = ProjectId.make("project-board-archived");
+      const restoredProjectId = ProjectId.make("project-board-restored");
+      const itemId = ProjectBoardItemId.make("item-board-publication");
+      const now = "2026-01-01T00:00:00.000Z";
+      const events: ReadonlyArray<OrchestrationEvent> = [
+        {
+          sequence: 1,
+          eventId: EventId.make("event-board-archived"),
+          aggregateKind: "project",
+          aggregateId: archivedProjectId,
+          occurredAt: now,
+          commandId: null,
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "project.board.item.archived",
+          payload: {
+            projectId: archivedProjectId,
+            itemId,
+            archivedAt: now,
+            updatedAt: now,
+          },
+        },
+        {
+          sequence: 2,
+          eventId: EventId.make("event-board-restored"),
+          aggregateKind: "project",
+          aggregateId: restoredProjectId,
+          occurredAt: now,
+          commandId: null,
+          causationEventId: null,
+          correlationId: null,
+          metadata: {},
+          type: "project.board.item.restored",
+          payload: { projectId: restoredProjectId, itemId, updatedAt: now },
+        },
+      ];
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(2),
+            readEvents: () => Stream.fromIterable(events),
+          },
+          projectionSnapshotQuery: {
+            getProjectShellById: (projectId) =>
+              Effect.succeed(
+                Option.some({
+                  id: projectId,
+                  title: "Board project",
+                  workspaceRoot: `/tmp/${projectId}`,
+                  defaultModelSelection: null,
+                  scripts: [],
+                  boardItems: [],
+                  createdAt: now,
+                  updatedAt: now,
+                }),
+              ),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 0 }).pipe(
+            Stream.take(2),
+            Stream.runCollect,
+          ),
+        ),
+      );
+
+      const projectIds = Array.from(items).flatMap((item) =>
+        item.kind === "project-upserted" ? [item.project.id] : [],
+      );
+      assert.sameMembers(projectIds, [archivedProjectId, restoredProjectId]);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

@@ -27,6 +27,8 @@ In a thread for the project:
 
 The board is capped at 100 items per project.
 
+For remote connections, update the client and server together before using the expanded workflow. Current versions safely show older pending items in **Backlog**, while older clients may not understand the expanded statuses produced by a current server.
+
 ## Agents
 
 When an agent session is connected through T3 Code’s MCP tools (Claude, Cursor, Codex, Grok, OpenCode), it can list and update the same board with `board_digest`, `board_list`, `board_get_brief`, `board_upsert`, `board_set_status`, `board_link_turn`, `board_handoff`, `board_archive`, `board_restore`, and `board_delete`. Changes show up live in the panel for every connected client. Lists and digests hide archived items by default; `board_list` can include them when requested.

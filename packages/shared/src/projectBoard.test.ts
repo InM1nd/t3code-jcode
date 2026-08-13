@@ -74,6 +74,22 @@ describe("formatProjectBoardDigest", () => {
     expect(digest).toContain("1 linked turn");
     expect(digest).not.toContain("secret details");
     expect(digest).not.toContain("Archived task");
+    expect(digest).toContain("1 archived");
+  });
+
+  it("distinguishes an archived-only board from an empty board", () => {
+    const digest = formatProjectBoardDigest([
+      item({
+        id: "i1" as ProjectBoardItem["id"],
+        title: "Archived task",
+        status: "cancelled",
+        archivedAt: "2026-01-02T00:00:00.000Z",
+      }),
+    ]);
+
+    expect(digest).toContain("No active items (1 archived).");
+    expect(digest).not.toContain("Archived task");
+    expect(formatProjectBoardDigest([])).toContain("Board is empty.");
   });
 });
 
