@@ -75,10 +75,11 @@ board assignment.
 ## Data and compatibility
 
 Extend the existing durable thread interaction-mode event/schema rather than
-adding a second competing setting. Its values become `build`, `plan`, `debug`,
-and `swarm`; old `default` data is read as Build and newly persisted as Build.
-The projector, client runtime, and web UI all derive their state from this one
-field.
+adding a second competing setting. Its current values are `build`, `plan`,
+`debug`, and `swarm`; the old `default` value remains a compatibility spelling
+for Build. New threads and new mode changes persist `build`, while the web UI
+shows legacy `default` threads as Build. The projector, client runtime, and
+web UI all derive their state from this one field.
 
 Provider adapters receive only a resolved native mode (`default` or `plan`, as
 they support it) plus an optional instruction profile. The resolver is a small

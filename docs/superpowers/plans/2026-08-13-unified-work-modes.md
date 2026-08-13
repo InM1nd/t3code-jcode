@@ -4,14 +4,14 @@
 
 **Goal:** Add durable Build, Plan, Debug, and Swarm Lite modes to every thread, with consistent Jcode and direct-provider behavior.
 
-**Architecture:** Reuse the existing thread interaction-mode event and projection field as the single persisted work-mode field. Decode historical `default` values as `build`; resolve every work mode at the provider boundary into a supported native mode (`default` or `plan`) plus an optional private workflow instruction. The web composer exposes one four-item selector and sends the existing command path.
+**Architecture:** Reuse the existing thread interaction-mode event and projection field as the single persisted work-mode field. Keep historical `default` as a compatibility spelling for Build while new threads persist `build`; resolve every work mode at the provider boundary into a supported native mode (`default` or `plan`) plus an optional private workflow instruction. The web composer exposes one four-item selector and sends the existing command path.
 
 **Tech Stack:** TypeScript, Effect Schema, event-sourced orchestration, React, Vitest, existing provider adapters.
 
 ## Global Constraints
 
 - Do not add dependencies, database migrations, a global setting, or a second thread-mode field.
-- New threads use `build`; historical persisted `default` decodes as `build`.
+- New threads use `build`; historical persisted `default` remains accepted and is shown as Build in the web client.
 - Provider adapters must never send `debug` or `swarm` as native provider/ACP mode IDs.
 - Jcode keeps its selected inner provider/model; choosing a work mode must not alter routing, reasoning, or speed.
 - Swarm Lite is a guided workflow, not a T3-created agent pool or scheduler.
@@ -49,7 +49,7 @@
 
 **Consumes:** Existing `thread.interaction-mode.set` command and projected `Thread.interactionMode` field.
 
-**Produces:** `ProviderInteractionMode` type of `"build" | "plan" | "debug" | "swarm"`; historical wire value `"default"` decodes to `"build"`; `DEFAULT_PROVIDER_INTERACTION_MODE === "build"`.
+**Produces:** `ProviderInteractionMode` accepts `"default" | "build" | "plan" | "debug" | "swarm"`; `default` is legacy Build compatibility; `DEFAULT_PROVIDER_INTERACTION_MODE === "build"`.
 
 - [ ] **Step 1: Add contract tests before changing the schema.**
 
@@ -68,13 +68,13 @@
 
   Expected: the legacy decode expectation fails and/or `build` is rejected.
 
-- [ ] **Step 3: Implement a decoding-only legacy normalization.**
+- [ ] **Step 3: Implement legacy compatibility.**
 
-  Replace the plain `Schema.Literals(["default", "plan"])` with a schema transformation whose decoded type is exactly the four current modes and whose encoded input additionally accepts `default`. Use it consistently in all thread/create/turn/set schemas already referencing `ProviderInteractionMode`; do not change the SQLite column or add a migration.
+  Extend the schema with `build`, `debug`, and `swarm`, retain `default` as a legacy spelling, and set the new default to `build`. Normalize the legacy spelling in the web client; do not change the SQLite column or add a migration.
 
   ```ts
   export const DEFAULT_PROVIDER_INTERACTION_MODE: ProviderInteractionMode = "build";
-  // decode "default" -> "build"; encode only build/plan/debug/swarm
+  // keep "default" readable; new defaults write "build"
   ```
 
 - [ ] **Step 4: Add event-sourcing tests.**
@@ -264,5 +264,5 @@
 
 - **Spec coverage:** Task 1 covers durable selection and legacy compatibility; Task 2 covers all direct adapters plus Jcode routing; Task 3 covers UI, aliases, beta-gate removal, and failure semantics; Task 4 covers Swarm Lite scope, documentation, and real-client verification.
 - **Scope:** The plan deliberately excludes a T3 swarm scheduler, worker graph, sidebar indicators, and provider/model changes.
-- **Consistency:** `build`, `plan`, `debug`, and `swarm` are the only decoded application modes; `default` occurs only as a historical wire input or provider-native resolved mode.
+- **Consistency:** `build`, `plan`, `debug`, and `swarm` are current application modes; `default` remains a readable legacy Build spelling and provider-native resolved mode.
 - **Placeholder scan:** The document contains no unfinished implementation markers.
