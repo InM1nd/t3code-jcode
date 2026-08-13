@@ -177,18 +177,19 @@ const handlers = {
       const scope = yield* requireBoardScope();
       const projectId = yield* resolveProjectId(scope.threadId);
       const project = yield* loadBoard(projectId);
-      const items = listProjectBoardItems(project.boardItems ?? []);
+      const allItems = project.boardItems ?? [];
+      const activeItems = listProjectBoardItems(allItems);
       return {
         projectId,
-        digest: formatProjectBoardDigest(items),
-        backlogCount: items.filter((item) => item.status === "backlog").length,
-        readyCount: items.filter((item) => item.status === "ready").length,
-        inProgressCount: items.filter((item) => item.status === "inProgress").length,
-        inReviewCount: items.filter((item) => item.status === "inReview").length,
-        blockedCount: items.filter((item) => item.status === "blocked").length,
-        completedCount: items.filter((item) => item.status === "completed").length,
-        cancelledCount: items.filter((item) => item.status === "cancelled").length,
-        totalCount: items.length,
+        digest: formatProjectBoardDigest(allItems),
+        backlogCount: activeItems.filter((item) => item.status === "backlog").length,
+        readyCount: activeItems.filter((item) => item.status === "ready").length,
+        inProgressCount: activeItems.filter((item) => item.status === "inProgress").length,
+        inReviewCount: activeItems.filter((item) => item.status === "inReview").length,
+        blockedCount: activeItems.filter((item) => item.status === "blocked").length,
+        completedCount: activeItems.filter((item) => item.status === "completed").length,
+        cancelledCount: activeItems.filter((item) => item.status === "cancelled").length,
+        totalCount: activeItems.length,
       };
     }),
 

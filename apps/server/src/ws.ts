@@ -548,6 +548,8 @@ const makeWsRpcLayer = (
           case "project.board-item-upserted":
           case "project.board-item-handoff-appended":
           case "project.board-item-deleted":
+          case "project.board.item.archived":
+          case "project.board.item.restored":
             return projectUpsertOrRemove(event.payload.projectId, event.sequence);
           case "project.deleted":
             return Effect.succeed(

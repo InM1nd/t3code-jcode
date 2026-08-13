@@ -4,6 +4,8 @@ import {
   CorrelationId,
   EventId,
   MessageId,
+  ProjectBoardItem,
+  ProjectBoardItemId,
   ProjectId,
   ThreadId,
   TurnId,
@@ -15,6 +17,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
@@ -53,6 +56,9 @@ const exists = (filePath: string) =>
   });
 
 const BaseTestLayer = makeProjectionPipelinePrefixedTestLayer("t3-projection-pipeline-test-");
+const decodeBoardItemsJson = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Array(ProjectBoardItem)),
+);
 
 it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
   it.effect("bootstraps all projection states and writes projection rows", () =>
@@ -2787,6 +2793,75 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
           faviconPath: "brand/icon.svg",
         },
       ]);
+    }),
+  );
+
+  it.effect("persists Board archive and restore lifecycle changes", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const sql = yield* SqlClient.SqlClient;
+      const projectId = ProjectId.make("project-board-lifecycle");
+      const itemId = ProjectBoardItemId.make("item-board-lifecycle");
+
+      yield* engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("cmd-board-lifecycle-project"),
+        projectId,
+        title: "Board Lifecycle",
+        workspaceRoot: "/tmp/project-board-lifecycle",
+        defaultModelSelection: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+      yield* engine.dispatch({
+        type: "project.board.item.upsert",
+        commandId: CommandId.make("cmd-board-lifecycle-upsert"),
+        projectId,
+        itemId,
+        title: "Preserve blocked status",
+        status: "blocked",
+        source: "user",
+      });
+      yield* engine.dispatch({
+        type: "project.board.item.archive",
+        commandId: CommandId.make("cmd-board-lifecycle-archive"),
+        projectId,
+        itemId,
+      });
+
+      const archivedRows = yield* sql<{
+        readonly boardItemsJson: string;
+        readonly updatedAt: string;
+      }>`
+        SELECT board_items_json AS "boardItemsJson", updated_at AS "updatedAt"
+        FROM projection_projects
+        WHERE project_id = ${projectId}
+      `;
+      const archivedItem = decodeBoardItemsJson(archivedRows[0]?.boardItemsJson ?? "[]")[0];
+      assert.exists(archivedItem);
+      assert.equal(archivedItem.status, "blocked");
+      assert.isString(archivedItem.archivedAt);
+      assert.equal(archivedItem.updatedAt, archivedRows[0]?.updatedAt);
+
+      yield* engine.dispatch({
+        type: "project.board.item.restore",
+        commandId: CommandId.make("cmd-board-lifecycle-restore"),
+        projectId,
+        itemId,
+      });
+
+      const restoredRows = yield* sql<{
+        readonly boardItemsJson: string;
+        readonly updatedAt: string;
+      }>`
+        SELECT board_items_json AS "boardItemsJson", updated_at AS "updatedAt"
+        FROM projection_projects
+        WHERE project_id = ${projectId}
+      `;
+      const restoredItem = decodeBoardItemsJson(restoredRows[0]?.boardItemsJson ?? "[]")[0];
+      assert.exists(restoredItem);
+      assert.equal(restoredItem.status, "blocked");
+      assert.isNull(restoredItem.archivedAt);
+      assert.equal(restoredItem.updatedAt, restoredRows[0]?.updatedAt);
     }),
   );
 });
