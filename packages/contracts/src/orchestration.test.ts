@@ -422,6 +422,8 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
     assert.strictEqual(thread.settledAt, null);
     assert.strictEqual(shell.settledOverride, null);
     assert.strictEqual(shell.settledAt, null);
+    assert.strictEqual(thread.interactionMode, "build");
+    assert.strictEqual(shell.interactionMode, "build");
   }),
 );
 
@@ -705,6 +707,22 @@ it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
       threadId: "thread-1",
       planId: "plan-1",
     });
+  }),
+);
+
+it.effect("normalizes historical default interaction-mode commands to build", () =>
+  Effect.gen(function* () {
+    const command = yield* decodeOrchestrationCommand({
+      type: "thread.interaction-mode.set",
+      commandId: "cmd-interaction-mode-default",
+      threadId: "thread-1",
+      interactionMode: "default",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    if (command.type !== "thread.interaction-mode.set") {
+      throw new Error("Expected an interaction-mode command.");
+    }
+    assert.strictEqual(command.interactionMode, "build");
   }),
 );
 
