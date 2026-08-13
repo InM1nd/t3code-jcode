@@ -65,7 +65,7 @@ import {
 import { startJcodeSessionDaemon } from "../acp/JcodeSessionDaemon.ts";
 import { type JcodeAdapterShape } from "../Services/JcodeAdapter.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
-import { discoverJcodeModelsForProvider } from "./JcodeProvider.ts";
+import { discoverJcodeModelsForProviderStrict } from "./JcodeProvider.ts";
 
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
 
@@ -618,13 +618,22 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
               issue: "Choose a discovered Jcode model before starting a turn.",
             });
           }
-          const availableModels = yield* discoverJcodeModelsForProvider(
+          const availableModels = yield* discoverJcodeModelsForProviderStrict(
             jcodeSettings,
             jcodeProvider,
             options?.environment ?? process.env,
           ).pipe(
             Effect.provideService(Crypto.Crypto, crypto),
             Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
+            Effect.mapError(
+              (cause) =>
+                new ProviderAdapterProcessError({
+                  provider: PROVIDER,
+                  threadId: input.threadId,
+                  detail: `Failed to discover Jcode models for provider '${jcodeProvider}': ${cause instanceof Error ? cause.message : String(cause)}`,
+                  cause,
+                }),
+            ),
           );
           if (!availableModels.some((model) => model.slug === requestedStartModelId)) {
             return yield* new ProviderAdapterValidationError({
@@ -1414,7 +1423,7 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
 
     return {
       provider: PROVIDER,
-      capabilities: { sessionModelSwitch: "in-session" },
+      capabilities: { sessionModelSwitch: "unsupported" },
       startSession,
       sendTurn,
       interruptTurn,

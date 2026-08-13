@@ -14,6 +14,7 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
+import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
@@ -460,7 +461,9 @@ const make = Effect.gen(function* () {
     if (
       requestedModelSelection === undefined ||
       (input.currentModelSelection.instanceId === requestedModelSelection.instanceId &&
-        input.currentModelSelection.model === requestedModelSelection.model)
+        input.currentModelSelection.model === requestedModelSelection.model &&
+        getModelSelectionStringOptionValue(input.currentModelSelection, "jcodeProvider") ===
+          getModelSelectionStringOptionValue(requestedModelSelection, "jcodeProvider"))
     ) {
       return;
     }
@@ -680,6 +683,12 @@ const make = Effect.gen(function* () {
         activeSession?.providerInstanceId !== requestedModelSelection.instanceId;
       const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "unsupported";
       const previousModelSelection = threadModelSelections.get(threadId);
+      const jcodeProviderChanged =
+        preferredProvider === "jcode" &&
+        requestedModelSelection !== undefined &&
+        previousModelSelection !== undefined &&
+        getModelSelectionStringOptionValue(previousModelSelection, "jcodeProvider") !==
+          getModelSelectionStringOptionValue(requestedModelSelection, "jcodeProvider");
       const shouldRestartForModelSelectionChange =
         preferredProvider === "claudeAgent" &&
         requestedModelSelection !== undefined &&
@@ -690,14 +699,16 @@ const make = Effect.gen(function* () {
         !cwdChanged &&
         !instanceChanged &&
         !shouldRestartForModelChange &&
+        !jcodeProviderChanged &&
         !shouldRestartForModelSelectionChange
       ) {
         return existingSessionThreadId;
       }
 
-      const resumeCursor = shouldRestartForModelChange
-        ? undefined
-        : (activeSession?.resumeCursor ?? undefined);
+      const resumeCursor =
+        shouldRestartForModelChange || jcodeProviderChanged
+          ? undefined
+          : (activeSession?.resumeCursor ?? undefined);
       yield* Effect.logInfo("provider command reactor restarting provider session", {
         threadId,
         existingSessionThreadId,
@@ -714,6 +725,7 @@ const make = Effect.gen(function* () {
         modelChanged,
         instanceChanged,
         shouldRestartForModelChange,
+        jcodeProviderChanged,
         shouldRestartForModelSelectionChange,
         hasResumeCursor: resumeCursor !== undefined,
       });
@@ -729,11 +741,13 @@ const make = Effect.gen(function* () {
         cwd: restartedSession.cwd,
       });
       yield* bindSessionToThread(restartedSession);
+      threadModelSelections.set(threadId, desiredModelSelection);
       return restartedSession.threadId;
     }
 
     const startedSession = yield* startProviderSession(undefined);
     yield* bindSessionToThread(startedSession);
+    threadModelSelections.set(threadId, desiredModelSelection);
     return startedSession.threadId;
   });
 

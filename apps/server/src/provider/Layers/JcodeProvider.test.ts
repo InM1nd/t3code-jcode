@@ -9,6 +9,7 @@ import { JcodeSettings } from "@t3tools/contracts";
 import {
   buildInitialJcodeProviderSnapshot,
   checkJcodeProviderStatus,
+  discoverJcodeModelsForProviderStrict,
   jcodeModelsFromModelList,
 } from "./JcodeProvider.ts";
 
@@ -53,6 +54,34 @@ describe("jcodeModelsFromModelList", () => {
       { slug: "cursor-grok-4.6-high-fast", subProvider: "Cursor" },
     ]);
   });
+});
+
+it.layer(NodeServices.layer)("discoverJcodeModelsForProviderStrict", (it) => {
+  it.effect("preserves non-zero exit details for session-start discovery", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-jcode-discovery-" });
+        const jcodePath = path.join(dir, "jcode");
+        yield* fs.writeFileString(
+          jcodePath,
+          ["#!/bin/sh", 'printf "authentication required\\n" >&2', "exit 7", ""].join("\n"),
+        );
+        yield* fs.chmod(jcodePath, 0o755);
+
+        const error = yield* discoverJcodeModelsForProviderStrict(
+          decodeJcodeSettings({ enabled: true, binaryPath: jcodePath }),
+          "cursor",
+          process.env,
+        ).pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(Error);
+        expect(String(error)).toContain("exited with code 7");
+        expect(String(error)).toContain("authentication required");
+      }),
+    ),
+  );
 });
 
 it.layer(NodeServices.layer)("checkJcodeProviderStatus", (it) => {

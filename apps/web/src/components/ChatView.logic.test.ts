@@ -353,6 +353,34 @@ describe("getStartedThreadModelChangeBlockReason", () => {
     ).toBeNull();
   });
 
+  it("treats a different Jcode inner provider as a route change", () => {
+    expect(
+      getStartedThreadModelChangeBlockReason({
+        providers: [
+          {
+            instanceId: ProviderInstanceId.make("jcode"),
+            requiresNewThreadForModelChange: true,
+          },
+        ],
+        hasStartedSession: true,
+        currentModelSelection: {
+          instanceId: ProviderInstanceId.make("jcode"),
+          model: "shared-model-slug",
+          options: [{ id: "jcodeProvider", value: "cursor" }],
+        },
+        nextModelSelection: {
+          instanceId: ProviderInstanceId.make("jcode"),
+          model: "shared-model-slug",
+          options: [{ id: "jcodeProvider", value: "claude" }],
+        },
+      }),
+    ).toEqual({
+      title: "Start a new chat to change models",
+      description:
+        "This provider does not allow switching models after a conversation has started.",
+    });
+  });
+
   it("blocks started-session model changes when either provider requires a new thread", () => {
     expect(
       getStartedThreadModelChangeBlockReason({

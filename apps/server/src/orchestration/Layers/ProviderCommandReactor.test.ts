@@ -1909,6 +1909,63 @@ describe("ProviderCommandReactor", () => {
     expect(harness.stopSession.mock.calls.length).toBe(0);
   });
 
+  it("restarts Jcode when the inner provider changes for the same exact model slug", async () => {
+    const selection = (jcodeProvider: string): ModelSelection => ({
+      instanceId: ProviderInstanceId.make("jcode"),
+      model: "shared-model-slug",
+      options: [{ id: "jcodeProvider", value: jcodeProvider }],
+    });
+    const harness = await createHarness({
+      threadModelSelection: selection("cursor"),
+      sessionModelSwitch: "in-session",
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-jcode-cursor"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-jcode-cursor"),
+          role: "user",
+          text: "first",
+          attachments: [],
+        },
+        modelSelection: selection("cursor"),
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-jcode-claude"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-jcode-claude"),
+          role: "user",
+          text: "second",
+          attachments: [],
+        },
+        modelSelection: selection("claude"),
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.startSession.mock.calls.length === 2);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+
+    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+      modelSelection: selection("claude"),
+    });
+    expect(harness.startSession.mock.calls[1]?.[1]).not.toHaveProperty("resumeCursor");
+  });
+
   it("restarts an existing Codex thread on a compatible requested instance", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

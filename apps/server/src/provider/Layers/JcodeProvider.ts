@@ -10,6 +10,7 @@ import {
 } from "@t3tools/shared/jcodeInnerProvider";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as Crypto from "effect/Crypto";
+import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -45,6 +46,15 @@ const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
 
 const VERSION_PROBE_TIMEOUT_MS = 4_000;
 const JCODE_MODEL_LIST_TIMEOUT_MS = 4_000;
+const JCODE_DISCOVERY_OUTPUT_LIMIT = 2_000;
+
+export class JcodeModelDiscoveryError extends Data.TaggedError("JcodeModelDiscoveryError")<{
+  readonly detail: string;
+}> {
+  override get message(): string {
+    return this.detail;
+  }
+}
 
 const JCODE_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
   {
@@ -164,18 +174,46 @@ const runJcodeModelListCommand = (
     );
   });
 
+function boundedDiscoveryOutput(output: string): string {
+  const trimmed = output.trim();
+  return trimmed.length <= JCODE_DISCOVERY_OUTPUT_LIMIT
+    ? trimmed
+    : `${trimmed.slice(0, JCODE_DISCOVERY_OUTPUT_LIMIT)}…`;
+}
+
+export const discoverJcodeModelsForProviderStrict = Effect.fn(
+  "discoverJcodeModelsForProviderStrict",
+)(function* (jcodeSettings: JcodeSettings, providerId: string, environment: NodeJS.ProcessEnv) {
+  const result = yield* runJcodeModelListCommand(jcodeSettings, providerId, environment).pipe(
+    Effect.timeoutOption(JCODE_MODEL_LIST_TIMEOUT_MS),
+  );
+  if (Option.isNone(result)) {
+    return yield* new JcodeModelDiscoveryError({
+      detail: `Timed out after ${String(JCODE_MODEL_LIST_TIMEOUT_MS)}ms while discovering Jcode models for provider '${providerId}'.`,
+    });
+  }
+  if (result.value.code !== 0) {
+    const stderr = boundedDiscoveryOutput(result.value.stderr);
+    const stdout = boundedDiscoveryOutput(result.value.stdout);
+    return yield* new JcodeModelDiscoveryError({
+      detail: [
+        `Jcode model discovery for provider '${providerId}' exited with code ${String(result.value.code)}.`,
+        stderr ? `stderr: ${stderr}` : null,
+        stdout ? `stdout: ${stdout}` : null,
+      ]
+        .filter((line) => line !== null)
+        .join("\n"),
+    });
+  }
+  return jcodeModelsFromModelList(providerId, result.value.stdout);
+});
+
 export const discoverJcodeModelsForProvider = (
   jcodeSettings: JcodeSettings,
   providerId: string,
   environment: NodeJS.ProcessEnv,
 ) =>
-  runJcodeModelListCommand(jcodeSettings, providerId, environment).pipe(
-    Effect.timeoutOption(JCODE_MODEL_LIST_TIMEOUT_MS),
-    Effect.map((result) =>
-      Option.isSome(result) && result.value.code === 0
-        ? jcodeModelsFromModelList(providerId, result.value.stdout)
-        : [],
-    ),
+  discoverJcodeModelsForProviderStrict(jcodeSettings, providerId, environment).pipe(
     Effect.catchCause(() => Effect.succeed([])),
   );
 

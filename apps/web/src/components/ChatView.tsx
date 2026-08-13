@@ -5783,16 +5783,22 @@ function ChatViewContent(props: ChatViewProps) {
   ]);
 
   const getModelDisabledReason = useCallback(
-    (instanceId: ProviderInstanceId, model: string): string | null => {
+    (instanceId: ProviderInstanceId, model: string, jcodeProvider?: string): string | null => {
       if (!activeThread) {
         return null;
       }
+      const isJcode =
+        providerStatuses.find((snapshot) => snapshot.instanceId === instanceId)?.driver === "jcode";
       const reason = getStartedThreadModelChangeBlockReason({
         providers: providerStatuses,
         hasStartedSession: activeThread.session !== null,
         currentModelSelection: activeThread.modelSelection,
         currentProviderInstanceId: activeThread.session?.providerInstanceId ?? null,
-        nextModelSelection: { instanceId, model },
+        nextModelSelection: createModelSelection(
+          instanceId,
+          model,
+          isJcode && jcodeProvider ? [{ id: "jcodeProvider", value: jcodeProvider }] : undefined,
+        ),
       });
       return reason ? `${reason.description} Start a new thread to use this model.` : null;
     },

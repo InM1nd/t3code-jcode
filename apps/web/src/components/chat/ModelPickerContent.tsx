@@ -96,7 +96,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   onJcodeInnerProviderChange?: (instanceId: ProviderInstanceId, provider: string) => void;
   terminalOpen: boolean;
   onRequestClose?: () => void;
-  getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
+  getModelDisabledReason?: (
+    instanceId: ProviderInstanceId,
+    model: string,
+    jcodeProvider?: string,
+  ) => string | null;
   onInstanceModelChange: (
     instanceId: ProviderInstanceId,
     model: string,
@@ -449,7 +453,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   const handleModelSelect = useCallback(
     (modelSlug: string, instanceId: ProviderInstanceId) => {
-      if (getModelDisabledReason?.(instanceId, modelSlug)) {
+      if (getModelDisabledReason?.(instanceId, modelSlug, props.jcodeInnerProvider ?? undefined)) {
         return;
       }
       const options = modelOptionsByInstance.get(instanceId);
@@ -508,7 +512,13 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     >();
     let selectableModelIndex = 0;
     for (const model of visibleModels) {
-      if (getModelDisabledReason?.(model.instanceId, model.slug)) {
+      if (
+        getModelDisabledReason?.(
+          model.instanceId,
+          model.slug,
+          props.jcodeInnerProvider ?? undefined,
+        )
+      ) {
         continue;
       }
       const jumpCommand = modelPickerJumpCommandForIndex(selectableModelIndex);
@@ -519,7 +529,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       selectableModelIndex += 1;
     }
     return mapping;
-  }, [getModelDisabledReason, visibleModels]);
+  }, [getModelDisabledReason, props.jcodeInnerProvider, visibleModels]);
   const modelJumpModelKeys = useMemo(
     () => [...modelJumpCommandByKey.keys()],
     [modelJumpCommandByKey],
@@ -883,7 +893,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                       return null;
                     }
                     const disabledReason =
-                      getModelDisabledReason?.(model.instanceId, model.slug) ?? null;
+                      getModelDisabledReason?.(
+                        model.instanceId,
+                        model.slug,
+                        props.jcodeInnerProvider ?? undefined,
+                      ) ?? null;
                     return (
                       <ModelListRow
                         key={modelKey}
