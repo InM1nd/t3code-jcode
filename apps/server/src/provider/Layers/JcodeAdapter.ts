@@ -84,6 +84,62 @@ export interface JcodeAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
 }
 
+export const startJcodeSessionRoute = Effect.fn("startJcodeSessionRoute")(function* <
+  A,
+  S extends Pick<AcpSessionRuntime.AcpSessionRuntimeStartResult, "sessionSetupResult">,
+  E,
+  R,
+>(input: {
+  readonly threadId: ThreadId;
+  readonly provider: string;
+  readonly requestedModelId: string;
+  readonly sessionScope: Scope.Closeable;
+  readonly discoverModels: Effect.Effect<ReadonlyArray<{ readonly slug: string }>, E, R>;
+  readonly startDaemon: Effect.Effect<string, E, R>;
+  readonly startAcp: (socketPath: string) => Effect.Effect<
+    {
+      readonly resource: A;
+      readonly started: S;
+    },
+    E,
+    R
+  >;
+}) {
+  return yield* Effect.gen(function* () {
+    const availableModels = yield* input.discoverModels;
+    if (!availableModels.some((model) => model.slug === input.requestedModelId)) {
+      return yield* new ProviderAdapterValidationError({
+        provider: PROVIDER,
+        operation: "startSession",
+        issue: `Model '${input.requestedModelId}' is not reported by Jcode provider '${input.provider}'.`,
+      });
+    }
+
+    const socketPath = yield* input.startDaemon;
+    const acpStarted = yield* input.startAcp(socketPath);
+    const reportedModelId = currentJcodeModelIdFromSessionSetup(
+      acpStarted.started.sessionSetupResult,
+    );
+    const boundModelId = applyJcodeAcpModelSelection({
+      currentModelId: reportedModelId,
+      requestedModelId: input.requestedModelId,
+    });
+    if (!boundModelId) {
+      return yield* new ProviderAdapterValidationError({
+        provider: PROVIDER,
+        operation: "startSession",
+        issue: `Jcode route mismatch: requested provider '${input.provider}' and model '${input.requestedModelId}', but ACP reported model '${reportedModelId ?? "unknown"}'.`,
+      });
+    }
+
+    return { ...acpStarted, boundModelId };
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Scope.close(input.sessionScope, Exit.void).pipe(Effect.andThen(Effect.failCause(cause))),
+    ),
+  );
+});
+
 interface PendingApproval {
   readonly decision: Deferred.Deferred<ProviderApprovalDecision>;
 }
@@ -618,122 +674,118 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
               issue: "Choose a discovered Jcode model before starting a turn.",
             });
           }
-          const availableModels = yield* discoverJcodeModelsForProviderStrict(
-            jcodeSettings,
-            jcodeProvider,
-            options?.environment ?? process.env,
-          ).pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
-            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
-            Effect.mapError(
-              (cause) =>
-                new ProviderAdapterProcessError({
-                  provider: PROVIDER,
-                  threadId: input.threadId,
-                  detail: `Failed to discover Jcode models for provider '${jcodeProvider}': ${cause instanceof Error ? cause.message : String(cause)}`,
-                  cause,
-                }),
-            ),
-          );
-          if (!availableModels.some((model) => model.slug === requestedStartModelId)) {
-            return yield* new ProviderAdapterValidationError({
-              provider: PROVIDER,
-              operation: "startSession",
-              issue: `Model '${requestedStartModelId}' is not reported by Jcode provider '${jcodeProvider}'.`,
-            });
-          }
-
-          // Unix-domain socket paths are capped at roughly 100 bytes on macOS.
-          // A scoped system temp directory stays short even when T3 runs from a deep worktree.
-          const socketDirectory = yield* fileSystem
-            .makeTempDirectoryScoped({ prefix: "t3-jcode-" })
-            .pipe(
-              Effect.provideService(Scope.Scope, sessionScope),
+          const routedStart = yield* startJcodeSessionRoute({
+            threadId: input.threadId,
+            provider: jcodeProvider,
+            requestedModelId: requestedStartModelId,
+            sessionScope,
+            discoverModels: discoverJcodeModelsForProviderStrict(
+              jcodeSettings,
+              jcodeProvider,
+              options?.environment ?? process.env,
+            ).pipe(
+              Effect.provideService(Crypto.Crypto, crypto),
+              Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
               Effect.mapError(
                 (cause) =>
                   new ProviderAdapterProcessError({
                     provider: PROVIDER,
                     threadId: input.threadId,
-                    detail: `Failed to prepare Jcode session socket: ${cause.message}`,
+                    detail: `Failed to discover Jcode models for provider '${jcodeProvider}': ${cause instanceof Error ? cause.message : String(cause)}`,
                     cause,
                   }),
               ),
-            );
-          const socketPath = path.join(socketDirectory, "daemon.sock");
-          yield* startJcodeSessionDaemon(
-            {
-              threadId: input.threadId,
-              provider: jcodeProvider,
-              model: requestedStartModelId,
-              cwd,
-              socketPath,
-              ...(jcodeSettings.binaryPath ? { binaryPath: jcodeSettings.binaryPath } : {}),
-              ...(jcodeSettings.providerProfile
-                ? { providerProfile: jcodeSettings.providerProfile }
-                : {}),
-              ...(options?.environment ? { environment: options.environment } : {}),
-            },
-            childProcessSpawner,
-          ).pipe(
-            Effect.provideService(FileSystem.FileSystem, fileSystem),
-            Effect.provideService(Path.Path, path),
-            Effect.provideService(Scope.Scope, sessionScope),
-            Effect.mapError(
-              (cause) =>
-                new ProviderAdapterProcessError({
-                  provider: PROVIDER,
-                  threadId: input.threadId,
-                  detail: `Failed to start isolated Jcode session daemon: ${cause.message}`,
-                  cause,
-                }),
             ),
-          );
-          const spawnJcodeSettings = {
-            ...jcodeSettings,
-            jcodeProvider,
-            model: requestedStartModelId,
-            socketPath,
-          };
-          const acp = yield* makeJcodeAcpRuntime({
-            jcodeSettings: spawnJcodeSettings,
-            ...(options?.environment ? { environment: options.environment } : {}),
-            childProcessSpawner,
-            cwd,
-            ...(resumeSessionId ? { resumeSessionId } : {}),
-            clientInfo: { name: "t3-code", version: "0.0.0" },
-            ...acpNativeLoggers,
-          }).pipe(
-            Effect.provideService(Crypto.Crypto, crypto),
-            Effect.provideService(Scope.Scope, sessionScope),
-            Effect.mapError(
-              (cause) =>
-                new ProviderAdapterProcessError({
-                  provider: PROVIDER,
+            startDaemon: Effect.gen(function* () {
+              // Unix-domain socket paths are capped at roughly 100 bytes on macOS.
+              // A scoped system temp directory stays short even in a deep worktree.
+              const socketDirectory = yield* fileSystem
+                .makeTempDirectoryScoped({ prefix: "t3-jcode-" })
+                .pipe(
+                  Effect.provideService(Scope.Scope, sessionScope),
+                  Effect.mapError(
+                    (cause) =>
+                      new ProviderAdapterProcessError({
+                        provider: PROVIDER,
+                        threadId: input.threadId,
+                        detail: `Failed to prepare Jcode session socket: ${cause.message}`,
+                        cause,
+                      }),
+                  ),
+                );
+              const socketPath = path.join(socketDirectory, "daemon.sock");
+              yield* startJcodeSessionDaemon(
+                {
                   threadId: input.threadId,
-                  detail: cause.message,
-                  cause,
-                }),
-            ),
-          );
-          const started = yield* acp
-            .start()
-            .pipe(
-              Effect.mapError((error) =>
-                mapAcpToAdapterError(PROVIDER, input.threadId, "session/start", error),
-              ),
-            );
-
-          const boundModelId = applyJcodeAcpModelSelection({
-            currentModelId: currentJcodeModelIdFromSessionSetup(started.sessionSetupResult),
-            requestedModelId: requestedStartModelId,
+                  provider: jcodeProvider,
+                  model: requestedStartModelId,
+                  cwd,
+                  socketPath,
+                  ...(jcodeSettings.binaryPath ? { binaryPath: jcodeSettings.binaryPath } : {}),
+                  ...(jcodeSettings.providerProfile
+                    ? { providerProfile: jcodeSettings.providerProfile }
+                    : {}),
+                  ...(options?.environment ? { environment: options.environment } : {}),
+                },
+                childProcessSpawner,
+              ).pipe(
+                Effect.provideService(FileSystem.FileSystem, fileSystem),
+                Effect.provideService(Path.Path, path),
+                Effect.provideService(Scope.Scope, sessionScope),
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderAdapterProcessError({
+                      provider: PROVIDER,
+                      threadId: input.threadId,
+                      detail: `Failed to start isolated Jcode session daemon: ${cause.message}`,
+                      cause,
+                    }),
+                ),
+              );
+              return socketPath;
+            }),
+            startAcp: (socketPath) =>
+              Effect.gen(function* () {
+                const spawnJcodeSettings = {
+                  ...jcodeSettings,
+                  jcodeProvider,
+                  model: requestedStartModelId,
+                  socketPath,
+                };
+                const resource = yield* makeJcodeAcpRuntime({
+                  jcodeSettings: spawnJcodeSettings,
+                  ...(options?.environment ? { environment: options.environment } : {}),
+                  childProcessSpawner,
+                  cwd,
+                  ...(resumeSessionId ? { resumeSessionId } : {}),
+                  clientInfo: { name: "t3-code", version: "0.0.0" },
+                  ...acpNativeLoggers,
+                }).pipe(
+                  Effect.provideService(Crypto.Crypto, crypto),
+                  Effect.provideService(Scope.Scope, sessionScope),
+                  Effect.mapError(
+                    (cause) =>
+                      new ProviderAdapterProcessError({
+                        provider: PROVIDER,
+                        threadId: input.threadId,
+                        detail: cause.message,
+                        cause,
+                      }),
+                  ),
+                );
+                const started = yield* resource
+                  .start()
+                  .pipe(
+                    Effect.mapError((error) =>
+                      mapAcpToAdapterError(PROVIDER, input.threadId, "session/start", error),
+                    ),
+                  );
+                return { resource, started };
+              }),
           });
-          if (!boundModelId) {
-            return yield* new ProviderAdapterValidationError({
-              provider: PROVIDER,
-              operation: "startSession",
-              issue: `Jcode route mismatch: requested provider '${jcodeProvider}' and model '${requestedStartModelId}', but ACP reported model '${currentJcodeModelIdFromSessionSetup(started.sessionSetupResult) ?? "unknown"}'.`,
-            });
-          }
+          const acp = routedStart.resource;
+          const started = routedStart.started;
+          const boundModelId = routedStart.boundModelId;
 
           const now = yield* nowIso;
           const session: ProviderSession = {
