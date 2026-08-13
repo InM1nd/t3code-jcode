@@ -130,6 +130,21 @@ describe("buildTurnStartParams", () => {
     });
   });
 
+  it("keeps debug on Codex's native default mode", () => {
+    const params = Effect.runSync(
+      buildTurnStartParams({
+        threadId: "provider-thread-1",
+        runtimeMode: "full-access",
+        prompt: "Find the regression",
+        model: "gpt-5.3-codex",
+        interactionMode: "debug",
+      }),
+    );
+
+    NodeAssert.equal(params.collaborationMode?.mode, "default");
+    NodeAssert.match(params.collaborationMode?.settings.developer_instructions ?? "", /Debug mode/);
+  });
+
   it("includes default collaboration mode and image attachments", () => {
     const params = Effect.runSync(
       buildTurnStartParams({
@@ -137,7 +152,7 @@ describe("buildTurnStartParams", () => {
         runtimeMode: "auto-accept-edits",
         prompt: "Implement it",
         model: "gpt-5.3-codex",
-        interactionMode: "default",
+        interactionMode: "build",
         attachments: [
           {
             type: "image",
@@ -170,7 +185,7 @@ describe("buildTurnStartParams", () => {
         settings: {
           model: "gpt-5.3-codex",
           reasoning_effort: "medium",
-          developer_instructions: buildCodexDeveloperInstructions("default", {
+          developer_instructions: buildCodexDeveloperInstructions("build", {
             model: "gpt-5.3-codex",
             reasoningEffort: "medium",
           }),
@@ -185,7 +200,7 @@ describe("buildTurnStartParams", () => {
         threadId: "provider-thread-1",
         runtimeMode: "full-access",
         prompt: "Go",
-        interactionMode: "default",
+        interactionMode: "build",
       }),
     );
 
@@ -248,7 +263,7 @@ describe("buildTurnStartParams", () => {
 
 describe("buildCodexDeveloperInstructions", () => {
   it("appends runtime info after the mode instructions", () => {
-    const instructions = buildCodexDeveloperInstructions("default", {
+    const instructions = buildCodexDeveloperInstructions("build", {
       model: "gpt-5.3-codex",
       reasoningEffort: "high",
     });
@@ -270,11 +285,11 @@ describe("buildCodexDeveloperInstructions", () => {
   });
 
   it("varies with the model and effort of each turn", () => {
-    const first = buildCodexDeveloperInstructions("default", {
+    const first = buildCodexDeveloperInstructions("build", {
       model: "gpt-5.3-codex",
       reasoningEffort: "medium",
     });
-    const second = buildCodexDeveloperInstructions("default", {
+    const second = buildCodexDeveloperInstructions("build", {
       model: "gpt-5.4",
       reasoningEffort: "high",
     });
@@ -283,7 +298,7 @@ describe("buildCodexDeveloperInstructions", () => {
   });
 
   it("flattens multiline metadata into single-line runtime info", () => {
-    const instructions = buildCodexDeveloperInstructions("default", {
+    const instructions = buildCodexDeveloperInstructions("build", {
       model: "gpt\n5.3\ncodex",
       reasoningEffort: " high\neffort ",
     });

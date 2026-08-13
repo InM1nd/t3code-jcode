@@ -35,6 +35,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { prependWorkModeInstruction } from "../WorkMode.ts";
 import { clearJcodeMcpAuthFile, installJcodeMcpBridgeFiles } from "../jcodeMcpConfig.ts";
 import {
   ProviderAdapterProcessError,
@@ -831,7 +832,7 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
               // Mid-session ACP model switch unsupported; keep spawn-time `-m` model.
               const currentModelId = ctx.currentModelId;
 
-              const text = input.input?.trim();
+              const text = prependWorkModeInstruction(input.interactionMode, input.input);
               const imagePromptParts = yield* Effect.forEach(
                 (input.attachments ?? []).filter((attachment) => attachment.type === "image"),
                 (attachment) =>

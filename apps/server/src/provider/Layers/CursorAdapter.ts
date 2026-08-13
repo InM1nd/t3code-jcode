@@ -43,6 +43,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { prependWorkModeInstruction, resolveWorkMode } from "../WorkMode.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -224,7 +225,7 @@ function resolveRequestedModeId(input: {
     return undefined;
   }
 
-  if (input.interactionMode === "plan") {
+  if (resolveWorkMode(input.interactionMode)?.nativeInteractionMode === "plan") {
     return findModeByAliases(modeState.availableModes, ACP_PLAN_MODE_ALIASES)?.id;
   }
 
@@ -961,8 +962,9 @@ export function makeCursorAdapter(
           }
 
           const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
-          if (input.input?.trim()) {
-            promptParts.push({ type: "text", text: input.input.trim() });
+          const text = prependWorkModeInstruction(input.interactionMode, input.input);
+          if (text) {
+            promptParts.push({ type: "text", text });
           }
           if (input.attachments && input.attachments.length > 0) {
             for (const attachment of input.attachments) {
