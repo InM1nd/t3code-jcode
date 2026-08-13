@@ -35,8 +35,12 @@ but no longer live in global `Pinned`, `Snoozed`, or `Settled` shelves.
   data.
 - Opening a thread directly, including from search, expands its parent group
   so the selected row remains visible.
-- Sidebar search stays global. It returns the same matching chats, while their
-  parent projects are shown expanded for the duration of the search.
+- Sidebar search stays global and keeps its dedicated result view. Selecting a
+  result clears the search and expands that chat's parent project, so the
+  selected row is visible in the normal list.
+- A large project's older settled history uses the existing inline “Show more”
+  pattern inside that project. This keeps every chat in its project without
+  creating an unbounded sidebar DOM.
 - Archived threads stay absent from the sidebar, as today.
 
 ## Scope
