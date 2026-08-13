@@ -180,6 +180,24 @@ describe("getComposerProviderState", () => {
     });
   });
 
+  it("keeps the Jcode inner provider when preparing a turn", () => {
+    const state = getComposerProviderState({
+      provider: ProviderDriverKind.make("jcode"),
+      model: "gpt-luna",
+      models: [
+        {
+          slug: "gpt-luna",
+          name: "GPT Luna",
+          isCustom: false,
+          capabilities: {},
+        },
+      ],
+      modelOptions: selections(["jcodeProvider", "codex"]),
+    });
+
+    expect(state.modelOptionsForDispatch).toEqual(selections(["jcodeProvider", "codex"]));
+  });
+
   it("adds ultrathink class names when the prompt triggers a promptInjectedValues descriptor", () => {
     const state = getComposerProviderState({
       provider: PROVIDER,

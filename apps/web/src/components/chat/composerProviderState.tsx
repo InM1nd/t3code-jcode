@@ -65,11 +65,19 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
   const ultrathinkActive =
     (primarySelectDescriptor?.promptInjectedValues?.length ?? 0) > 0 &&
     promptInjectionState === "ultrathink";
+  const descriptorOptions = buildProviderOptionSelectionsFromDescriptors(descriptors);
+  const jcodeRoutingOption =
+    provider === "jcode"
+      ? modelOptions?.find((option) => option.id === "jcodeProvider")
+      : undefined;
+  const modelOptionsForDispatch = jcodeRoutingOption
+    ? [...(descriptorOptions ?? []), jcodeRoutingOption]
+    : descriptorOptions;
 
   return {
     provider,
     promptEffort,
-    modelOptionsForDispatch: buildProviderOptionSelectionsFromDescriptors(descriptors),
+    modelOptionsForDispatch,
     ...(ultrathinkActive
       ? {
           composerFrameClassName: "ultrathink-frame",
