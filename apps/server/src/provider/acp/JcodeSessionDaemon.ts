@@ -11,6 +11,8 @@ import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import { ChildProcess, type ChildProcessSpawner } from "effect/unstable/process";
 
+import { resolveJcodeRuntimeModelId } from "./JcodeAcpSupport.ts";
+
 const JCODE_DAEMON_START_TIMEOUT = "5 seconds";
 const JCODE_DAEMON_OUTPUT_LIMIT = 2_000;
 
@@ -42,16 +44,8 @@ export interface JcodeSessionDaemonInput {
 
 export function buildJcodeSessionDaemonInput(input: JcodeSessionDaemonInput) {
   const socketPath = input.socketPath ?? `.jcode-${input.threadId}.sock`;
-  const args = [
-    "serve",
-    "--no-selfdev",
-    "-p",
-    input.provider,
-    "-m",
-    input.model,
-    "--socket",
-    socketPath,
-  ];
+  const model = resolveJcodeRuntimeModelId(input.provider, input.model) ?? input.model;
+  const args = ["serve", "--no-selfdev", "-p", input.provider, "-m", model, "--socket", socketPath];
   if (input.providerProfile?.trim()) {
     args.push("--provider-profile", input.providerProfile.trim());
   }

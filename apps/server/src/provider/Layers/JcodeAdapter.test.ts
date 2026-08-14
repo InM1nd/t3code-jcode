@@ -16,6 +16,7 @@ describe("startJcodeSessionRoute", () => {
         threadId: ThreadId.make("thread-route-mismatch"),
         provider: "cursor",
         requestedModelId: "cursor-grok-4.6-high-fast",
+        runtimeModelId: "grok-4.6-high-fast",
         sessionScope,
         discoverModels: Effect.succeed([{ slug: "cursor-grok-4.6-high-fast" }]),
         startDaemon: Effect.addFinalizer(() =>
@@ -60,7 +61,7 @@ describe("startJcodeSessionRoute", () => {
         _tag: "ProviderAdapterValidationError",
         operation: "startSession",
         issue: expect.stringContaining(
-          "requested provider 'cursor' and model 'cursor-grok-4.6-high-fast', but ACP reported model 'claude-opus-5'",
+          "requested provider 'cursor' and model 'cursor-grok-4.6-high-fast' (runtime 'grok-4.6-high-fast'), but ACP reported model 'claude-opus-5'",
         ),
       });
       expect(finalized.sort()).toEqual(["acp", "daemon"]);

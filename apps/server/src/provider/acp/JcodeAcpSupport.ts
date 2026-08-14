@@ -19,6 +19,21 @@ type JcodeAcpRuntimeJcodeSettings = Pick<
   "binaryPath" | "model" | "providerProfile" | "jcodeProvider"
 > & { readonly socketPath?: string };
 
+/**
+ * `jcode model list -p cursor` exposes Cursor's Grok aliases with a
+ * `cursor-` prefix, while Cursor's agent endpoint accepts the underlying ID.
+ */
+export function resolveJcodeRuntimeModelId(
+  provider: string | undefined,
+  model: string | undefined,
+): string | undefined {
+  const trimmed = model?.trim();
+  if (!trimmed) return undefined;
+  return provider === "cursor" && trimmed.startsWith("cursor-")
+    ? trimmed.slice("cursor-".length)
+    : trimmed;
+}
+
 interface JcodeAcpRuntimeInput extends Omit<
   AcpSessionRuntime.AcpSessionRuntimeOptions,
   "authMethodId" | "clientCapabilities" | "spawn" | "skipAuthenticate"
@@ -33,7 +48,7 @@ export function buildJcodeAcpSpawnInput(
   cwd: string,
   environment?: NodeJS.ProcessEnv,
 ): AcpSessionRuntime.AcpSpawnInput {
-  const model = jcodeSettings?.model?.trim();
+  const model = resolveJcodeRuntimeModelId(jcodeSettings?.jcodeProvider, jcodeSettings?.model);
   const providerProfile = jcodeSettings?.providerProfile?.trim();
   const jcodeProvider = jcodeSettings?.jcodeProvider?.trim();
   const args: Array<string> = ["acp", "--no-selfdev"];

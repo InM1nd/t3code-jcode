@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   applyJcodeAcpModelSelection,
   buildJcodeAcpSpawnInput,
+  resolveJcodeRuntimeModelId,
   resolveJcodeAcpProvider,
   resolveJcodeAcpBaseModelId,
 } from "./JcodeAcpSupport.ts";
@@ -70,6 +71,32 @@ describe("buildJcodeAcpSpawnInput", () => {
       cwd: "/tmp/project",
       env: { PATH: "/usr/bin" },
     });
+  });
+
+  it("uses Cursor's underlying id for its prefixed Grok catalog alias", () => {
+    expect(
+      buildJcodeAcpSpawnInput(
+        {
+          binaryPath: "",
+          jcodeProvider: "cursor",
+          model: "cursor-grok-4.6-high-fast",
+          providerProfile: "",
+        },
+        "/tmp/project",
+      ).args,
+    ).toContain("grok-4.6-high-fast");
+  });
+});
+
+describe("resolveJcodeRuntimeModelId", () => {
+  it("strips only Cursor's catalog-only prefix", () => {
+    expect(resolveJcodeRuntimeModelId("cursor", "cursor-grok-4.6-high-fast")).toBe(
+      "grok-4.6-high-fast",
+    );
+    expect(resolveJcodeRuntimeModelId("cursor", "composer-2.5")).toBe("composer-2.5");
+    expect(resolveJcodeRuntimeModelId("claude", "claude-opus-5-thinking-high")).toBe(
+      "claude-opus-5-thinking-high",
+    );
   });
 });
 

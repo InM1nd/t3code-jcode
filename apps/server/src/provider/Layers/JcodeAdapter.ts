@@ -61,6 +61,7 @@ import {
   makeJcodeAcpRuntime,
   resolveJcodeAcpProvider,
   resolveJcodeAcpBaseModelId,
+  resolveJcodeRuntimeModelId,
 } from "../acp/JcodeAcpSupport.ts";
 import { startJcodeSessionDaemon } from "../acp/JcodeSessionDaemon.ts";
 import { type JcodeAdapterShape } from "../Services/JcodeAdapter.ts";
@@ -93,6 +94,7 @@ export const startJcodeSessionRoute = Effect.fn("startJcodeSessionRoute")(functi
   readonly threadId: ThreadId;
   readonly provider: string;
   readonly requestedModelId: string;
+  readonly runtimeModelId: string;
   readonly sessionScope: Scope.Closeable;
   readonly discoverModels: Effect.Effect<ReadonlyArray<{ readonly slug: string }>, E, R>;
   readonly startDaemon: Effect.Effect<string, E, R>;
@@ -122,13 +124,13 @@ export const startJcodeSessionRoute = Effect.fn("startJcodeSessionRoute")(functi
     );
     const boundModelId = applyJcodeAcpModelSelection({
       currentModelId: reportedModelId,
-      requestedModelId: input.requestedModelId,
+      requestedModelId: input.runtimeModelId,
     });
     if (!boundModelId) {
       return yield* new ProviderAdapterValidationError({
         provider: PROVIDER,
         operation: "startSession",
-        issue: `Jcode route mismatch: requested provider '${input.provider}' and model '${input.requestedModelId}', but ACP reported model '${reportedModelId ?? "unknown"}'.`,
+        issue: `Jcode route mismatch: requested provider '${input.provider}' and model '${input.requestedModelId}' (runtime '${input.runtimeModelId}'), but ACP reported model '${reportedModelId ?? "unknown"}'.`,
       });
     }
 
@@ -674,10 +676,22 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
               issue: "Choose a discovered Jcode model before starting a turn.",
             });
           }
+          const runtimeStartModelId = resolveJcodeRuntimeModelId(
+            jcodeProvider,
+            requestedStartModelId,
+          );
+          if (!runtimeStartModelId) {
+            return yield* new ProviderAdapterValidationError({
+              provider: PROVIDER,
+              operation: "startSession",
+              issue: "Choose a discovered Jcode model before starting a turn.",
+            });
+          }
           const routedStart = yield* startJcodeSessionRoute({
             threadId: input.threadId,
             provider: jcodeProvider,
             requestedModelId: requestedStartModelId,
+            runtimeModelId: runtimeStartModelId,
             sessionScope,
             discoverModels: discoverJcodeModelsForProviderStrict(
               jcodeSettings,
@@ -718,7 +732,7 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
                 {
                   threadId: input.threadId,
                   provider: jcodeProvider,
-                  model: requestedStartModelId,
+                  model: runtimeStartModelId,
                   cwd,
                   socketPath,
                   ...(jcodeSettings.binaryPath ? { binaryPath: jcodeSettings.binaryPath } : {}),
@@ -749,7 +763,7 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
                 const spawnJcodeSettings = {
                   ...jcodeSettings,
                   jcodeProvider,
-                  model: requestedStartModelId,
+                  model: runtimeStartModelId,
                   socketPath,
                 };
                 const resource = yield* makeJcodeAcpRuntime({

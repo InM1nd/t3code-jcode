@@ -11,7 +11,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import { buildJcodeSessionDaemonInput, startJcodeSessionDaemon } from "./JcodeSessionDaemon.ts";
 
 describe("buildJcodeSessionDaemonInput", () => {
-  it("binds the startup provider, exact model, and dedicated socket in one command", () => {
+  it("uses Cursor's underlying model id while binding a dedicated socket", () => {
     expect(
       buildJcodeSessionDaemonInput({
         threadId: "thread-1",
@@ -27,7 +27,7 @@ describe("buildJcodeSessionDaemonInput", () => {
         "-p",
         "cursor",
         "-m",
-        "cursor-grok-4.6-high-fast",
+        "grok-4.6-high-fast",
         "--socket",
         "/tmp/jcode-thread-1.sock",
       ],
@@ -79,7 +79,7 @@ describe("startJcodeSessionDaemon", () => {
         ),
       );
 
-      expect(commands[0]).toContain("cursor-grok-4.6-high-fast");
+      expect(commands[0]).toContain("grok-4.6-high-fast");
       expect(yield* Ref.get(killCount)).toBe(1);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
