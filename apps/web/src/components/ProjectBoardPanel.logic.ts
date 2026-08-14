@@ -50,6 +50,76 @@ export const PROJECT_BOARD_STATUS_ORDER: ReadonlyArray<ProjectBoardItemStatus> =
   "cancelled",
 ];
 
+const WORKSTREAM_PREFIX = /^\[([^\]]+)\]\s*/;
+
+const PROJECT_BOARD_WORKSTREAM_STATUS_ORDER: ReadonlyArray<ProjectBoardItemStatus> = [
+  "inProgress",
+  "ready",
+  "backlog",
+  "completed",
+  "cancelled",
+];
+
+export function projectBoardItemDisplayTitle(title: string): string {
+  const prefix = WORKSTREAM_PREFIX.exec(title);
+  const displayTitle = prefix ? title.slice(prefix[0].length).trim() : title;
+  return displayTitle || title;
+}
+
+function projectBoardWorkstreamTitle(title: string): string {
+  return WORKSTREAM_PREFIX.exec(title)?.[1]?.trim() || "Other work";
+}
+
+export function getProjectBoardCockpit(items: ReadonlyArray<ProjectBoardItem>) {
+  const counts = {
+    backlog: 0,
+    ready: 0,
+    inProgress: 0,
+    inReview: 0,
+    blocked: 0,
+    completed: 0,
+    cancelled: 0,
+    archived: 0,
+  };
+  const attention: ProjectBoardItem[] = [];
+  const workstreams = new Map<string, ProjectBoardItem[]>();
+
+  for (const item of items) {
+    if (item.archivedAt) {
+      counts.archived += 1;
+      continue;
+    }
+    counts[item.status] += 1;
+    if (item.status === "blocked" || item.status === "inReview") {
+      attention.push(item);
+      continue;
+    }
+    const title = projectBoardWorkstreamTitle(item.title);
+    const group = workstreams.get(title) ?? [];
+    group.push(item);
+    workstreams.set(title, group);
+  }
+
+  const statusRank = (status: ProjectBoardItemStatus) =>
+    PROJECT_BOARD_WORKSTREAM_STATUS_ORDER.indexOf(status);
+  const byPriorityThenNewest = (left: ProjectBoardItem, right: ProjectBoardItem) =>
+    statusRank(left.status) - statusRank(right.status) ||
+    right.updatedAt.localeCompare(left.updatedAt);
+
+  attention.sort(
+    (left, right) =>
+      Number(left.status !== "blocked") - Number(right.status !== "blocked") ||
+      right.updatedAt.localeCompare(left.updatedAt),
+  );
+  return {
+    counts,
+    attention,
+    workstreams: [...workstreams.entries()]
+      .map(([title, group]) => ({ title, items: group.sort(byPriorityThenNewest) }))
+      .sort((left, right) => right.items.length - left.items.length),
+  };
+}
+
 export function groupProjectBoardItems(items: ReadonlyArray<ProjectBoardItem>): {
   active: Record<ProjectBoardItemStatus, ProjectBoardItem[]>;
   archived: ProjectBoardItem[];

@@ -10,8 +10,10 @@ import {
   buildBoardImplementPrompt,
   createBoardItemDraft,
   findDraftIdForThread,
+  getProjectBoardCockpit,
   groupProjectBoardItems,
   nextProjectBoardItemStatus,
+  projectBoardItemDisplayTitle,
   projectBoardStatusLabel,
 } from "./ProjectBoardPanel.logic";
 
@@ -79,6 +81,54 @@ describe("groupProjectBoardItems", () => {
     expect(grouped.active.blocked.map((entry) => entry.id)).toEqual(["blocked"]);
     expect(grouped.active.backlog.map((entry) => entry.id)).toEqual(["backlog"]);
     expect(grouped.archived.map((entry) => entry.id)).toEqual(["archived"]);
+  });
+});
+
+describe("getProjectBoardCockpit", () => {
+  it("surfaces attention items and groups the remaining active cards by title prefix", () => {
+    const blocked = item({
+      id: "blocked" as ProjectBoardItem["id"],
+      title: "[SEO] Fix canonical URLs",
+      status: "blocked",
+    });
+    const review = item({
+      id: "review" as ProjectBoardItem["id"],
+      title: "[SEO] Review sitemap",
+      status: "inReview",
+    });
+    const product = item({
+      id: "product" as ProjectBoardItem["id"],
+      title: "[Product] Improve project search",
+      status: "inProgress",
+    });
+    const ungrouped = item({
+      id: "other" as ProjectBoardItem["id"],
+      title: "Refresh screenshots",
+      status: "backlog",
+    });
+    const archived = item({
+      id: "archived" as ProjectBoardItem["id"],
+      title: "[Product] Old task",
+      status: "completed",
+      archivedAt: "2026-01-02T00:00:00.000Z",
+    });
+
+    const cockpit = getProjectBoardCockpit([blocked, review, product, ungrouped, archived]);
+
+    expect(cockpit.attention.map((entry) => entry.id)).toEqual([blocked.id, review.id]);
+    expect(cockpit.workstreams.map((group) => group.title)).toEqual(["Product", "Other work"]);
+    expect(cockpit.workstreams[0]?.items.map((entry) => entry.id)).toEqual([product.id]);
+    expect(cockpit.counts.archived).toBe(1);
+    expect(cockpit.counts.inProgress).toBe(1);
+  });
+});
+
+describe("projectBoardItemDisplayTitle", () => {
+  it("removes a leading workstream prefix without changing ungrouped titles", () => {
+    expect(projectBoardItemDisplayTitle("[Product] Improve project search")).toBe(
+      "Improve project search",
+    );
+    expect(projectBoardItemDisplayTitle("Refresh screenshots")).toBe("Refresh screenshots");
   });
 });
 

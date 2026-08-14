@@ -13,7 +13,10 @@ In a thread for the project:
 ## Use the board
 
 - Add an item with the input at the top of the panel
-- Items are grouped into **Backlog**, **Ready**, **In progress**, **In review**, **Blocked**, **Done**, and **Cancelled**
+- The compact summary at the top shows counts by **Backlog**, **Ready**, **In progress**, **In review**, **Blocked**, **Done**, and **Cancelled**; each status also has its own colour
+- **Needs attention** appears first and contains blocked and review items
+- Other active items are grouped into collapsible workstreams. Start a title with a prefix such as `[Product]` or `[SEO]` to choose its workstream; items without a prefix appear under **Other work**
+- A row shows its title and one useful context line: the latest handoff's next step, then its note, then linked-turn information. Open task details for the full brief and history
 - Check an item to mark it done; uncheck to return it to the backlog
 - Click the status chip to advance it through the workflow
 - Press the play control on a row to **Implement** it: opens a new thread with a seeded prompt, marks the item in progress, and links that thread on the card

@@ -35,9 +35,11 @@ import {
   buildBoardImplementPrompt,
   createBoardItemDraft,
   findDraftIdForThread,
+  getProjectBoardCockpit,
   groupProjectBoardItems,
   nextProjectBoardItemStatus,
   PROJECT_BOARD_STATUS_ORDER,
+  projectBoardItemDisplayTitle,
   projectBoardStatusLabel,
 } from "./ProjectBoardPanel.logic";
 
@@ -48,6 +50,25 @@ interface ProjectBoardPanelProps {
   selectedItemId: ProjectBoardItemId | null;
   onSelectItem: (itemId: ProjectBoardItemId | null) => void;
 }
+
+const BOARD_STATUS_STYLES: Record<
+  ProjectBoardItem["status"],
+  { readonly accent: string; readonly chip: string }
+> = {
+  backlog: { accent: "bg-slate-400", chip: "bg-slate-500/15 text-slate-600 dark:text-slate-300" },
+  ready: { accent: "bg-sky-400", chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
+  inProgress: {
+    accent: "bg-violet-400",
+    chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+  },
+  inReview: { accent: "bg-amber-400", chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  blocked: { accent: "bg-rose-400", chip: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
+  completed: {
+    accent: "bg-emerald-400",
+    chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  },
+  cancelled: { accent: "bg-zinc-400", chip: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300" },
+};
 
 function BoardItemRow({
   item,
@@ -72,14 +93,23 @@ function BoardItemRow({
 }) {
   const completed = item.status === "completed";
   const linkedThreadId = item.sourceThreadId ?? null;
+  const linkedTurns = item.linkedTurnIds?.length ?? 0;
+  const context = item.latestHandoff?.nextStep?.trim() || item.notes?.trim() || null;
   return (
     <div
-      className="group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-accent/50"
+      className="group flex items-start gap-2 rounded-md px-1.5 py-1.5 hover:bg-accent/50"
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("button")) return;
         onOpenDetails(item);
       }}
     >
+      <span
+        aria-hidden
+        className={cn(
+          "mt-1 h-4 w-0.5 shrink-0 rounded-full",
+          BOARD_STATUS_STYLES[item.status].accent,
+        )}
+      />
       <Checkbox
         checked={completed}
         onCheckedChange={() => onToggleDone(item)}
@@ -96,16 +126,15 @@ function BoardItemRow({
               completed && "text-muted-foreground line-through decoration-muted-foreground/60",
             )}
           >
-            {item.title}
+            {projectBoardItemDisplayTitle(item.title)}
           </button>
           <button
             type="button"
             onClick={() => onCycleStatus(item)}
             className={cn(
               "shrink-0 cursor-pointer rounded px-1 py-px text-[10px] font-medium uppercase tracking-wide",
-              item.status === "inProgress"
-                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
+              BOARD_STATUS_STYLES[item.status].chip,
+              "hover:bg-accent hover:text-foreground",
             )}
             aria-label={`Cycle status for "${item.title}" (currently ${projectBoardStatusLabel(item.status)})`}
           >
@@ -117,28 +146,25 @@ function BoardItemRow({
             </span>
           ) : null}
         </div>
-        {item.notes ? (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.notes}</p>
-        ) : null}
-        {(linkedThreadId || (item.linkedTurnIds?.length ?? 0) > 0) && (
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-            {(item.linkedTurnIds?.length ?? 0) > 0 ? (
-              <span>
-                {item.linkedTurnIds?.length} linked turn
-                {item.linkedTurnIds?.length === 1 ? "" : "s"}
+        {context || linkedThreadId || linkedTurns > 0 ? (
+          <div className="mt-0.5 flex min-w-0 items-center gap-x-2 overflow-hidden text-[11px] text-muted-foreground">
+            {context ? <span className="truncate">{context}</span> : null}
+            {linkedTurns > 0 ? (
+              <span className="shrink-0">
+                {linkedTurns} turn{linkedTurns === 1 ? "" : "s"}
               </span>
             ) : null}
             {linkedThreadId ? (
               <button
                 type="button"
                 onClick={() => onOpenLinkedThread(linkedThreadId)}
-                className="cursor-pointer underline-offset-2 hover:text-foreground hover:underline"
+                className="shrink-0 cursor-pointer underline-offset-2 hover:text-foreground hover:underline"
               >
-                Open linked thread
+                Thread
               </button>
             ) : null}
           </div>
-        )}
+        ) : null}
       </div>
       {!completed && !item.archivedAt ? (
         <Tooltip>
@@ -267,6 +293,7 @@ export function ProjectBoardPanel({
   const boardItems = project?.boardItems ?? [];
   const detailItem = boardItems.find((item) => item.id === selectedItemId) ?? null;
   const groupedItems = useMemo(() => groupProjectBoardItems(boardItems), [boardItems]);
+  const cockpit = useMemo(() => getProjectBoardCockpit(boardItems), [boardItems]);
 
   useEffect(() => {
     setItemDraft(detailItem ? createBoardItemDraft(detailItem) : null);
@@ -750,17 +777,53 @@ export function ProjectBoardPanel({
             </div>
           ) : (
             <ScrollArea className="min-h-0 flex-1">
-              <div className="flex flex-col gap-3 p-2">
-                {PROJECT_BOARD_STATUS_ORDER.map((status) =>
-                  groupedItems.active[status].length > 0 ? (
-                    <BoardSection
-                      key={status}
-                      title={projectBoardStatusLabel(status)}
-                      items={groupedItems.active[status]}
-                      {...rowHandlers}
-                    />
-                  ) : null,
-                )}
+              <div className="flex flex-col gap-2 p-2">
+                <div className="flex flex-wrap gap-1 px-1.5 py-1">
+                  {PROJECT_BOARD_STATUS_ORDER.map((status) =>
+                    cockpit.counts[status] > 0 ? (
+                      <span
+                        key={status}
+                        className={cn(
+                          "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                          BOARD_STATUS_STYLES[status].chip,
+                        )}
+                      >
+                        {cockpit.counts[status]} {projectBoardStatusLabel(status)}
+                      </span>
+                    ) : null,
+                  )}
+                </div>
+                {cockpit.attention.length > 0 ? (
+                  <BoardSection
+                    title="Needs attention"
+                    items={cockpit.attention}
+                    {...rowHandlers}
+                  />
+                ) : null}
+                {cockpit.workstreams.map((workstream) => (
+                  <Collapsible
+                    key={workstream.title}
+                    defaultOpen={workstream.items.some(
+                      (item) => item.status === "inProgress" || item.status === "ready",
+                    )}
+                  >
+                    <CollapsibleTrigger className="group flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-left text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground hover:bg-accent/50 hover:text-foreground">
+                      <ChevronRight
+                        aria-hidden
+                        className="size-3 transition-transform group-data-[state=open]:rotate-90"
+                      />
+                      {workstream.title}
+                      <span className="ml-1 tabular-nums text-muted-foreground/70">
+                        {workstream.items.length}
+                      </span>
+                    </CollapsibleTrigger>
+                    <CollapsiblePanel>
+                      {workstream.items.map((item) => (
+                        <BoardItemRow key={item.id} item={item} {...rowHandlers} />
+                      ))}
+                    </CollapsiblePanel>
+                  </Collapsible>
+                ))}
                 {groupedItems.archived.length > 0 ? (
                   <Collapsible open={archiveOpen} onOpenChange={setArchiveOpen}>
                     <CollapsibleTrigger className="flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground hover:bg-accent/50 hover:text-foreground">
