@@ -17,7 +17,7 @@ describe("resolveJcodeAcpProvider", () => {
         model: "gpt-5.5",
         options: [{ id: "jcodeProvider", value: "cursor" }],
       }),
-    ).toBe("cursor");
+    ).toBeUndefined();
   });
 });
 

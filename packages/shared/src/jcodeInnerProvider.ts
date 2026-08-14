@@ -9,7 +9,6 @@ import { ProviderDriverKind } from "@t3tools/contracts";
 
 export const JCODE_INNER_PROVIDERS = [
   { id: "claude", label: "Claude", driverKind: ProviderDriverKind.make("claudeAgent") },
-  { id: "cursor", label: "Cursor", driverKind: ProviderDriverKind.make("cursor") },
   { id: "openai", label: "Codex", driverKind: ProviderDriverKind.make("codex") },
 ] as const;
 
