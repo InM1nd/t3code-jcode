@@ -1911,6 +1911,24 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     workspacePatchedDependencies,
     stageDependencies,
   );
+  const stageBuildConfig = yield* createBuildConfig(
+    options.platform,
+    options.target,
+    appVersion,
+    options.signed,
+    options.mockUpdates,
+    options.mockUpdateServerPort,
+    macPasskeySigning && macEntitlementsPath
+      ? {
+          entitlementsPath: macEntitlementsPath,
+          provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
+        }
+      : undefined,
+  );
+  if (options.platform === "mac" && !options.signed) {
+    stageBuildConfig.afterPack = path.join(stageAppDir, "after-pack.cjs");
+  }
+
   const stagePackageJson: StagePackageJson = {
     name: "t3code",
     version: appVersion,
@@ -1921,25 +1939,33 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     description: "T3 Code desktop build",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.cjs",
-    build: yield* createBuildConfig(
-      options.platform,
-      options.target,
-      appVersion,
-      options.signed,
-      options.mockUpdates,
-      options.mockUpdateServerPort,
-      macPasskeySigning && macEntitlementsPath
-        ? {
-            entitlementsPath: macEntitlementsPath,
-            provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
-          }
-        : undefined,
-    ),
+    build: stageBuildConfig,
     dependencies: stageDependencies,
     devDependencies: {
       electron: electronVersion,
     },
   };
+
+  if (options.platform === "mac" && !options.signed) {
+    yield* fs.writeFileString(
+      path.join(stageAppDir, "after-pack.cjs"),
+      `const { spawnSync } = require("node:child_process");
+const { readdirSync } = require("node:fs");
+const { join } = require("node:path");
+exports.default = async ({ appOutDir }) => {
+  const app = readdirSync(appOutDir, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name.endsWith(".app"));
+  if (!app) throw new Error("packaged macOS app not found");
+  const appPath = join(appOutDir, app.name);
+  const result = spawnSync("codesign", ["--force", "--deep", "--sign", "-", appPath], { stdio: "inherit" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error("ad-hoc codesign failed");
+  const verification = spawnSync("codesign", ["--verify", "--deep", "--strict", appPath], { stdio: "inherit" });
+  if (verification.error) throw verification.error;
+  if (verification.status !== 0) throw new Error("ad-hoc codesign verification failed");
+};
+`,
+    );
+  }
 
   const stagePackageJsonString = yield* encodeJsonString(stagePackageJson);
   yield* fs.writeFileString(path.join(stageAppDir, "package.json"), `${stagePackageJsonString}\n`);
@@ -2057,6 +2083,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   }
 
   const stageEntries = yield* fs.readDirectory(stageDistDir);
+
   yield* fs.makeDirectory(options.outputDir, { recursive: true });
 
   const copiedArtifacts: string[] = [];
