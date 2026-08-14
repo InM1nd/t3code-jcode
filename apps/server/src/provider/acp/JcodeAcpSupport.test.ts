@@ -73,7 +73,7 @@ describe("buildJcodeAcpSpawnInput", () => {
     });
   });
 
-  it("uses Cursor's underlying id for its prefixed Grok catalog alias", () => {
+  it("uses Cursor's exact live-catalog model id", () => {
     expect(
       buildJcodeAcpSpawnInput(
         {
@@ -84,14 +84,14 @@ describe("buildJcodeAcpSpawnInput", () => {
         },
         "/tmp/project",
       ).args,
-    ).toContain("grok-4.6-high-fast");
+    ).toContain("cursor-grok-4.6-high-fast");
   });
 });
 
 describe("resolveJcodeRuntimeModelId", () => {
-  it("strips only Cursor's catalog-only prefix", () => {
+  it("preserves the exact slug advertised by Jcode's live catalog", () => {
     expect(resolveJcodeRuntimeModelId("cursor", "cursor-grok-4.6-high-fast")).toBe(
-      "grok-4.6-high-fast",
+      "cursor-grok-4.6-high-fast",
     );
     expect(resolveJcodeRuntimeModelId("cursor", "composer-2.5")).toBe("composer-2.5");
     expect(resolveJcodeRuntimeModelId("claude", "claude-opus-5-thinking-high")).toBe(

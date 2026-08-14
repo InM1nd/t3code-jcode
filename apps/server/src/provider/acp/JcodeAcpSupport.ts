@@ -19,19 +19,11 @@ type JcodeAcpRuntimeJcodeSettings = Pick<
   "binaryPath" | "model" | "providerProfile" | "jcodeProvider"
 > & { readonly socketPath?: string };
 
-/**
- * `jcode model list -p cursor` exposes Cursor's Grok aliases with a
- * `cursor-` prefix, while Cursor's agent endpoint accepts the underlying ID.
- */
 export function resolveJcodeRuntimeModelId(
-  provider: string | undefined,
+  _provider: string | undefined,
   model: string | undefined,
 ): string | undefined {
-  const trimmed = model?.trim();
-  if (!trimmed) return undefined;
-  return provider === "cursor" && trimmed.startsWith("cursor-")
-    ? trimmed.slice("cursor-".length)
-    : trimmed;
+  return model?.trim() || undefined;
 }
 
 interface JcodeAcpRuntimeInput extends Omit<
