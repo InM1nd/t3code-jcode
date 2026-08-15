@@ -9,7 +9,7 @@ import {
 describe("resolveJcodeInnerProvider", () => {
   it("only accepts the providers exposed by the Jcode picker", () => {
     expect(resolveJcodeInnerProvider("claude")).toMatchObject({ driverKind: "claudeAgent" });
-    expect(resolveJcodeInnerProvider("cursor")).toMatchObject({ driverKind: "cursor" });
+    expect(resolveJcodeInnerProvider("cursor")).toBeNull();
     expect(resolveJcodeInnerProvider("openai")).toMatchObject({ driverKind: "codex" });
     expect(resolveJcodeInnerProvider("anthropic-api")).toBeNull();
   });
