@@ -15,7 +15,8 @@ In a thread for the project:
 - Add an item with the input at the top of the panel
 - The compact summary at the top shows counts by **Backlog**, **Ready**, **In progress**, **In review**, **Blocked**, **Done**, and **Cancelled**; each status also has its own colour
 - **Needs attention** appears first and contains blocked and review items
-- Other active items are grouped into collapsible workstreams. Start a title with a prefix such as `[Product]` or `[SEO]` to choose its workstream; items without a prefix appear under **Other work**
+- Other active items are grouped into fixed collapsible workflow sections: **In progress**, **Ready**, **Backlog**, **Done**, and **Cancelled**. The section order is stable and does not depend on title wording
+- Keep titles focused on the deliverable. Do not add phase, priority, or ownership prefixes such as `[P1-MOBILE]`; use the card status for workflow and the brief or notes for context
 - A row shows its title and one useful context line: the latest handoff's next step, then its note, then linked-turn information. Open task details for the full brief and history
 - Check an item to mark it done; uncheck to return it to the backlog
 - Click the status chip to advance it through the workflow
@@ -41,5 +42,7 @@ Use `board_get_brief` before starting a card and `board_handoff` when you are tr
 Status mutations automatically link the current thread’s latest turn to the card. Linked turns show a **Board** badge in the chat timeline, and each card shows how many turns are attached.
 
 Use the command palette action **Insert project board digest** for a compact status summary in the composer without dumping every note into the prompt.
+
+Board items represent deliverables, not separate analysis, implementation, or verification phases. Before creating an item, check the existing board and update a matching item with its `itemId`. Use `board_set_status` for workflow changes and `board_handoff` for a concrete next step when work moves between agents.
 
 **jcode:** T3 installs a small local MCP bridge into the project’s `.jcode/mcp.json` when a jcode session starts, so jcode can use the same `board_*` tools. Each turn also gets a short reminder that those tools exist. Prefer letting the agent update the board via tools; the Board panel still works for manual edits.

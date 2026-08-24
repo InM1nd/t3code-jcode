@@ -16,6 +16,30 @@ export const VOLT_THEME_ID = "volt" as const;
 export const VOLT_THEME_LABEL = "Volt";
 export const ION_THEME_ID = "ion" as const;
 export const ION_THEME_LABEL = "Ion";
+export const NOVA_THEME_ID = "nova" as const;
+export const NOVA_THEME_LABEL = "Nova";
+export const SLATE_THEME_ID = "slate" as const;
+export const SLATE_THEME_LABEL = "Slate";
+export const COPPER_THEME_ID = "copper" as const;
+export const COPPER_THEME_LABEL = "Copper";
+export const BOREALIS_THEME_ID = "borealis" as const;
+export const BOREALIS_THEME_LABEL = "Borealis";
+export const SAKURA_THEME_ID = "sakura" as const;
+export const SAKURA_THEME_LABEL = "Sakura";
+export const GILDED_THEME_ID = "gilded" as const;
+export const GILDED_THEME_LABEL = "Gilded";
+export const TANGERINE_THEME_ID = "tangerine" as const;
+export const TANGERINE_THEME_LABEL = "Tangerine";
+export const MINT_THEME_ID = "mint" as const;
+export const MINT_THEME_LABEL = "Mint";
+export const IGNITE_THEME_ID = "ignite" as const;
+export const IGNITE_THEME_LABEL = "Ignite";
+export const CIRCUIT_THEME_ID = "circuit" as const;
+export const CIRCUIT_THEME_LABEL = "Circuit";
+export const PULSE_THEME_ID = "pulse" as const;
+export const PULSE_THEME_LABEL = "Pulse";
+export const NOIR_THEME_ID = "noir" as const;
+export const NOIR_THEME_LABEL = "Noir";
 export const THEME_FILE_VERSION = 1 as const;
 export const CUSTOM_THEMES_STORAGE_KEY = "t3code:themes:v1";
 export const THEME_FOLLOW_SYSTEM_STORAGE_KEY = "t3code:theme-follow-system";
@@ -131,6 +155,18 @@ const RESERVED_THEME_IDS = new Set([
   SIGNAL_THEME_ID,
   VOLT_THEME_ID,
   ION_THEME_ID,
+  NOVA_THEME_ID,
+  SLATE_THEME_ID,
+  COPPER_THEME_ID,
+  BOREALIS_THEME_ID,
+  SAKURA_THEME_ID,
+  GILDED_THEME_ID,
+  TANGERINE_THEME_ID,
+  MINT_THEME_ID,
+  IGNITE_THEME_ID,
+  CIRCUIT_THEME_ID,
+  PULSE_THEME_ID,
+  NOIR_THEME_ID,
   LEGACY_T3_CHAT_DARK_THEME_ID,
   "t3-grove",
   "t3-ocean",
@@ -1444,6 +1480,228 @@ export const ION_THEME: ThemeDefinition = {
   },
 };
 
+/** Synthwave — near-black + hot magenta neon, soft pink in light mode. */
+export const NOVA_THEME: ThemeDefinition = {
+  id: NOVA_THEME_ID,
+  label: NOVA_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#fdf2f9", "#d6249f", { exactSeeds: true }),
+    ...themeActionColors("#8b2fd1"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a0a0f", "#ff3ec8", { exactSeeds: true }),
+      ...themeActionColors("#7c4dff"),
+    },
+  },
+};
+
+/** Graphite + steel blue — cool, muted, professional. */
+export const SLATE_THEME: ThemeDefinition = {
+  id: SLATE_THEME_ID,
+  label: SLATE_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#f4f6f8", "#3f5b74"),
+    ...themeActionColors("#5c7a92"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#1a2027", "#8fb3cc"),
+      ...themeActionColors("#7ba0b8"),
+    },
+  },
+};
+
+/** Warm cream + burnished copper, deep espresso in dark mode. */
+export const COPPER_THEME: ThemeDefinition = {
+  id: COPPER_THEME_ID,
+  label: COPPER_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#fbf3ea", "#b5651d"),
+    ...themeActionColors("#8a4b2e"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#241a14", "#e0954a"),
+      ...themeActionColors("#d9a441"),
+    },
+  },
+};
+
+/** Northern lights — emerald canvas shot through with violet neon accent. */
+export const BOREALIS_THEME: ThemeDefinition = {
+  id: BOREALIS_THEME_ID,
+  label: BOREALIS_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#eefaf5", "#0fd68a", { exactSeeds: true }),
+    ...themeActionColors("#7c3aed"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#071a14", "#2ee6a6", { exactSeeds: true }),
+      ...themeActionColors("#a855f7"),
+    },
+  },
+};
+
+/** Cherry blossom — soft blush light mode, near-black dark with neon sakura pink. */
+export const SAKURA_THEME: ThemeDefinition = {
+  id: SAKURA_THEME_ID,
+  label: SAKURA_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#fff0f5", "#ff5ca8", { exactSeeds: true }),
+    ...themeActionColors("#ff2e7e"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0f0a0d", "#ff7ec2", { exactSeeds: true }),
+      ...themeActionColors("#ff2e7e"),
+    },
+  },
+};
+
+/** Luxury black + gold — ivory in light mode, obsidian and gilt in dark. */
+export const GILDED_THEME: ThemeDefinition = {
+  id: GILDED_THEME_ID,
+  label: GILDED_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#faf6ec", "#a9822f"),
+    ...themeActionColors("#8a6d1f"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0c0b08", "#e8c565", { exactSeeds: true }),
+      ...themeActionColors("#f0d78c"),
+    },
+  },
+};
+
+/** Vivid citrus orange — punchy and warm, distinct from Ember's rust tone. */
+export const TANGERINE_THEME: ThemeDefinition = {
+  id: TANGERINE_THEME_ID,
+  label: TANGERINE_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#fff4e8", "#ff7a1a", { exactSeeds: true }),
+    ...themeActionColors("#ff5200"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#1a120a", "#ff9a3d", { exactSeeds: true }),
+      ...themeActionColors("#ff6a00"),
+    },
+  },
+};
+
+/** Fresh mint — crisp spearmint green, cooler and brighter than Grove. */
+export const MINT_THEME: ThemeDefinition = {
+  id: MINT_THEME_ID,
+  label: MINT_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#eefaf6", "#00c896", { exactSeeds: true }),
+    ...themeActionColors("#00a884"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a1512", "#3de8b8", { exactSeeds: true }),
+      ...themeActionColors("#1fd9a8"),
+    },
+  },
+};
+
+/** Brand orange on near-black — from a client branding palette (E85002 / C10801 / F16001). */
+export const IGNITE_THEME: ThemeDefinition = {
+  id: IGNITE_THEME_ID,
+  label: IGNITE_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#fff4ee", "#e85002", { exactSeeds: true }),
+    ...themeActionColors("#c10801"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a0a0a", "#e85002", { exactSeeds: true }),
+      ...themeActionColors("#f16001"),
+    },
+  },
+};
+
+/** Black + electric violet paired with acid lime — dual-accent brand palette. */
+export const CIRCUIT_THEME: ThemeDefinition = {
+  id: CIRCUIT_THEME_ID,
+  label: CIRCUIT_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#f5f0fe", "#7d39eb", { exactSeeds: true }),
+    ...themeActionColors("#c6ff33"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a0a0a", "#7d39eb", { exactSeeds: true }),
+      ...themeActionColors("#c6ff33"),
+    },
+  },
+};
+
+/** Plum violet + banana yellow on near-white — NFT/crypto brand palette. */
+export const PULSE_THEME: ThemeDefinition = {
+  id: PULSE_THEME_ID,
+  label: PULSE_THEME_LABEL,
+  appearance: "light",
+  colors: {
+    ...createManagedThemeColors("light", "#fefffc", "#8116e0", { exactSeeds: true }),
+    ...themeActionColors("#d0ff00"),
+  },
+  variants: {
+    dark: {
+      ...createManagedThemeColors("dark", "#0a0a0a", "#8116e0", { exactSeeds: true }),
+      ...themeActionColors("#d0ff00"),
+    },
+  },
+};
+
+/**
+ * Grayscale-only base with the accent confined to small interactive elements
+ * (focus ring, buttons, links, update pill, cursor) — everything else (canvas,
+ * surfaces, borders, sidebar, muted text) stays pure black/white/gray, unlike
+ * the managed generator above which tints those with the accent hue.
+ */
+function noirThemeColors(appearance: ThemeAppearance, accent: string): ThemeColors {
+  const isDark = appearance === "dark";
+  // Same background color as messageAction, so reuse its contrast-solved
+  // foreground instead of assuming white clears 4.5:1 (it doesn't, here).
+  const action = themeActionColors(accent);
+  return {
+    ...getStandardThemeColors(appearance),
+    focus: accent,
+    accent,
+    accentForeground: action.messageActionForeground,
+    update: accent,
+    updateForeground: isDark ? "#ffab7a" : accent,
+    updateSurface: isDark ? "#2e1608" : "#fce7dc",
+    ...action,
+    terminalCursor: accent,
+  };
+}
+
+/** Monochrome — near-black/white with the accent confined to small elements (buttons, focus, links, cursor). No other surface carries a hint of it. */
+export const NOIR_THEME: ThemeDefinition = {
+  id: NOIR_THEME_ID,
+  label: NOIR_THEME_LABEL,
+  appearance: "light",
+  colors: noirThemeColors("light", "#e85002"),
+  variants: {
+    dark: noirThemeColors("dark", "#ff5a1f"),
+  },
+};
+
 const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = [
   T3_CHAT_THEME,
   GROVE_THEME,
@@ -1453,6 +1711,18 @@ const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = [
   SIGNAL_THEME,
   VOLT_THEME,
   ION_THEME,
+  NOVA_THEME,
+  SLATE_THEME,
+  COPPER_THEME,
+  BOREALIS_THEME,
+  SAKURA_THEME,
+  GILDED_THEME,
+  TANGERINE_THEME,
+  MINT_THEME,
+  IGNITE_THEME,
+  CIRCUIT_THEME,
+  PULSE_THEME,
+  NOIR_THEME,
 ];
 
 export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | null {

@@ -14,6 +14,7 @@ import type {
 import {
   ApprovalRequestId,
   ClaudeSettings,
+  EnvironmentId,
   ProviderDriverKind,
   ProviderItemId,
   ProviderRuntimeEvent,
@@ -34,6 +35,7 @@ import * as TestClock from "effect/testing/TestClock";
 
 import { attachmentRelativePath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderAdapterProcessError, ProviderAdapterValidationError } from "../Errors.ts";
 import type { ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
@@ -439,6 +441,47 @@ describe("ClaudeAdapterLive", () => {
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("always loads the T3 MCP tools in Claude sessions", () => {
+    const harness = makeHarness();
+    McpProviderSession.setMcpProviderSession({
+      environmentId: EnvironmentId.make("test-environment"),
+      threadId: THREAD_ID,
+      providerSessionId: "provider-session",
+      providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+      endpoint: "http://127.0.0.1:1234/mcp",
+      authorizationHeader: "Bearer token",
+    });
+
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+
+      const mcpServer = harness.getLastCreateQueryInput()?.options.mcpServers?.["t3-code"];
+      assert.equal(mcpServer?.type, "http");
+      if (mcpServer?.type !== "http") {
+        return;
+      }
+      assert.equal(mcpServer.alwaysLoad, true);
+      // The adapter always sends the preset object shape; the SDK type also
+      // allows a bare string, so narrow before reading `append`.
+      const systemPrompt = harness.getLastCreateQueryInput()?.options.systemPrompt;
+      assert.equal(typeof systemPrompt === "object" && !Array.isArray(systemPrompt), true);
+      const appendedInstruction =
+        typeof systemPrompt === "object" && systemPrompt !== null && !Array.isArray(systemPrompt)
+          ? (systemPrompt.append ?? "")
+          : "";
+      assert.match(appendedInstruction, /ToolSearch to find board tools/);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+      Effect.ensuring(Effect.sync(() => McpProviderSession.clearMcpProviderSession(THREAD_ID))),
     );
   });
 

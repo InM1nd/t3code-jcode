@@ -34,7 +34,9 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   buildBoardImplementPrompt,
   createBoardItemDraft,
+  filterProjectBoardItemsByArea,
   findDraftIdForThread,
+  getProjectBoardAreas,
   getProjectBoardCockpit,
   groupProjectBoardItems,
   nextProjectBoardItemStatus,
@@ -97,7 +99,7 @@ function BoardItemRow({
   const context = item.latestHandoff?.nextStep?.trim() || item.notes?.trim() || null;
   return (
     <div
-      className="group flex items-start gap-2 rounded-md px-1.5 py-1.5 hover:bg-accent/50"
+      className="group relative flex items-start gap-2 rounded-md px-1.5 py-1.5 hover:bg-accent/50"
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("button")) return;
         onOpenDetails(item);
@@ -140,6 +142,11 @@ function BoardItemRow({
           >
             {projectBoardStatusLabel(item.status)}
           </button>
+          {item.area ? (
+            <span className="shrink-0 rounded bg-muted px-1 py-px text-[10px] font-medium text-muted-foreground">
+              {item.area}
+            </span>
+          ) : null}
           {item.source === "agent" ? (
             <span className="shrink-0 rounded bg-muted px-1 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               agent
@@ -166,46 +173,52 @@ function BoardItemRow({
           </div>
         ) : null}
       </div>
-      {!completed && !item.archivedAt ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={() => onImplement(item)}
-                className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                aria-label={`Implement "${item.title}" in a new thread`}
-              >
-                <Play className="size-3" />
-              </button>
-            }
-          />
-          <TooltipPopup side="top">Implement in new thread</TooltipPopup>
-        </Tooltip>
-      ) : null}
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          if (item.archivedAt) onRestore(item);
-          else onArchive(item);
-        }}
-        className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-        aria-label={`${item.archivedAt ? "Restore" : "Archive"} "${item.title}"`}
-      >
-        {item.archivedAt ? <RotateCcw className="size-3" /> : <Archive className="size-3" />}
-      </button>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onDelete(item);
-        }}
-        className="mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-        aria-label={`Delete "${item.title}"`}
-      >
-        <X className="size-3" />
-      </button>
+      {/* Overlaid on hover instead of reserved in the flex row: a row's normal
+          width goes entirely to title/badges, and these appear on top of the
+          trailing (already-truncated) text only when the user is pointing at
+          the row. */}
+      <div className="absolute top-1 right-1 flex items-center gap-0.5 rounded-md bg-popover px-0.5 opacity-0 shadow-sm group-hover:opacity-100 group-focus-within:opacity-100">
+        {!completed && !item.archivedAt ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={() => onImplement(item)}
+                  className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={`Implement "${item.title}" in a new thread`}
+                >
+                  <Play className="size-3" />
+                </button>
+              }
+            />
+            <TooltipPopup side="top">Implement in new thread</TooltipPopup>
+          </Tooltip>
+        ) : null}
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (item.archivedAt) onRestore(item);
+            else onArchive(item);
+          }}
+          className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label={`${item.archivedAt ? "Restore" : "Archive"} "${item.title}"`}
+        >
+          {item.archivedAt ? <RotateCcw className="size-3" /> : <Archive className="size-3" />}
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(item);
+          }}
+          className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label={`Delete "${item.title}"`}
+        >
+          <X className="size-3" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -289,11 +302,17 @@ export function ProjectBoardPanel({
   const [handoffSummary, setHandoffSummary] = useState("");
   const [handoffDecisions, setHandoffDecisions] = useState("");
   const [handoffNextStep, setHandoffNextStep] = useState("");
+  const [selectedArea, setSelectedArea] = useState<string | null>(null);
 
   const boardItems = project?.boardItems ?? [];
   const detailItem = boardItems.find((item) => item.id === selectedItemId) ?? null;
   const groupedItems = useMemo(() => groupProjectBoardItems(boardItems), [boardItems]);
-  const cockpit = useMemo(() => getProjectBoardCockpit(boardItems), [boardItems]);
+  const areas = useMemo(() => getProjectBoardAreas(boardItems), [boardItems]);
+  const areaFilteredItems = useMemo(
+    () => filterProjectBoardItemsByArea(boardItems, selectedArea),
+    [boardItems, selectedArea],
+  );
+  const cockpit = useMemo(() => getProjectBoardCockpit(areaFilteredItems), [areaFilteredItems]);
 
   useEffect(() => {
     setItemDraft(detailItem ? createBoardItemDraft(detailItem) : null);
@@ -407,6 +426,7 @@ export function ProjectBoardPanel({
         title: itemDraft.title.trim(),
         status: itemDraft.status,
         notes: itemDraft.notes.trim() || null,
+        area: itemDraft.area.trim() || null,
         source: detailItem.source,
         sourceThreadId: detailItem.sourceThreadId ?? null,
         brief: goal
@@ -620,6 +640,18 @@ export function ProjectBoardPanel({
             </select>
             <Input
               size="sm"
+              value={itemDraft.area}
+              onChange={(event) => setItemDraft({ ...itemDraft, area: event.target.value })}
+              placeholder="Area (e.g. seo, mobile, media)"
+              list="project-board-areas"
+            />
+            <datalist id="project-board-areas">
+              {areas.map((area) => (
+                <option key={area} value={area} />
+              ))}
+            </datalist>
+            <Input
+              size="sm"
               value={itemDraft.briefGoal}
               onChange={(event) => setItemDraft({ ...itemDraft, briefGoal: event.target.value })}
               placeholder="Task goal"
@@ -793,6 +825,37 @@ export function ProjectBoardPanel({
                     ) : null,
                   )}
                 </div>
+                {areas.length > 0 ? (
+                  <div className="flex flex-wrap gap-1 px-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedArea(null)}
+                      className={cn(
+                        "cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        selectedArea === null
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      All
+                    </button>
+                    {areas.map((area) => (
+                      <button
+                        key={area}
+                        type="button"
+                        onClick={() => setSelectedArea(area === selectedArea ? null : area)}
+                        className={cn(
+                          "cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium",
+                          selectedArea === area
+                            ? "bg-foreground text-background"
+                            : "bg-muted text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {area}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {cockpit.attention.length > 0 ? (
                   <BoardSection
                     title="Needs attention"
@@ -800,10 +863,10 @@ export function ProjectBoardPanel({
                     {...rowHandlers}
                   />
                 ) : null}
-                {cockpit.workstreams.map((workstream) => (
+                {cockpit.sections.map((section) => (
                   <Collapsible
-                    key={workstream.title}
-                    defaultOpen={workstream.items.some(
+                    key={section.status}
+                    defaultOpen={section.items.some(
                       (item) => item.status === "inProgress" || item.status === "ready",
                     )}
                   >
@@ -812,15 +875,26 @@ export function ProjectBoardPanel({
                         aria-hidden
                         className="size-3 transition-transform group-data-[state=open]:rotate-90"
                       />
-                      {workstream.title}
+                      {projectBoardStatusLabel(section.status)}
                       <span className="ml-1 tabular-nums text-muted-foreground/70">
-                        {workstream.items.length}
+                        {section.items.length}
                       </span>
                     </CollapsibleTrigger>
                     <CollapsiblePanel>
-                      {workstream.items.map((item) => (
-                        <BoardItemRow key={item.id} item={item} {...rowHandlers} />
-                      ))}
+                      {section.areaGroups.length > 1
+                        ? section.areaGroups.map((group) => (
+                            <div key={group.area ?? "uncategorized"}>
+                              <div className="px-1.5 pt-1 text-[.6rem] font-medium uppercase tracking-wider text-muted-foreground/70">
+                                {group.area ?? "Uncategorized"}
+                              </div>
+                              {group.items.map((item) => (
+                                <BoardItemRow key={item.id} item={item} {...rowHandlers} />
+                              ))}
+                            </div>
+                          ))
+                        : section.items.map((item) => (
+                            <BoardItemRow key={item.id} item={item} {...rowHandlers} />
+                          ))}
                     </CollapsiblePanel>
                   </Collapsible>
                 ))}

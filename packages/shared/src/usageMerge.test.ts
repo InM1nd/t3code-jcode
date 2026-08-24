@@ -112,6 +112,33 @@ describe("mergeUsage", () => {
     expect(merged.contributingEnvironments).toEqual(["env-a"]);
   });
 
+  it("counts one Cursor account once across two different real hosts", () => {
+    // Unlike a Claude/Codex home directory, a Cursor account is reachable from
+    // every machine signed into it. UsageService encodes that by giving every
+    // Cursor source a fixed `hostId`, so two laptops signed into one account
+    // must still collapse to a single contribution — this is the fingerprint
+    // shape UsageService actually emits, not two servers that happen to
+    // collide.
+    const cursorAccount = {
+      provider: "cursor" as const,
+      hostId: "cursor-dashboard-api",
+      homePath: "cursor:account:user_123",
+      volumeId: "",
+    };
+    const merged = mergeUsage(
+      [
+        environment("laptop", summary([bucket({ provider: "cursor" })], [cursorAccount])),
+        environment("desktop", summary([bucket({ provider: "cursor" })], [cursorAccount])),
+      ],
+      USAGE_CONTRACT_VERSION,
+    );
+
+    expect(merged.costUsd).toBe(10);
+    expect(merged.records).toBe(5);
+    expect(merged.duplicateSources).toHaveLength(1);
+    expect(merged.contributingEnvironments).toEqual(["desktop"]);
+  });
+
   it("drops only the duplicated provider, keeping the environment's other one", () => {
     const sharedClaude = {
       provider: "claude" as const,

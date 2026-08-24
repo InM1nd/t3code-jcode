@@ -24,6 +24,18 @@ import {
   OCEAN_THEME,
   SIGNAL_THEME,
   VOLT_THEME,
+  NOVA_THEME,
+  SLATE_THEME,
+  COPPER_THEME,
+  BOREALIS_THEME,
+  SAKURA_THEME,
+  GILDED_THEME,
+  TANGERINE_THEME,
+  MINT_THEME,
+  IGNITE_THEME,
+  CIRCUIT_THEME,
+  PULSE_THEME,
+  NOIR_THEME,
 } from "../../themePalette";
 import {
   AlertDialog,
@@ -58,6 +70,18 @@ const MAINTAINER_THEMES: ReadonlyArray<ThemeDefinition> = [
   SIGNAL_THEME,
   VOLT_THEME,
   ION_THEME,
+  NOVA_THEME,
+  SLATE_THEME,
+  COPPER_THEME,
+  BOREALIS_THEME,
+  SAKURA_THEME,
+  GILDED_THEME,
+  TANGERINE_THEME,
+  MINT_THEME,
+  IGNITE_THEME,
+  CIRCUIT_THEME,
+  PULSE_THEME,
+  NOIR_THEME,
 ];
 
 function downloadThemeFile(filename: string, contents: string): void {

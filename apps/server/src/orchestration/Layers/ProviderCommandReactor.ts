@@ -343,6 +343,11 @@ const make = Effect.gen(function* () {
     );
 
   const threadModelSelections = new Map<string, ModelSelection>();
+  // Threads that already received the full board-rules paragraph this
+  // process's lifetime; later turns get the compact hint instead. Resets on
+  // restart, which is fine — resending the rules once after a restart is
+  // cheap and harmless.
+  const threadsWithBoardRulesSent = new Set<string>();
 
   const appendProviderFailureActivity = (input: {
     readonly threadId: ThreadId;
@@ -802,14 +807,20 @@ const make = Effect.gen(function* () {
         : input.modelSelection;
 
     // jcode loads T3 MCP via a stdio bridge; keep a tiny board hint so the model
-    // knows board_* tools exist without dumping the full list every turn.
+    // knows board_* tools exist without dumping the full list every turn. The
+    // rules paragraph only goes out once per thread: repeating it on every
+    // turn teaches the model nothing it doesn't already have in context.
     let turnInput = toNonEmptyProviderInput(input.messageText);
     if (activeSession?.provider === "jcode") {
       const project = yield* projectionSnapshotQuery.getProjectShellById(thread.projectId).pipe(
         Effect.map(Option.getOrNull),
         Effect.orElseSucceed(() => null),
       );
-      const boardBlock = formatProjectBoardPromptBlock(project?.boardItems ?? []);
+      const rulesAlreadySent = threadsWithBoardRulesSent.has(input.threadId);
+      const boardBlock = formatProjectBoardPromptBlock(project?.boardItems ?? [], {
+        compact: rulesAlreadySent,
+      });
+      if (!rulesAlreadySent) threadsWithBoardRulesSent.add(input.threadId);
       turnInput = appendProjectBoardToTurnInput(turnInput, boardBlock);
     }
 

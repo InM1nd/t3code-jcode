@@ -51,8 +51,11 @@ const BoardMutateResult = Schema.Struct({
 
 export const BoardListTool = Tool.make("board_list", {
   description:
-    "List the project board todos for the current thread's project. These items are shared across all threads in the project.",
-  parameters: Schema.Struct({ includeArchived: Schema.optional(Schema.Boolean) }),
+    "List project board todos as structured data (shared across all threads in the project). Returns id/title/status only by default — cheap. Pass includeDetails: true to also include notes, brief, and latest handoff for every item; that is far more expensive than the default and than board_digest, so only use it when you must bulk-read details across many cards at once. For orientation, prefer board_digest. For one card's detail, use board_get_brief.",
+  parameters: Schema.Struct({
+    includeArchived: Schema.optional(Schema.Boolean),
+    includeDetails: Schema.optional(Schema.Boolean),
+  }),
   success: BoardListResult,
   failure: BoardToolError,
   dependencies,
@@ -65,7 +68,11 @@ export const BoardListTool = Tool.make("board_list", {
 export const BoardDigestTool = Tool.make("board_digest", {
   description:
     "Return a compact project board digest (counts + titles by status). Prefer this over board_list when you only need orientation.",
-  parameters: Schema.Struct({}),
+  // Empty `Schema.Struct({})` encodes to an invalid root `anyOf: [object,
+  // array]` JSON Schema in this Effect version instead of `type: "object"`.
+  // Claude Code's MCP client silently drops every tool from a server whose
+  // list includes a non-object-root inputSchema, so this must stay a Record.
+  parameters: Schema.Record(Schema.String, Schema.Never),
   success: BoardDigestResult,
   failure: BoardToolError,
   dependencies,
@@ -90,13 +97,14 @@ export const BoardGetBriefTool = Tool.make("board_get_brief", {
 
 export const BoardUpsertTool = Tool.make("board_upsert", {
   description:
-    "Create or update a project board todo. Pass itemId to update an existing item; omit it to create a new one. Automatically links the project's current thread latest turn when available.",
+    'Create or update a project board todo. One item tracks one deliverable, not a phase or implementation step. Check the board first and pass itemId to update an existing item instead of creating a duplicate. Use status for workflow phases, keep titles free of phase/priority/ownership prefixes, and use board_handoff for transfer context. Always set area unless the project genuinely has no natural groupings — check board_digest first and reuse an existing area verbatim (e.g. "seo", "mobile", "media") rather than inventing a near-duplicate spelling; area is free text, per-project, and is what lets board_digest group each status by area so an untouched one is visible without rereading every card. It is never inferred automatically — an item created or edited without area stays uncategorized. In notes/brief, point at codebase-memory qualified names instead of re-describing code, so the next agent doesn\'t re-explore what\'s already indexed. Automatically links the project\'s current thread latest turn when available.',
   parameters: Schema.Struct({
     itemId: Schema.optional(ProjectBoardItemId),
     title: TrimmedNonEmptyString,
     status: ProjectBoardItemStatus,
     notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
     brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
+    area: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   }),
   success: BoardMutateResult,
   failure: BoardToolError,
@@ -123,7 +131,7 @@ export const BoardHandoffTool = Tool.make("board_handoff", {
 
 export const BoardSetStatusTool = Tool.make("board_set_status", {
   description:
-    "Set the status of an existing project board todo. Automatically links the current thread's latest turn when available.",
+    "Set the workflow status of an existing project board todo; use this for phase changes instead of creating phase cards. Automatically links the current thread's latest turn when available.",
   parameters: Schema.Struct({
     itemId: ProjectBoardItemId,
     status: ProjectBoardItemStatus,

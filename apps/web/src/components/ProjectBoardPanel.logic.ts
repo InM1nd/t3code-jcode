@@ -4,6 +4,7 @@ import type {
   ProjectBoardItemStatus,
   ThreadId,
 } from "@t3tools/contracts";
+import { groupProjectBoardItemsByArea } from "@t3tools/shared/projectBoard";
 
 /** Cycle open/done statuses for the board row control. */
 export function nextProjectBoardItemStatus(status: ProjectBoardItemStatus): ProjectBoardItemStatus {
@@ -50,9 +51,9 @@ export const PROJECT_BOARD_STATUS_ORDER: ReadonlyArray<ProjectBoardItemStatus> =
   "cancelled",
 ];
 
-const WORKSTREAM_PREFIX = /^\[([^\]]+)\]\s*/;
+const LEGACY_TITLE_PREFIX = /^\[([^\]]+)\]\s*/;
 
-const PROJECT_BOARD_WORKSTREAM_STATUS_ORDER: ReadonlyArray<ProjectBoardItemStatus> = [
+const PROJECT_BOARD_COCKPIT_STATUS_ORDER: ReadonlyArray<ProjectBoardItemStatus> = [
   "inProgress",
   "ready",
   "backlog",
@@ -61,50 +62,24 @@ const PROJECT_BOARD_WORKSTREAM_STATUS_ORDER: ReadonlyArray<ProjectBoardItemStatu
 ];
 
 export function projectBoardItemDisplayTitle(title: string): string {
-  const prefix = WORKSTREAM_PREFIX.exec(title);
+  const prefix = LEGACY_TITLE_PREFIX.exec(title);
   const displayTitle = prefix ? title.slice(prefix[0].length).trim() : title;
   return displayTitle || title;
 }
 
-function projectBoardWorkstreamTitle(title: string): string {
-  return WORKSTREAM_PREFIX.exec(title)?.[1]?.trim() || "Other work";
-}
-
 export function getProjectBoardCockpit(items: ReadonlyArray<ProjectBoardItem>) {
+  const grouped = groupProjectBoardItems(items);
   const counts = {
-    backlog: 0,
-    ready: 0,
-    inProgress: 0,
-    inReview: 0,
-    blocked: 0,
-    completed: 0,
-    cancelled: 0,
-    archived: 0,
+    backlog: grouped.active.backlog.length,
+    ready: grouped.active.ready.length,
+    inProgress: grouped.active.inProgress.length,
+    inReview: grouped.active.inReview.length,
+    blocked: grouped.active.blocked.length,
+    completed: grouped.active.completed.length,
+    cancelled: grouped.active.cancelled.length,
+    archived: grouped.archived.length,
   };
-  const attention: ProjectBoardItem[] = [];
-  const workstreams = new Map<string, ProjectBoardItem[]>();
-
-  for (const item of items) {
-    if (item.archivedAt) {
-      counts.archived += 1;
-      continue;
-    }
-    counts[item.status] += 1;
-    if (item.status === "blocked" || item.status === "inReview") {
-      attention.push(item);
-      continue;
-    }
-    const title = projectBoardWorkstreamTitle(item.title);
-    const group = workstreams.get(title) ?? [];
-    group.push(item);
-    workstreams.set(title, group);
-  }
-
-  const statusRank = (status: ProjectBoardItemStatus) =>
-    PROJECT_BOARD_WORKSTREAM_STATUS_ORDER.indexOf(status);
-  const byPriorityThenNewest = (left: ProjectBoardItem, right: ProjectBoardItem) =>
-    statusRank(left.status) - statusRank(right.status) ||
-    right.updatedAt.localeCompare(left.updatedAt);
+  const attention = [...grouped.active.blocked, ...grouped.active.inReview];
 
   attention.sort(
     (left, right) =>
@@ -114,9 +89,14 @@ export function getProjectBoardCockpit(items: ReadonlyArray<ProjectBoardItem>) {
   return {
     counts,
     attention,
-    workstreams: [...workstreams.entries()]
-      .map(([title, group]) => ({ title, items: group.sort(byPriorityThenNewest) }))
-      .sort((left, right) => right.items.length - left.items.length),
+    // Areas group within a status (e.g. Ready split into seo/mobile/media) so
+    // an untouched area is visible without rereading every card. Skipped
+    // when the status only spans one area — see groupProjectBoardItemsByArea.
+    sections: PROJECT_BOARD_COCKPIT_STATUS_ORDER.map((status) => ({
+      status,
+      items: grouped.active[status],
+      areaGroups: groupProjectBoardItemsByArea(grouped.active[status]),
+    })).filter((section) => section.items.length > 0),
   };
 }
 
@@ -153,6 +133,7 @@ export interface BoardItemDraft {
   title: string;
   notes: string;
   status: ProjectBoardItemStatus;
+  area: string;
   briefGoal: string;
   briefCriteria: string;
   briefFiles: string;
@@ -164,11 +145,29 @@ export function createBoardItemDraft(item: ProjectBoardItem): BoardItemDraft {
     title: item.title,
     notes: item.notes ?? "",
     status: item.status,
+    area: item.area ?? "",
     briefGoal: item.brief?.goal ?? "",
     briefCriteria: item.brief?.acceptanceCriteria.join("\n") ?? "",
     briefFiles: item.brief?.importantFiles.join("\n") ?? "",
     briefNotes: item.brief?.notes ?? "",
   };
+}
+
+/** Distinct areas across all items, sorted, for a filter control. Items without an area don't contribute — "All" already covers them. */
+export function getProjectBoardAreas(items: ReadonlyArray<ProjectBoardItem>): string[] {
+  const areas = new Set<string>();
+  for (const item of items) {
+    if (item.area) areas.add(item.area);
+  }
+  return [...areas].sort();
+}
+
+export function filterProjectBoardItemsByArea(
+  items: ReadonlyArray<ProjectBoardItem>,
+  area: string | null,
+): ProjectBoardItem[] {
+  if (area === null) return [...items];
+  return items.filter((item) => item.area === area);
 }
 
 export function buildBoardImplementPrompt(item: ProjectBoardItem): string {

@@ -36,6 +36,27 @@ export function listProjectBoardItems(
   return includeArchived ? items : items.filter((item) => !item.archivedAt);
 }
 
+/**
+ * Strips an item down to id/title/status for the default `board_list`
+ * response. `notes`/`brief`/`latestHandoff`/`linkedTurnIds` are omitted
+ * entirely (not nulled) — omission means "not fetched", null would wrongly
+ * claim "confirmed empty". This is what makes the default response cheap;
+ * `includeDetails: true` skips this and returns items as stored.
+ */
+export function toCompactBoardListItem(item: ProjectBoardItem): ProjectBoardItem {
+  return {
+    id: item.id,
+    title: item.title,
+    status: item.status,
+    source: item.source,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    ...(item.area ? { area: item.area } : {}),
+    ...(item.sourceThreadId ? { sourceThreadId: item.sourceThreadId } : {}),
+    ...(item.archivedAt ? { archivedAt: item.archivedAt } : {}),
+  };
+}
+
 const requireBoardScope = Effect.fn("BoardToolkit.requireScope")(function* () {
   const invocation = yield* McpInvocationContext.McpInvocationContext;
   if (!invocation.capabilities.has("board")) {
@@ -121,6 +142,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
   readonly status: ProjectBoardItemStatus;
   readonly notes?: string | null | undefined;
   readonly brief?: ProjectBoardBrief | null | undefined;
+  readonly area?: string | null | undefined;
   readonly sourceThreadId: McpInvocationContext.McpInvocationScope["threadId"];
   readonly linkTurnId?: TurnId | null | undefined;
 }) {
@@ -135,6 +157,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
       status: input.status,
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
       ...(input.brief !== undefined ? { brief: input.brief } : {}),
+      ...(input.area !== undefined ? { area: input.area } : {}),
       source: "agent",
       sourceThreadId: input.sourceThreadId,
       ...(input.linkTurnId ? { linkTurnId: input.linkTurnId } : {}),
@@ -161,14 +184,18 @@ const dispatchBoardLifecycle = Effect.fn("BoardToolkit.dispatchBoardLifecycle")(
 });
 
 const handlers = {
-  board_list: (input: { readonly includeArchived?: boolean | undefined }) =>
+  board_list: (input: {
+    readonly includeArchived?: boolean | undefined;
+    readonly includeDetails?: boolean | undefined;
+  }) =>
     Effect.gen(function* () {
       const scope = yield* requireBoardScope();
       const projectId = yield* resolveProjectId(scope.threadId);
       const project = yield* loadBoard(projectId);
+      const items = listProjectBoardItems(project.boardItems ?? [], input.includeArchived);
       return {
         projectId,
-        items: listProjectBoardItems(project.boardItems ?? [], input.includeArchived),
+        items: input.includeDetails === true ? items : items.map(toCompactBoardListItem),
       };
     }),
 
@@ -213,6 +240,7 @@ const handlers = {
     readonly status: ProjectBoardItemStatus;
     readonly notes?: string | null | undefined;
     readonly brief?: ProjectBoardBrief | null | undefined;
+    readonly area?: string | null | undefined;
   }) =>
     Effect.gen(function* () {
       const scope = yield* requireBoardScope();
@@ -226,6 +254,7 @@ const handlers = {
         status: input.status,
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
         ...(input.brief !== undefined ? { brief: input.brief } : {}),
+        ...(input.area !== undefined ? { area: input.area } : {}),
         sourceThreadId: scope.threadId,
         linkTurnId,
       });

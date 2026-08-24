@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the existing Board list into a compact, workstream-oriented project cockpit using only persisted Board data and existing MCP tools.
+**Goal:** Turn the existing Board list into a compact, workflow-oriented project cockpit using only persisted Board data and existing MCP tools.
 
-**Architecture:** Add pure view-model helpers beside the existing Board logic. Render those helpers in the Board panel while retaining current row actions and task-details UI. Workstreams are parsed from leading title prefixes and never written to the server.
+**Architecture:** Add pure view-model helpers beside the existing Board logic. Render those helpers in the Board panel while retaining current row actions and task-details UI. Workflow sections use the existing status field and never parse title prefixes.
 
 **Tech Stack:** React, TypeScript, Tailwind utilities, Vitest.
 
 ## Global Constraints
 
-- No contracts, server handlers, MCP tools, migrations, or dependencies.
+- No contracts, migrations, or dependencies; the existing MCP tool descriptions and turn prompt may carry the board-writing rules.
 - Preserve manual editing, archive/restore, Implement, linked thread navigation, and task details.
 - Use existing `ProjectBoardItem.status`, `notes`, `latestHandoff`, `linkedTurnIds`, `archivedAt`, and timestamps only.
 - Keep rows compact and use progressive disclosure through the existing details panel.
@@ -26,7 +26,7 @@
 
 **Interfaces:**
 
-- Produces `getProjectBoardCockpit(items)` with counts, attention items, and workstreams for `ProjectBoardPanel`.
+- Produces `getProjectBoardCockpit(items)` with counts, attention items, and workflow sections for `ProjectBoardPanel`.
 - Preserves `groupProjectBoardItems(items)` for existing archive/detail paths.
 
 - [x] **Step 1: Write failing tests**
@@ -36,9 +36,10 @@ expect(getProjectBoardCockpit(items).attention.map((item) => item.id)).toEqual([
   blocked.id,
   review.id,
 ]);
-expect(getProjectBoardCockpit(items).workstreams.map((group) => group.title)).toEqual([
-  "Product",
-  "Other work",
+expect(getProjectBoardCockpit(items).sections.map((section) => section.status)).toEqual([
+  "inProgress",
+  "ready",
+  "backlog",
 ]);
 expect(getProjectBoardCockpit(items).counts.archived).toBe(1);
 ```
@@ -51,7 +52,7 @@ Run: `pnpm exec vp test run apps/web/src/components/ProjectBoardPanel.logic.test
 
 ```ts
 export function getProjectBoardCockpit(items: ReadonlyArray<ProjectBoardItem>) {
-  // exclude archived cards; surface blocked/review; group the rest by [Prefix]
+  // exclude archived cards; surface blocked/review; group the rest by status
 }
 ```
 
@@ -71,11 +72,11 @@ Run: `pnpm exec vp test run apps/web/src/components/ProjectBoardPanel.logic.test
 - Consumes `getProjectBoardCockpit(items)`.
 - Reuses the existing `BoardItemRow` callbacks unchanged.
 
-- [x] **Step 1: Render summary, attention, and collapsible workstreams**
+- [x] **Step 1: Render summary, attention, and collapsible workflow sections**
 
 ```tsx
 const cockpit = useMemo(() => getProjectBoardCockpit(boardItems), [boardItems]);
-// Summary chips -> Needs attention -> collapsible workstreams -> existing archive
+// Summary chips -> Needs attention -> fixed workflow sections -> existing archive
 ```
 
 - [x] **Step 2: Compact the row’s visible metadata**
@@ -87,7 +88,7 @@ const context = item.latestHandoff?.nextStep ?? item.notes ?? linkedTurnLabel;
 
 - [x] **Step 3: Document the scan order**
 
-Update the user guide to describe the summary, attention cards, workstreams, and title-prefix convention.
+Update the user guide to describe the summary, attention cards, workflow sections, and title rules.
 
 - [x] **Step 4: Verify**
 

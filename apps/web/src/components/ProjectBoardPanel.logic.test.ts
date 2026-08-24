@@ -9,7 +9,9 @@ import type {
 import {
   buildBoardImplementPrompt,
   createBoardItemDraft,
+  filterProjectBoardItemsByArea,
   findDraftIdForThread,
+  getProjectBoardAreas,
   getProjectBoardCockpit,
   groupProjectBoardItems,
   nextProjectBoardItemStatus,
@@ -85,7 +87,7 @@ describe("groupProjectBoardItems", () => {
 });
 
 describe("getProjectBoardCockpit", () => {
-  it("surfaces attention items and groups the remaining active cards by title prefix", () => {
+  it("surfaces attention items and groups active cards by workflow status", () => {
     const blocked = item({
       id: "blocked" as ProjectBoardItem["id"],
       title: "[SEO] Fix canonical URLs",
@@ -98,13 +100,18 @@ describe("getProjectBoardCockpit", () => {
     });
     const product = item({
       id: "product" as ProjectBoardItem["id"],
-      title: "[Product] Improve project search",
+      title: "[P1-MOBILE] Improve project search",
+      status: "inProgress",
+    });
+    const mobile = item({
+      id: "mobile" as ProjectBoardItem["id"],
+      title: "[P0-MOBILE] Fix mobile onboarding",
       status: "inProgress",
     });
     const ungrouped = item({
       id: "other" as ProjectBoardItem["id"],
       title: "Refresh screenshots",
-      status: "backlog",
+      status: "ready",
     });
     const archived = item({
       id: "archived" as ProjectBoardItem["id"],
@@ -113,18 +120,18 @@ describe("getProjectBoardCockpit", () => {
       archivedAt: "2026-01-02T00:00:00.000Z",
     });
 
-    const cockpit = getProjectBoardCockpit([blocked, review, product, ungrouped, archived]);
+    const cockpit = getProjectBoardCockpit([blocked, review, product, mobile, ungrouped, archived]);
 
     expect(cockpit.attention.map((entry) => entry.id)).toEqual([blocked.id, review.id]);
-    expect(cockpit.workstreams.map((group) => group.title)).toEqual(["Product", "Other work"]);
-    expect(cockpit.workstreams[0]?.items.map((entry) => entry.id)).toEqual([product.id]);
+    expect(cockpit.sections.map((section) => section.status)).toEqual(["inProgress", "ready"]);
+    expect(cockpit.sections[0]?.items.map((entry) => entry.id)).toEqual([product.id, mobile.id]);
     expect(cockpit.counts.archived).toBe(1);
-    expect(cockpit.counts.inProgress).toBe(1);
+    expect(cockpit.counts.inProgress).toBe(2);
   });
 });
 
 describe("projectBoardItemDisplayTitle", () => {
-  it("removes a leading workstream prefix without changing ungrouped titles", () => {
+  it("removes a legacy bracket prefix without changing plain titles", () => {
     expect(projectBoardItemDisplayTitle("[Product] Improve project search")).toBe(
       "Improve project search",
     );
@@ -139,13 +146,52 @@ describe("createBoardItemDraft", () => {
       title: "Draft me",
       status: "inReview",
       notes: "Notes",
+      area: "seo",
     });
 
     expect(createBoardItemDraft(boardItem)).toMatchObject({
       title: boardItem.title,
       notes: "Notes",
       status: boardItem.status,
+      area: "seo",
     });
+  });
+
+  it("defaults area to an empty string when unset", () => {
+    const boardItem = item({
+      id: "draft" as ProjectBoardItem["id"],
+      title: "Draft me",
+      status: "backlog",
+    });
+    expect(createBoardItemDraft(boardItem).area).toBe("");
+  });
+});
+
+describe("getProjectBoardAreas", () => {
+  it("returns distinct areas, sorted, ignoring items without one", () => {
+    const items = [
+      item({ id: "1" as ProjectBoardItem["id"], title: "A", status: "backlog", area: "mobile" }),
+      item({ id: "2" as ProjectBoardItem["id"], title: "B", status: "backlog", area: "seo" }),
+      item({ id: "3" as ProjectBoardItem["id"], title: "C", status: "backlog", area: "mobile" }),
+      item({ id: "4" as ProjectBoardItem["id"], title: "D", status: "backlog" }),
+    ];
+    expect(getProjectBoardAreas(items)).toEqual(["mobile", "seo"]);
+  });
+});
+
+describe("filterProjectBoardItemsByArea", () => {
+  const items = [
+    item({ id: "1" as ProjectBoardItem["id"], title: "A", status: "backlog", area: "mobile" }),
+    item({ id: "2" as ProjectBoardItem["id"], title: "B", status: "backlog", area: "seo" }),
+    item({ id: "3" as ProjectBoardItem["id"], title: "C", status: "backlog" }),
+  ];
+
+  it("returns every item when area is null (All)", () => {
+    expect(filterProjectBoardItemsByArea(items, null)).toHaveLength(3);
+  });
+
+  it("keeps only items matching the selected area", () => {
+    expect(filterProjectBoardItemsByArea(items, "mobile").map((entry) => entry.id)).toEqual(["1"]);
   });
 });
 

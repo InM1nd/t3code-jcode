@@ -10,9 +10,9 @@ The Board panel stays in its current right-panel location. Its list view becomes
 
 - A single compact summary strip shows project totals for blocked, review, in-progress, ready, backlog, done, and cancelled work.
 - A short **Needs attention** section surfaces blocked and in-review items first.
-- Remaining active cards are presented in collapsible workstreams. A workstream is derived from an existing leading title prefix such as `[Product]`; cards without one appear in **Other work**. This is display-only and does not persist a new field.
+- Remaining active cards are presented in fixed collapsible workflow sections: **In progress**, **Ready**, **Backlog**, **Done**, and **Cancelled**. Section order comes from the structured status field, not title wording.
 - Rows remain compact: a thin status accent, title, one useful context line (latest handoff next step, then notes, then linked-turn count), and the existing actions. Full briefs, notes, history, editing, and archive stay in the existing detail view.
-- Archived cards remain collapsed and are never included in attention or workstreams.
+- Archived cards remain collapsed and are never included in attention or active workflow sections.
 
 ## Agent workflow
 
@@ -21,12 +21,12 @@ No new MCP tool is introduced. Agents continue to use `board_digest` for orienta
 ## Boundaries
 
 - Preserve all current status, archive/restore, edit, Implement, linked-thread, and detail interactions.
-- Do not persist a project-wide brief, priority, owner, epic, or workstream field.
+- Do not infer priority, owner, epic, or workstream from title prefixes.
 - Do not infer agent identity beyond existing source/handoff/thread data.
 - Keep the normal Board list dense; the detail view is the progressive-disclosure path.
 
 ## Verification
 
-- Unit-test workstream parsing and attention/summary derivation.
+- Unit-test workflow-section ordering and attention/summary derivation.
 - Run focused logic tests and the web typecheck.
 - Perform one user-requested integrated web pass after implementation.

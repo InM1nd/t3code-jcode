@@ -77,6 +77,37 @@ describe("formatProjectBoardDigest", () => {
     expect(digest).toContain("1 archived");
   });
 
+  it("groups a section by area only when it spans more than one", () => {
+    const singleArea = formatProjectBoardDigest([
+      item({ id: "i1" as ProjectBoardItem["id"], title: "SEO fix", status: "ready", area: "seo" }),
+      item({
+        id: "i2" as ProjectBoardItem["id"],
+        title: "SEO fix 2",
+        status: "ready",
+        area: "seo",
+      }),
+    ]);
+    expect(singleArea).not.toContain("seo:");
+    expect(singleArea).toContain("- [i1] SEO fix");
+
+    const multiArea = formatProjectBoardDigest([
+      item({ id: "i1" as ProjectBoardItem["id"], title: "SEO fix", status: "ready", area: "seo" }),
+      item({
+        id: "i2" as ProjectBoardItem["id"],
+        title: "Mobile fix",
+        status: "ready",
+        area: "mobile",
+      }),
+      item({ id: "i3" as ProjectBoardItem["id"], title: "No area yet", status: "ready" }),
+    ]);
+    expect(multiArea).toContain("mobile:");
+    expect(multiArea).toContain("seo:");
+    expect(multiArea).toContain("Uncategorized:");
+    // Areas sort alphabetically, ahead of the uncategorized bucket.
+    expect(multiArea.indexOf("mobile:")).toBeLessThan(multiArea.indexOf("seo:"));
+    expect(multiArea.indexOf("seo:")).toBeLessThan(multiArea.indexOf("Uncategorized:"));
+  });
+
   it("distinguishes an archived-only board from an empty board", () => {
     const digest = formatProjectBoardDigest([
       item({

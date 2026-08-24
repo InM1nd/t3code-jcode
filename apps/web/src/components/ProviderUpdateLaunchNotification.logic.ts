@@ -544,11 +544,27 @@ function getProviderUpdateInitialToastTitle(
   return `Updates Available: ${providers.length} providers`;
 }
 
+// The update command's own stdout/stderr (captured server-side) is the only
+// clue to *why* an exit code happened — an exit code alone (e.g. "code 243")
+// is meaningless without it. Collapsed and capped so it still fits the pill's
+// tooltip and aria-label instead of dumping the full 10KB capture.
+const PROVIDER_UPDATE_OUTPUT_SUMMARY_MAX_LENGTH = 200;
+
+function summarizeProviderUpdateOutput(output: string | null | undefined): string | null {
+  const collapsed = output?.trim().replace(/\s+/g, " ");
+  if (!collapsed) return null;
+  return collapsed.length > PROVIDER_UPDATE_OUTPUT_SUMMARY_MAX_LENGTH
+    ? `${collapsed.slice(0, PROVIDER_UPDATE_OUTPUT_SUMMARY_MAX_LENGTH)}…`
+    : collapsed;
+}
+
 function getFailedProviderUpdateDescription(providers: ReadonlyArray<ServerProvider>): string {
   if (providers.length === 1) {
     const provider = providers[0]!;
-    if (provider.updateState?.message) {
-      return provider.updateState.message;
+    const message = provider.updateState?.message;
+    if (message) {
+      const output = summarizeProviderUpdateOutput(provider.updateState?.output);
+      return output ? `${message} — ${output}` : message;
     }
   }
   return `${formatProviderList(providers)} failed to update. Check provider settings for details.`;

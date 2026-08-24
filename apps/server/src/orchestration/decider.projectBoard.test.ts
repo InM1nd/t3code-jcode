@@ -133,6 +133,73 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
     }),
   );
 
+  it.effect("preserves area across an update that omits it, and clears it when set to null", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const projectId = asProjectId("project-board-area");
+      let readModel = yield* projectEvent(
+        createEmptyReadModel(now),
+        createProjectEvent({ sequence: 1, projectId, now }),
+      );
+
+      const created = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.upsert",
+          commandId: CommandId.make("cmd-board-area-create"),
+          projectId,
+          itemId: asItemId("item-1"),
+          title: "SEO card",
+          status: "backlog",
+          area: "seo",
+        },
+        readModel,
+      });
+      const createdEvent = Array.isArray(created) ? created[0] : created;
+      if (!createdEvent || createdEvent.type !== "project.board-item-upserted") {
+        throw new Error("expected create event");
+      }
+      expect(createdEvent.payload.item.area).toBe("seo");
+      readModel = yield* projectEvent(readModel, createdEvent);
+
+      const statusOnly = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.upsert",
+          commandId: CommandId.make("cmd-board-area-status"),
+          projectId,
+          itemId: asItemId("item-1"),
+          title: "SEO card",
+          status: "ready",
+        },
+        readModel,
+      });
+      const statusOnlyEvent = Array.isArray(statusOnly) ? statusOnly[0] : statusOnly;
+      if (!statusOnlyEvent || statusOnlyEvent.type !== "project.board-item-upserted") {
+        throw new Error("expected status-only update event");
+      }
+      // area was omitted, not nulled, so it must carry forward unchanged.
+      expect(statusOnlyEvent.payload.item.area).toBe("seo");
+      readModel = yield* projectEvent(readModel, statusOnlyEvent);
+
+      const cleared = yield* decideOrchestrationCommand({
+        command: {
+          type: "project.board.item.upsert",
+          commandId: CommandId.make("cmd-board-area-clear"),
+          projectId,
+          itemId: asItemId("item-1"),
+          title: "SEO card",
+          status: "ready",
+          area: null,
+        },
+        readModel,
+      });
+      const clearedEvent = Array.isArray(cleared) ? cleared[0] : cleared;
+      if (!clearedEvent || clearedEvent.type !== "project.board-item-upserted") {
+        throw new Error("expected clear event");
+      }
+      expect(clearedEvent.payload.item.area).toBeNull();
+    }),
+  );
+
   it.effect("archives and restores a board item without changing its status", () =>
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";

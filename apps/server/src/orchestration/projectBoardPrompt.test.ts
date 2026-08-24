@@ -18,6 +18,11 @@ describe("projectBoardPrompt", () => {
     expect(empty).toContain("board_archive");
     expect(empty).toContain("board_restore");
     expect(empty).toContain("t3-code");
+    expect(empty).toContain("One card tracks one deliverable");
+    expect(empty).toContain("Use status for workflow");
+    expect(empty).toContain("Do not encode phases, priority, or ownership in titles");
+    expect(empty).toContain("reuse an existing itemId");
+    expect(empty).toContain("codebase-memory qualified names");
     expect(empty).not.toContain("id=");
 
     const populated = formatProjectBoardPromptBlock([
@@ -63,5 +68,19 @@ describe("projectBoardPrompt", () => {
     expect(appendProjectBoardToTurnInput("Hello", block)).toBe(`Hello\n\n${block}`);
     expect(appendProjectBoardToTurnInput(undefined, block)).toBe(block);
     expect(appendProjectBoardToTurnInput("Hello", null)).toBe("Hello");
+  });
+
+  it("drops the rules paragraph in compact mode but keeps the tool list and counts", () => {
+    const compact = formatProjectBoardPromptBlock([], { compact: true });
+
+    expect(compact).toContain("<project_board>");
+    expect(compact).toContain("empty");
+    expect(compact).toContain("board_digest");
+    expect(compact).toContain("board_handoff");
+    expect(compact).toContain("t3-code");
+    expect(compact).not.toContain("One card tracks one deliverable");
+    expect(compact).not.toContain("Use status for workflow");
+    expect(compact).not.toContain("reuse an existing itemId");
+    expect(compact).not.toContain("codebase-memory qualified names");
   });
 });

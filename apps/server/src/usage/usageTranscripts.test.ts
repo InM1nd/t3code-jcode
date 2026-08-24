@@ -4,6 +4,7 @@ import {
   initialCodexScanState,
   parseClaudeLine,
   parseCodexLine,
+  parseCursorUsageEvent,
   totalTokens,
 } from "./usageTranscripts.ts";
 
@@ -247,5 +248,48 @@ describe("totalTokens", () => {
         reasoningTokens: 25,
       }),
     ).toBe(100);
+  });
+});
+
+describe("parseCursorUsageEvent", () => {
+  const event = {
+    timestampMs: 1_754_800_000_000,
+    model: "claude-fable-5",
+    conversationId: "conv_1",
+    inputTokens: 100,
+    outputTokens: 50,
+    cacheReadTokens: 10,
+    cacheWriteTokens: 5,
+    chargedCents: 12,
+  };
+
+  it("maps token fields and prices from chargedCents", () => {
+    const record = parseCursorUsageEvent(event);
+
+    expect(record.provider).toBe("cursor");
+    expect(record.model).toBe("claude-fable-5");
+    expect(record.sessionId).toBe("conv_1");
+    expect(record.totals).toEqual({
+      uncachedInputTokens: 100,
+      cachedInputTokens: 10,
+      cacheCreationTokens: 5,
+      outputTokens: 50,
+      reasoningTokens: 0,
+    });
+    expect(record.reportedCostUsd).toBeCloseTo(0.12);
+  });
+
+  it("does not dedupe on conversationId, since many events share one", () => {
+    // conversationId groups events into a session; it is not unique per event,
+    // so using it as a dedupe key would collapse a whole conversation's worth
+    // of billed requests down to the first one seen.
+    expect(parseCursorUsageEvent(event).dedupeKey).toBeNull();
+  });
+
+  it("reports a free event as zero cost rather than unpriced", () => {
+    // chargedCents: 0 is a legitimate provider-reported cost, distinct from
+    // Codex-style records that report no cost figure at all (null).
+    const record = parseCursorUsageEvent({ ...event, chargedCents: 0 });
+    expect(record.reportedCostUsd).toBe(0);
   });
 });

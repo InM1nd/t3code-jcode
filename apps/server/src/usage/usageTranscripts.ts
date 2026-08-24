@@ -297,4 +297,46 @@ export function parseCodexLine(line: string, state: CodexScanState): UsageRecord
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Cursor                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Maps one dashboard usage event to a record.
+ *
+ * `conversationId` groups events into a session but is *not* a dedupe key:
+ * one conversation bills many events, all sharing that id, so deduping on it
+ * would collapse a whole conversation down to its first billed request. There
+ * is also nothing to dedupe against: pagination walks pages by our own
+ * request, never re-serving one, so every event this returns is already
+ * unique (same reasoning as Codex's post-fork-suppression events).
+ */
+export function parseCursorUsageEvent(event: {
+  readonly timestampMs: number;
+  readonly model: string;
+  readonly conversationId: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly cacheWriteTokens: number;
+  readonly chargedCents: number;
+}): UsageRecord {
+  return {
+    provider: "cursor",
+    timestampMs: event.timestampMs,
+    model: event.model,
+    sessionId: event.conversationId,
+    totals: {
+      uncachedInputTokens: int(event.inputTokens),
+      cachedInputTokens: int(event.cacheReadTokens),
+      cacheCreationTokens: int(event.cacheWriteTokens),
+      outputTokens: int(event.outputTokens),
+      // Cursor does not break reasoning tokens out separately.
+      reasoningTokens: 0,
+    },
+    reportedCostUsd: event.chargedCents / 100,
+    dedupeKey: null,
+  };
+}
+
 export { EMPTY_TOTALS };

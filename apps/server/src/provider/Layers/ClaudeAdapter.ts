@@ -1175,6 +1175,9 @@ const CLAUDE_SETTING_SOURCES = [
   "local",
 ] as const satisfies ReadonlyArray<SettingSource>;
 
+const T3_BOARD_TOOL_DISCOVERY_INSTRUCTION =
+  "T3 Board is provided by the t3-code MCP server. When a user asks about Board, use ToolSearch to find board tools before answering. Do not substitute GitHub Projects or claim Board is unavailable without searching.";
+
 function buildPromptText(
   input: ProviderSendTurnInput,
   boundInstanceId: ProviderInstanceId,
@@ -4106,7 +4109,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
         pathToClaudeCodeExecutable: claudeBinaryPath,
-        systemPrompt: { type: "preset", preset: "claude_code" },
+        systemPrompt: {
+          type: "preset",
+          preset: "claude_code",
+          ...(mcpSession ? { append: T3_BOARD_TOOL_DISCOVERY_INSTRUCTION } : {}),
+        },
         settingSources: [...CLAUDE_SETTING_SOURCES],
         // `ultracode` is a Claude Code setting, not an API effort level. It is
         // normalized to `xhigh` above and paired with `settings.ultracode`.
@@ -4136,6 +4143,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
                   headers: {
                     Authorization: mcpSession.authorizationHeader,
                   },
+                  // Keep Claude's remote tools visible like the ACP providers;
+                  // otherwise the SDK defers them behind tool search.
+                  alwaysLoad: true,
                 },
               },
             }

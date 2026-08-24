@@ -944,34 +944,6 @@ describe("orchestration projector", () => {
     const createdAt = "2026-03-01T10:00:00.000Z";
     const model = createEmptyReadModel(createdAt);
 
-    const afterCreate = await Effect.runPromise(
-      projectEvent(
-        model,
-        makeEvent({
-          sequence: 1,
-          type: "thread.created",
-          aggregateKind: "thread",
-          aggregateId: "thread-capped",
-          occurredAt: createdAt,
-          commandId: "cmd-create-capped",
-          payload: {
-            threadId: "thread-capped",
-            projectId: "project-1",
-            title: "capped",
-            modelSelection: {
-              provider: ProviderDriverKind.make("codex"),
-              model: "gpt-5-codex",
-            },
-            runtimeMode: "full-access",
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            updatedAt: createdAt,
-          },
-        }),
-      ),
-    );
-
     const messageEvents: ReadonlyArray<OrchestrationEvent> = Array.from(
       { length: 2_100 },
       (_, index) =>
@@ -993,13 +965,6 @@ describe("orchestration projector", () => {
             updatedAt: `2026-03-01T10:00:${String(index % 60).padStart(2, "0")}.000Z`,
           },
         }),
-    );
-    const afterMessages = await messageEvents.reduce<
-      Promise<ReturnType<typeof createEmptyReadModel>>
-    >(
-      (statePromise, event) =>
-        statePromise.then((state) => Effect.runPromise(projectEvent(state, event))),
-      Promise.resolve(afterCreate),
     );
 
     const checkpointEvents: ReadonlyArray<OrchestrationEvent> = Array.from(
@@ -1024,12 +989,41 @@ describe("orchestration projector", () => {
           },
         }),
     );
-    const finalState = await checkpointEvents.reduce<
-      Promise<ReturnType<typeof createEmptyReadModel>>
-    >(
-      (statePromise, event) =>
-        statePromise.then((state) => Effect.runPromise(projectEvent(state, event))),
-      Promise.resolve(afterMessages),
+    // One manual runtime call for the whole fold: the lint ratchet in
+    // oxlint-plugin-t3code/rules/no-manual-effect-runtime-in-tests caps how
+    // many this file may hold.
+    const finalState = await Effect.runPromise(
+      Effect.gen(function* () {
+        let state = yield* projectEvent(
+          model,
+          makeEvent({
+            sequence: 1,
+            type: "thread.created",
+            aggregateKind: "thread",
+            aggregateId: "thread-capped",
+            occurredAt: createdAt,
+            commandId: "cmd-create-capped",
+            payload: {
+              threadId: "thread-capped",
+              projectId: "project-1",
+              title: "capped",
+              modelSelection: {
+                provider: ProviderDriverKind.make("codex"),
+                model: "gpt-5-codex",
+              },
+              runtimeMode: "full-access",
+              branch: null,
+              worktreePath: null,
+              createdAt,
+              updatedAt: createdAt,
+            },
+          }),
+        );
+        for (const event of [...messageEvents, ...checkpointEvents]) {
+          state = yield* projectEvent(state, event);
+        }
+        return state;
+      }),
     );
 
     const thread = finalState.threads[0];

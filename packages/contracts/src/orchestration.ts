@@ -24,6 +24,20 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
+import {
+  ProjectBoardItem,
+  ProjectBoardItemStatus,
+  ProjectBoardItemArchiveCommand,
+  ProjectBoardItemArchivedPayload,
+  ProjectBoardItemDeleteCommand,
+  ProjectBoardItemDeletedPayload,
+  ProjectBoardItemHandoffAppendCommand,
+  ProjectBoardItemHandoffAppendedPayload,
+  ProjectBoardItemRestoreCommand,
+  ProjectBoardItemRestoredPayload,
+  ProjectBoardItemUpsertCommand,
+  ProjectBoardItemUpsertedPayload,
+} from "./projectBoard.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -152,13 +166,8 @@ export type ProviderUserInputAnswers = typeof ProviderUserInputAnswers.Type;
 
 export const PROVIDER_SEND_TURN_MAX_INPUT_CHARS = 120_000;
 export const PROVIDER_SEND_TURN_MAX_ATTACHMENTS = 8;
-/** Shared byte cap for image and file attachments on a turn. */
-export const PROVIDER_SEND_TURN_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-/** @deprecated Prefer PROVIDER_SEND_TURN_MAX_ATTACHMENT_BYTES. */
-export const PROVIDER_SEND_TURN_MAX_IMAGE_BYTES = PROVIDER_SEND_TURN_MAX_ATTACHMENT_BYTES;
-const PROVIDER_SEND_TURN_MAX_ATTACHMENT_DATA_URL_CHARS = 14_000_000;
-const PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS =
-  PROVIDER_SEND_TURN_MAX_ATTACHMENT_DATA_URL_CHARS;
+export const PROVIDER_SEND_TURN_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS = 14_000_000;
 const CHAT_ATTACHMENT_ID_MAX_CHARS = 128;
 // Correlation id is command id by design in this model.
 export const CorrelationId = CommandId;
@@ -175,9 +184,7 @@ export const ChatImageAttachment = Schema.Struct({
   id: ChatAttachmentId,
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
   mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100), Schema.isPattern(/^image\//i)),
-  sizeBytes: NonNegativeInt.check(
-    Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_ATTACHMENT_BYTES),
-  ),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES)),
 });
 export type ChatImageAttachment = typeof ChatImageAttachment.Type;
 
@@ -185,11 +192,9 @@ const UploadChatImageAttachment = Schema.Struct({
   type: Schema.Literal("image"),
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
   mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100), Schema.isPattern(/^image\//i)),
-  sizeBytes: NonNegativeInt.check(
-    Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_ATTACHMENT_BYTES),
-  ),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES)),
   dataUrl: TrimmedNonEmptyString.check(
-    Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_ATTACHMENT_DATA_URL_CHARS),
+    Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS),
   ),
 });
 export type UploadChatImageAttachment = typeof UploadChatImageAttachment.Type;
@@ -199,9 +204,7 @@ export const ChatFileAttachment = Schema.Struct({
   id: ChatAttachmentId,
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
   mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
-  sizeBytes: NonNegativeInt.check(
-    Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_ATTACHMENT_BYTES),
-  ),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES)),
 });
 export type ChatFileAttachment = typeof ChatFileAttachment.Type;
 
@@ -209,11 +212,9 @@ const UploadChatFileAttachment = Schema.Struct({
   type: Schema.Literal("file"),
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
   mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
-  sizeBytes: NonNegativeInt.check(
-    Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_ATTACHMENT_BYTES),
-  ),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES)),
   dataUrl: TrimmedNonEmptyString.check(
-    Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_ATTACHMENT_DATA_URL_CHARS),
+    Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS),
   ),
 });
 export type UploadChatFileAttachment = typeof UploadChatFileAttachment.Type;
@@ -258,80 +259,6 @@ export const ProjectFaviconPath = TrimmedNonEmptyString.check(
   Schema.isPattern(/\.(?:avif|gif|ico|jpe?g|png|svg|webp)$/i),
 );
 export type ProjectFaviconPath = typeof ProjectFaviconPath.Type;
-
-/** Soft cap so shell snapshots stay small when the board rides on project-upserted. */
-export const PROJECT_BOARD_ITEM_LIMIT = 100;
-
-const CanonicalProjectBoardItemStatus = Schema.Literals([
-  "backlog",
-  "ready",
-  "inProgress",
-  "inReview",
-  "blocked",
-  "completed",
-  "cancelled",
-]);
-
-export const ProjectBoardItemStatus = Schema.Literals([
-  "pending",
-  "backlog",
-  "ready",
-  "inProgress",
-  "inReview",
-  "blocked",
-  "completed",
-  "cancelled",
-]).pipe(
-  Schema.decodeTo(
-    CanonicalProjectBoardItemStatus,
-    SchemaTransformation.transformOrFail({
-      decode: (status) => Effect.succeed(status === "pending" ? "backlog" : status),
-      encode: Effect.succeed,
-    }),
-  ),
-);
-export type ProjectBoardItemStatus = typeof ProjectBoardItemStatus.Type;
-
-export const ProjectBoardItemSource = Schema.Literals(["user", "agent"]);
-export type ProjectBoardItemSource = typeof ProjectBoardItemSource.Type;
-
-export const ProjectBoardBrief = Schema.Struct({
-  goal: TrimmedNonEmptyString,
-  acceptanceCriteria: Schema.Array(TrimmedNonEmptyString),
-  importantFiles: Schema.Array(TrimmedNonEmptyString),
-  notes: Schema.NullOr(TrimmedNonEmptyString),
-});
-export type ProjectBoardBrief = typeof ProjectBoardBrief.Type;
-
-export const ProjectBoardHandoff = Schema.Struct({
-  id: ProjectBoardHandoffId,
-  sourceThreadId: ThreadId,
-  summary: TrimmedNonEmptyString,
-  decisions: Schema.Array(TrimmedNonEmptyString),
-  nextStep: TrimmedNonEmptyString,
-  createdAt: IsoDateTime,
-});
-export type ProjectBoardHandoff = typeof ProjectBoardHandoff.Type;
-
-/** Soft cap for turn links stored on each board item. */
-export const PROJECT_BOARD_LINKED_TURN_LIMIT = 20;
-
-export const ProjectBoardItem = Schema.Struct({
-  id: ProjectBoardItemId,
-  title: TrimmedNonEmptyString,
-  status: ProjectBoardItemStatus,
-  notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
-  brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
-  latestHandoff: Schema.optional(Schema.NullOr(ProjectBoardHandoff)),
-  source: ProjectBoardItemSource,
-  sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
-  // Turns that touched this card. Optional for older servers/clients.
-  linkedTurnIds: Schema.optional(Schema.Array(TurnId)),
-  archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
-  createdAt: IsoDateTime,
-  updatedAt: IsoDateTime,
-});
-export type ProjectBoardItem = typeof ProjectBoardItem.Type;
 
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
@@ -811,55 +738,6 @@ const ProjectDeleteCommand = Schema.Struct({
   force: Schema.optional(Schema.Boolean),
 });
 
-const ProjectBoardItemUpsertCommand = Schema.Struct({
-  type: Schema.Literal("project.board.item.upsert"),
-  commandId: CommandId,
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-  title: TrimmedNonEmptyString,
-  status: ProjectBoardItemStatus,
-  notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
-  brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
-  source: Schema.optional(ProjectBoardItemSource),
-  sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
-  // Replace the full linked-turn list when provided.
-  linkedTurnIds: Schema.optional(Schema.Array(TurnId)),
-  // Append a single turn id (deduped, capped) when provided.
-  linkTurnId: Schema.optional(Schema.NullOr(TurnId)),
-});
-
-const ProjectBoardItemHandoffAppendCommand = Schema.Struct({
-  type: Schema.Literal("project.board.item.handoff.append"),
-  commandId: CommandId,
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-  sourceThreadId: ThreadId,
-  summary: TrimmedNonEmptyString,
-  decisions: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
-  nextStep: TrimmedNonEmptyString,
-});
-
-const ProjectBoardItemDeleteCommand = Schema.Struct({
-  type: Schema.Literal("project.board.item.delete"),
-  commandId: CommandId,
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-});
-
-const ProjectBoardItemArchiveCommand = Schema.Struct({
-  type: Schema.Literal("project.board.item.archive"),
-  commandId: CommandId,
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-});
-
-const ProjectBoardItemRestoreCommand = Schema.Struct({
-  type: Schema.Literal("project.board.item.restore"),
-  commandId: CommandId,
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-});
-
 const ThreadCreateCommand = Schema.Struct({
   type: Schema.Literal("thread.create"),
   commandId: CommandId,
@@ -1331,39 +1209,6 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
 export const ProjectDeletedPayload = Schema.Struct({
   projectId: ProjectId,
   deletedAt: IsoDateTime,
-});
-
-export const ProjectBoardItemUpsertedPayload = Schema.Struct({
-  projectId: ProjectId,
-  item: ProjectBoardItem,
-  updatedAt: IsoDateTime,
-});
-
-export const ProjectBoardItemHandoffAppendedPayload = Schema.Struct({
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-  itemTitle: TrimmedNonEmptyString,
-  handoff: ProjectBoardHandoff,
-  updatedAt: IsoDateTime,
-});
-
-export const ProjectBoardItemDeletedPayload = Schema.Struct({
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-  updatedAt: IsoDateTime,
-});
-
-export const ProjectBoardItemArchivedPayload = Schema.Struct({
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-  archivedAt: IsoDateTime,
-  updatedAt: IsoDateTime,
-});
-
-export const ProjectBoardItemRestoredPayload = Schema.Struct({
-  projectId: ProjectId,
-  itemId: ProjectBoardItemId,
-  updatedAt: IsoDateTime,
 });
 
 export const ThreadCreatedPayload = Schema.Struct({

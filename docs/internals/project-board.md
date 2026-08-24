@@ -55,7 +55,7 @@ That gives jcode the same `board_*` (and other) MCP tools as Claude/Cursor. Turn
 3. If `sourceThreadId` already points at a live server thread or local draft, reopens it instead
 4. Marks a pending turn-link; `ChatView` attaches the first `latestTurn` via `linkTurnId`
 
-Pure helpers live in `apps/web/src/components/ProjectBoardPanel.logic.ts` and `@t3tools/shared/projectBoard`.
+Pure helpers live in `apps/web/src/components/ProjectBoardPanel.logic.ts` and `@t3tools/shared/projectBoard`. The web cockpit shows attention items first, then fixed workflow sections; title prefixes are not grouping data.
 
 ### Board digest
 

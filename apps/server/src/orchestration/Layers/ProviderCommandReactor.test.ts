@@ -2863,68 +2863,70 @@ describe("ProviderCommandReactor", () => {
       ),
     );
 
+    // Dispatched through one runtime call: the lint ratchet in
+    // oxlint-plugin-t3code/rules/no-manual-effect-runtime-in-tests caps how
+    // many manual runs this file may hold. Effect.all runs them in order.
     await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.session.set",
-        commandId: CommandId.make("cmd-session-set-for-user-input-error"),
-        threadId: ThreadId.make("thread-1"),
-        session: {
-          threadId: ThreadId.make("thread-1"),
-          status: "running",
-          providerName: "claudeAgent",
-          runtimeMode: "approval-required",
-          activeTurnId: null,
-          lastError: null,
-          updatedAt: now,
-        },
-        createdAt: now,
-      }),
-    );
-
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.activity.append",
-        commandId: CommandId.make("cmd-user-input-requested"),
-        threadId: ThreadId.make("thread-1"),
-        activity: {
-          id: EventId.make("activity-user-input-requested"),
-          tone: "info",
-          kind: "user-input.requested",
-          summary: "User input requested",
-          payload: {
-            requestId: "user-input-request-1",
-            questions: [
-              {
-                id: "sandbox_mode",
-                header: "Sandbox",
-                question: "Which mode should be used?",
-                options: [
+      Effect.all(
+        [
+          harness.engine.dispatch({
+            type: "thread.session.set",
+            commandId: CommandId.make("cmd-session-set-for-user-input-error"),
+            threadId: ThreadId.make("thread-1"),
+            session: {
+              threadId: ThreadId.make("thread-1"),
+              status: "running",
+              providerName: "claudeAgent",
+              runtimeMode: "approval-required",
+              activeTurnId: null,
+              lastError: null,
+              updatedAt: now,
+            },
+            createdAt: now,
+          }),
+          harness.engine.dispatch({
+            type: "thread.activity.append",
+            commandId: CommandId.make("cmd-user-input-requested"),
+            threadId: ThreadId.make("thread-1"),
+            activity: {
+              id: EventId.make("activity-user-input-requested"),
+              tone: "info",
+              kind: "user-input.requested",
+              summary: "User input requested",
+              payload: {
+                requestId: "user-input-request-1",
+                questions: [
                   {
-                    label: "workspace-write",
-                    description: "Allow workspace writes only",
+                    id: "sandbox_mode",
+                    header: "Sandbox",
+                    question: "Which mode should be used?",
+                    options: [
+                      {
+                        label: "workspace-write",
+                        description: "Allow workspace writes only",
+                      },
+                    ],
                   },
                 ],
               },
-            ],
-          },
-          turnId: null,
-          createdAt: now,
-        },
-        createdAt: now,
-      }),
-    );
-
-    await Effect.runPromise(
-      harness.engine.dispatch({
-        type: "thread.user-input.respond",
-        commandId: CommandId.make("cmd-user-input-respond-stale"),
-        threadId: ThreadId.make("thread-1"),
-        requestId: asApprovalRequestId("user-input-request-1"),
-        answers: {
-          sandbox_mode: "workspace-write",
-        },
-        createdAt: now,
-      }),
+              turnId: null,
+              createdAt: now,
+            },
+            createdAt: now,
+          }),
+          harness.engine.dispatch({
+            type: "thread.user-input.respond",
+            commandId: CommandId.make("cmd-user-input-respond-stale"),
+            threadId: ThreadId.make("thread-1"),
+            requestId: asApprovalRequestId("user-input-request-1"),
+            answers: {
+              sandbox_mode: "workspace-write",
+            },
+            createdAt: now,
+          }),
+        ],
+        { discard: true },
+      ),
     );
 
     await waitFor(async () => {

@@ -38,6 +38,8 @@ import * as ServerSettings from "../serverSettings.ts";
 import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
+import { fetchCursorUsageEvents } from "./cursorDashboardApi.ts";
+import { readCursorSessionToken } from "./cursorSession.ts";
 import { parseRateTable, type RateTable } from "./usagePricing.ts";
 import {
   listTranscriptFiles,
@@ -51,7 +53,7 @@ import {
   pruneScanCache,
   type ScanCache,
 } from "./usageScanCache.ts";
-import type { UsageRecord } from "./usageTranscripts.ts";
+import { parseCursorUsageEvent, type UsageRecord } from "./usageTranscripts.ts";
 
 const LITELLM_RATES_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
@@ -314,6 +316,21 @@ export const make = Effect.gen(function* () {
     }
     const windowStartMs = DateTime.toEpochMillis(windowStart.value) - MTIME_SLACK_MS;
 
+    const windowEnd = DateTime.make(`${input.untilDay}T00:00:00Z`);
+    if (Option.isNone(windowEnd)) {
+      return yield* new UsageReadError({
+        reason: "invalidWindow",
+        detail: `untilDay '${input.untilDay}' is not a valid date`,
+      });
+    }
+    // The Cursor API has no file mtime to prefilter by, so its window is
+    // widened by a full day either side (on top of the same slack the file
+    // scan uses) to cover any zone offset between UTC and `input.timeZone`.
+    // The aggregator's own day bucketing, which does honour `timeZone`, still
+    // does the precise filtering.
+    const windowEndMs =
+      DateTime.toEpochMillis(windowEnd.value) + 24 * 60 * 60 * 1000 + MTIME_SLACK_MS;
+
     const aggregator = new UsageAggregator({
       timeZone: input.timeZone,
       sinceDay: input.sinceDay,
@@ -378,6 +395,77 @@ export const make = Effect.gen(function* () {
         distinctSessions: sessionIds.size,
         message: null,
       });
+    }
+
+    // Cursor has no local transcripts to scan: its usage lives behind the
+    // dashboard API, authenticated with the editor's own stored session.
+    const cursorSessionResult = yield* Effect.result(
+      readCursorSessionToken().pipe(Effect.provideService(Path.Path, path)),
+    );
+
+    if (cursorSessionResult._tag === "Failure") {
+      sources.push({
+        fingerprint: {
+          hostId,
+          provider: "cursor",
+          resolvedHomePath: `cursor:local:${hostId}`,
+          volumeId: "",
+        },
+        status: "failed",
+        scannedFiles: 0,
+        skippedFiles: 0,
+        malformedRecords: 0,
+        distinctSessions: 0,
+        message: cursorSessionResult.failure.message,
+      });
+    } else {
+      const cursorSession = cursorSessionResult.success;
+      // The account, not the host, is what makes two environments' Cursor
+      // usage the same physical source: unlike a Claude/Codex home directory,
+      // the same account is reachable from every machine signed into it, so
+      // `hostId` is fixed rather than the real host. Two laptops signed into
+      // one account must collapse to a single contribution instead of each
+      // fetching (and double-counting) that account's whole usage history.
+      const fingerprint = {
+        hostId: "cursor-dashboard-api",
+        provider: "cursor" as const,
+        resolvedHomePath: `cursor:account:${cursorSession.userId}`,
+        volumeId: "",
+      };
+      const cursorEventsResult = yield* Effect.result(
+        fetchCursorUsageEvents(cursorSession, windowStartMs, windowEndMs).pipe(
+          Effect.provideService(HttpClient.HttpClient, httpClient),
+        ),
+      );
+
+      if (cursorEventsResult._tag === "Failure") {
+        sources.push({
+          fingerprint,
+          status: "failed",
+          scannedFiles: 0,
+          skippedFiles: 0,
+          malformedRecords: 0,
+          distinctSessions: 0,
+          message: cursorEventsResult.failure.message,
+        });
+      } else {
+        const sessionIds = new Set<string>();
+        for (const event of cursorEventsResult.success) {
+          const record = parseCursorUsageEvent(event);
+          if (aggregator.add(record) && record.sessionId.length > 0) {
+            sessionIds.add(record.sessionId);
+          }
+        }
+        sources.push({
+          fingerprint,
+          status: "ok",
+          scannedFiles: cursorEventsResult.success.length,
+          skippedFiles: 0,
+          malformedRecords: 0,
+          distinctSessions: sessionIds.size,
+          message: null,
+        });
+      }
     }
 
     const pruned = pruneScanCache(fileCache, {

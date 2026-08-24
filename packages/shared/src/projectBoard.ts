@@ -54,6 +54,30 @@ function statusSectionLabel(status: ProjectBoardItemStatus): string {
 }
 
 /**
+ * Split items into area groups: named areas sorted alphabetically, then
+ * uncategorized (area: null) last. A single group back means the caller
+ * shouldn't bother rendering area headers — nothing to distinguish.
+ */
+export function groupProjectBoardItemsByArea(
+  items: ReadonlyArray<ProjectBoardItem>,
+): Array<{ area: string | null; items: ProjectBoardItem[] }> {
+  const byArea = new Map<string, ProjectBoardItem[]>();
+  for (const item of items) {
+    const key = item.area ?? "";
+    const group = byArea.get(key);
+    if (group) group.push(item);
+    else byArea.set(key, [item]);
+  }
+  const areaNames = [...byArea.keys()].filter((name) => name !== "").sort();
+  const groups: Array<{ area: string | null; items: ProjectBoardItem[] }> = areaNames.map(
+    (area) => ({ area, items: byArea.get(area) ?? [] }),
+  );
+  const uncategorized = byArea.get("");
+  if (uncategorized) groups.push({ area: null, items: uncategorized });
+  return groups;
+}
+
+/**
  * Compact board digest for humans and agents — not a full dump of notes.
  */
 export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>): string {
@@ -86,14 +110,30 @@ export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>)
     `Totals: ${byStatus.inProgress.length} in progress, ${byStatus.backlog.length} backlog, ${byStatus.ready.length} ready, ${byStatus.inReview.length} in review, ${byStatus.blocked.length} blocked, ${byStatus.completed.length} done, ${byStatus.cancelled.length} cancelled (${activeItems.length} active${archivedCount > 0 ? `, ${archivedCount} archived` : ""}).`,
   ];
 
+  const itemLine = (item: ProjectBoardItem): string => {
+    const turnCount = item.linkedTurnIds?.length ?? 0;
+    const turnSuffix =
+      turnCount > 0 ? ` · ${turnCount} linked turn${turnCount === 1 ? "" : "s"}` : "";
+    return `- [${item.id}] ${item.title}${turnSuffix}`;
+  };
+
   const appendSection = (status: ProjectBoardItemStatus, sectionItems: ProjectBoardItem[]) => {
     if (sectionItems.length === 0) return;
     lines.push("", `${statusSectionLabel(status)}:`);
-    for (const item of sectionItems) {
-      const turnCount = item.linkedTurnIds?.length ?? 0;
-      const turnSuffix =
-        turnCount > 0 ? ` · ${turnCount} linked turn${turnCount === 1 ? "" : "s"}` : "";
-      lines.push(`- [${item.id}] ${item.title}${turnSuffix}`);
+
+    // Grouped by area so an agent can see at a glance which areas a status
+    // hasn't touched yet, without rereading every card. Skipped when the
+    // section only spans one area (or none): a heading over a single group
+    // teaches nothing and costs a line.
+    const groups = groupProjectBoardItemsByArea(sectionItems);
+    if (groups.length <= 1) {
+      for (const item of sectionItems) lines.push(itemLine(item));
+      return;
+    }
+
+    for (const group of groups) {
+      lines.push(`  ${group.area ?? "Uncategorized"}:`);
+      for (const item of group.items) lines.push(`  ${itemLine(item)}`);
     }
   };
 
