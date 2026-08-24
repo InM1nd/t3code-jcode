@@ -1614,7 +1614,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             assert.strictEqual(initialCodex?.status, "error");
             assert.strictEqual(initialCodex?.installed, false);
-            assert.deepStrictEqual(spawnedCommands, [firstMissing]);
+            // The fork registers an extra `jcode` provider that boot-probes
+            // alongside codex; this assertion is about codex's spawn, so
+            // filter the fork provider out rather than baking in its order.
+            assert.deepStrictEqual(
+              spawnedCommands.filter((command) => command !== "jcode"),
+              [firstMissing],
+            );
 
             // Drive a settings change. The Hydration layer's
             // `SettingsWatcherLive` consumes this via `streamChanges`,
@@ -1651,7 +1657,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             });
 
             const reprobedCodex = refreshed.find((provider) => provider.instanceId === "codex");
-            assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
+            assert.deepStrictEqual(
+              spawnedCommands.filter((command) => command !== "jcode"),
+              [firstMissing, secondMissing],
+            );
             assert.strictEqual(reprobedCodex?.status, "error");
             assert.strictEqual(reprobedCodex?.installed, false);
           }).pipe(Effect.provide(runtimeServices));
@@ -1807,6 +1816,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 "codex",
                 "cursor",
                 "grok",
+                "jcode",
                 "opencode",
               ]);
               assert.strictEqual(cursorProvider?.enabled, false);

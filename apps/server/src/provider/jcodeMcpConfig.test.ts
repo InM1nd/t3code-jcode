@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import { ThreadId } from "@t3tools/contracts";
 import * as NodeFS from "node:fs";
-import * as NodeOs from "node:os";
+import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -65,7 +65,7 @@ describe("jcodeMcpConfig", () => {
   });
 
   it("writes auth + mcp.json under cwd/secrets", () => {
-    const root = NodeFS.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "jcode-mcp-config-"));
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "jcode-mcp-config-"));
     const cwd = NodePath.join(root, "project");
     const secretsDir = NodePath.join(root, "secrets");
     NodeFS.mkdirSync(cwd, { recursive: true });
