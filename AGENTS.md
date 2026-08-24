@@ -142,6 +142,12 @@ Full glossary with file links: `docs/internals/glossary.md`
 - Our users drive agents all day and notice a dropped frame, a lying spinner, and a stale label. No continuously repainting animations; they peg the GPU on high-refresh displays.
 - If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
 
+## Fork isolation
+
+This repo is a fork of `pingdotgg/t3code`. Before adding a feature, read
+`docs/fork/isolation.md`: fork code lives in fork-owned files, and an upstream
+file gets at most ~10 added lines of wiring — never edits to existing lines.
+
 ## Additional tips
 
 - Don't verify with browsers or computer use unless the user explicitly agrees or requests it.
