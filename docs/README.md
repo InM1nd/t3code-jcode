@@ -7,9 +7,11 @@
 - [Work modes](./user/work-modes.md)
 - [Keyboard shortcuts](./user/keybindings.md)
 - [Organizing threads](./user/thread-sidebar.md)
+- [Review usage](./user/usage.md)
 - [Customize a project icon](./user/project-settings.md)
 - [Project Board](./user/project-board.md)
 - [Project Activity](./user/project-activity.md)
+- [Mobile appearance](./user/mobile-appearance.md)
 - [Remote access](./user/remote-access.md)
 - [Keeping app and server in sync](./user/updating.md)
 - [Source control integrations](./user/source-control.md)
@@ -37,6 +39,7 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 - [Environment auth](./internals/environment-auth.md)
 - [T3 Connect](./internals/t3-connect.md)
 - [CI gates](./internals/ci.md)
+- [Engineering work artifacts](./internals/work-artifacts.md)
 
 ### Runbooks
 

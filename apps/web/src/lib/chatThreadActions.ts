@@ -1,6 +1,6 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ProjectId, ScopedProjectRef, ThreadId } from "@t3tools/contracts";
-import type { DraftThreadEnvMode } from "../composerDraftStore";
+import type { DraftId, DraftThreadEnvMode } from "../composerDraftStore";
 
 interface ThreadContextLike {
   environmentId: EnvironmentId;
@@ -8,7 +8,7 @@ interface ThreadContextLike {
 }
 
 export type NewThreadResult = {
-  draftId: string;
+  draftId: DraftId;
   threadId: ThreadId;
 };
 
@@ -23,7 +23,8 @@ interface NewThreadHandler {
       seedPrompt?: string;
       replace?: boolean;
     },
-  ): Promise<NewThreadResult | undefined>;
+    // The opened draft's identity, which most callers have no use for.
+  ): Promise<unknown>;
 }
 
 export interface ChatThreadActionContext {

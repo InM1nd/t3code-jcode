@@ -65,7 +65,11 @@ export const ThreadProviderIcons = memo(function ThreadProviderIcons(props: {
   driverKind: ProviderDriverKind;
   displayName: string;
   innerKind?: JcodeInnerProviderIconKind | null;
+  accentColor?: string | undefined;
+  showBadge?: boolean;
+  badgeContent?: "initials" | "none";
   iconClassName?: string;
+  badgeClassName?: string;
   className?: string;
 }) {
   const innerDriver = props.innerKind ? INNER_KIND_TO_DRIVER[props.innerKind] : null;
@@ -86,7 +90,11 @@ export const ThreadProviderIcons = memo(function ThreadProviderIcons(props: {
       <ProviderInstanceIcon
         driverKind={props.driverKind}
         displayName={props.displayName}
+        {...(props.accentColor ? { accentColor: props.accentColor } : {})}
+        {...(props.showBadge !== undefined ? { showBadge: props.showBadge } : {})}
+        {...(props.badgeContent ? { badgeContent: props.badgeContent } : {})}
         {...(props.iconClassName ? { iconClassName: props.iconClassName } : {})}
+        {...(props.badgeClassName ? { badgeClassName: props.badgeClassName } : {})}
       />
       {InnerIcon ? (
         <InnerIcon className={cn("size-3.5 shrink-0", props.iconClassName)} aria-hidden />
