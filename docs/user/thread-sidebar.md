@@ -1,8 +1,11 @@
 # Organizing threads
 
-On web and desktop, the sidebar groups each project's chats together. Select a project header to
-collapse or expand its history; T3 Code remembers that choice on this device. Pins, active chats,
-snoozed chats, and settled chats remain in their project and keep their usual actions.
+Pin a thread from its context menu to keep it in the pinned section above your active work.
+`mod+shift+p` pins or unpins the thread you have open. Pinned threads are shown independently of
+their project, including when you connect to more than one environment.
+
+To require confirmation before unpinning, enable **Settings → General → Unpin confirmation**. The
+confirmation applies to the sidebar controls, thread menus, and the `mod+shift+p` shortcut.
 
 ## Starting a thread in the right workspace
 
@@ -18,7 +21,15 @@ model in any existing worktree. A started thread keeps its selected workspace.
 A project with a long settled history shows recent chats first. Select **Show more** inside that
 project to reveal older settled chats.
 
-Pin a thread from its context menu to keep it at the top of its project's history.
+Pinned threads still move to **Settled** when they become inactive. They also move when their pull
+request merges if **Auto-settle merged threads** is enabled.
+
+When you un-settle a thread, it returns to the top of the active list so you can find it right
+away. Its timestamps do not change. Other threads keep their positions.
+
+Right-click a pull request link in a thread and choose **Link to thread** to show that pull request
+in the sidebar. The thread settles when the linked pull request merges if **Auto-settle merged
+threads** is enabled. Right-click the same link and choose **Unlink from thread** to remove it.
 
 On web and desktop, drag a pinned thread to change its position. On mobile, open the thread's menu
 and choose **Move up** or **Move down**. The order is stored by the server and appears on your

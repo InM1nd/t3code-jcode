@@ -5,14 +5,11 @@ import {
   type ModelSelection,
   ProviderDriverKind,
   ProviderInstanceId,
-  type ProviderOptionSelection,
   type ServerProvider,
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
-import { resolveJcodeInnerProvider } from "@t3tools/shared/jcodeInnerProvider";
 import {
   createModelSelection,
-  getProviderOptionStringSelectionValue,
   normalizeCustomModelSlug,
   resolveSelectableModel,
 } from "@t3tools/shared/model";
@@ -81,6 +78,27 @@ export interface AppModelOption {
   isCustom: boolean;
   isDefault?: boolean;
   isLegacy?: boolean;
+  isUnavailable?: boolean;
+}
+
+function appendUnavailableOpenCodeSelection(
+  options: AppModelOption[],
+  rawModels: ReadonlyArray<ServerProvider["models"][number]>,
+  provider: ProviderDriverKind,
+  selectedModel: string | null | undefined,
+  hiddenModels: ReadonlyArray<string>,
+): AppModelOption[] {
+  if (provider !== "opencode") return options;
+  const slug = normalizeCustomModelSlug(selectedModel);
+  if (!slug) return options;
+
+  // A model that exists in the raw catalog can be absent from `options`
+  // because the user hid it. Keep that preference authoritative.
+  if (rawModels.some((model) => model.slug === slug)) return options;
+  if (hiddenModels.includes(slug)) return options;
+  if (options.some((option) => option.slug === slug)) return options;
+
+  return [...options, { slug, name: slug, isCustom: false, isUnavailable: true }];
 }
 
 function toAppModelOption(model: ServerProvider["models"][number]): AppModelOption {
@@ -154,9 +172,10 @@ export function getAppModelOptions(
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
   provider: ProviderDriverKind,
-  _selectedModel?: string | null,
+  selectedModel?: string | null,
 ): AppModelOption[] {
-  const options: AppModelOption[] = getProviderModels(providers, provider).map(toAppModelOption);
+  const rawModels = getProviderModels(providers, provider);
+  const options: AppModelOption[] = rawModels.map(toAppModelOption);
   const seen = new Set(options.map((option) => option.slug));
   const builtInModelSlugs = new Set(
     Arr.filterMap(getProviderModels(providers, provider), (model) =>
@@ -183,9 +202,13 @@ export function getAppModelOptions(
     });
   }
 
-  return applyInstanceModelPreferences(
-    options,
-    readInstanceModelPreferences(settings, defaultInstanceId),
+  const preferences = readInstanceModelPreferences(settings, defaultInstanceId);
+  return appendUnavailableOpenCodeSelection(
+    applyInstanceModelPreferences(options, preferences),
+    rawModels,
+    provider,
+    selectedModel,
+    preferences.hiddenModels,
   );
 }
 
@@ -203,6 +226,7 @@ export function getAppModelOptions(
 export function getAppModelOptionsForInstance(
   settings: UnifiedSettings,
   entry: ProviderInstanceEntry,
+  selectedModel?: string | null,
 ): AppModelOption[] {
   const options: AppModelOption[] = entry.models.map(toAppModelOption);
   const seen = new Set(options.map((option) => option.slug));
@@ -222,9 +246,13 @@ export function getAppModelOptionsForInstance(
     options.push({ slug, name: slug, isCustom: true });
   }
 
-  return applyInstanceModelPreferences(
-    options,
-    readInstanceModelPreferences(settings, entry.instanceId),
+  const preferences = readInstanceModelPreferences(settings, entry.instanceId);
+  return appendUnavailableOpenCodeSelection(
+    applyInstanceModelPreferences(options, preferences),
+    entry.models,
+    entry.driverKind,
+    selectedModel,
+    preferences.hiddenModels,
   );
 }
 
@@ -247,31 +275,36 @@ export function resolveAppModelSelectionForInstance(
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
   selectedModel: string | null | undefined,
-  selectedOptions?: ReadonlyArray<ProviderOptionSelection> | null | undefined,
+  resolutionOptions?:
+    | { readonly preserveUnavailableSelection?: boolean }
+    | ReadonlyArray<{ readonly id: string; readonly value: string | boolean }>,
 ): string | null {
-  const entries = deriveProviderInstanceEntries(providers);
-  const entry = entries.find((candidate) => candidate.instanceId === instanceId);
+  const preserveUnavailableSelection =
+    resolutionOptions !== undefined &&
+    !Array.isArray(resolutionOptions) &&
+    "preserveUnavailableSelection" in resolutionOptions &&
+    resolutionOptions.preserveUnavailableSelection === true;
+  const entry = deriveProviderInstanceEntries(providers).find(
+    (candidate) => candidate.instanceId === instanceId,
+  );
   if (!entry) return null;
-  const jcodeInnerProvider =
-    entry.driverKind === "jcode"
-      ? resolveJcodeInnerProvider(
-          getProviderOptionStringSelectionValue(selectedOptions, "jcodeProvider"),
-        )
-      : null;
-  if (jcodeInnerProvider) {
-    const sourceOptions = getAppModelOptionsForInstance(settings, entry).filter(
-      (option) => option.subProvider === jcodeInnerProvider.label,
-    );
-    return (
-      resolveSelectableModel(entry.driverKind, selectedModel, sourceOptions) ??
-      sourceOptions.find((option) => option.isDefault)?.slug ??
-      sourceOptions[0]?.slug ??
-      null
-    );
+  const options = getAppModelOptionsForInstance(
+    settings,
+    entry,
+    preserveUnavailableSelection ? selectedModel : null,
+  );
+  const resolvedSelection = resolveSelectableModel(entry.driverKind, selectedModel, options);
+  if (resolvedSelection) {
+    return resolvedSelection;
   }
-  const options = getAppModelOptionsForInstance(settings, entry);
+  if (preserveUnavailableSelection && entry.driverKind === "opencode") {
+    const unavailableSelection = normalizeCustomModelSlug(selectedModel);
+    const hiddenModels = readInstanceModelPreferences(settings, entry.instanceId).hiddenModels;
+    if (unavailableSelection && !hiddenModels.includes(unavailableSelection)) {
+      return unavailableSelection;
+    }
+  }
   return (
-    resolveSelectableModel(entry.driverKind, selectedModel, options) ??
     options.find((option) => option.isDefault)?.slug ??
     options[0]?.slug ??
     entry.models.find((model) => model.isDefault)?.slug ??
@@ -288,12 +321,19 @@ export function resolveAppModelSelectionForInstance(
 export function getCustomModelOptionsByInstance(
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
-  _selectedInstanceId?: ProviderInstanceId | null,
-  _selectedModel?: string | null,
+  selectedInstanceId?: ProviderInstanceId | null,
+  selectedModel?: string | null,
 ): ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>> {
   const out = new Map<ProviderInstanceId, ReadonlyArray<ModelEsque>>();
   for (const entry of deriveProviderInstanceEntries(providers)) {
-    out.set(entry.instanceId, getAppModelOptionsForInstance(settings, entry));
+    out.set(
+      entry.instanceId,
+      getAppModelOptionsForInstance(
+        settings,
+        entry,
+        entry.instanceId === selectedInstanceId ? selectedModel : null,
+      ),
+    );
   }
   return out;
 }

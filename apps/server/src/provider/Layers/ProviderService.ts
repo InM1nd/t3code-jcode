@@ -1,4 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
 /**
  * ProviderServiceLive - Cross-provider orchestration layer.
  *
@@ -20,6 +19,7 @@ import {
   ProviderSendTurnInput,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
+  ProviderUploadFeedbackInput,
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
@@ -37,11 +37,6 @@ import * as SchemaIssue from "effect/SchemaIssue";
 import * as Stream from "effect/Stream";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
-import {
-  isTextLikeChatFileMime,
-  PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS,
-} from "@t3tools/shared/chatAttachments";
-import * as NodeFS from "node:fs";
 import * as ServerConfig from "../../config.ts";
 import {
   increment,
@@ -734,55 +729,25 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       );
     }
 
-    // Adapters inline attachment pixels into the model prompt, but the model's
-    // tools cannot dereference pixels. Appending the on-disk path is what lets
-    // a turn like "include this screenshot in the PR" copy the actual file.
-    // Text-like file attachments are also embedded (capped) so every provider
-    // sees their contents without per-adapter file APIs. This runs after schema
-    // decode, so the appended lines are exempt from
-    // PROVIDER_SEND_TURN_MAX_INPUT_CHARS; attachment count is capped, so the
-    // overhead is bounded. Unresolvable ids are skipped here and surface as
-    // adapter errors when the file is read for inlining.
-    const attachmentContextParts: string[] = [];
-    for (const attachment of attachments) {
+    // Every attachment gets an on-disk path in the prompt so the model's tools
+    // can dereference the actual file. All attachments then go to the adapter,
+    // and each adapter decides what its provider ingests natively: OpenCode
+    // sends generic files as file parts, the others send images only and rely
+    // on the path line for everything else. Unresolvable ids are skipped here
+    // and surface as adapter errors when the file is read.
+    const attachmentPathLines = attachments.flatMap((attachment) => {
       const attachmentPath = resolveAttachmentPath({
         attachmentsDir: serverConfig.attachmentsDir,
         attachment,
       });
-      if (attachmentPath === null) continue;
-      attachmentContextParts.push(
-        `[Attached ${attachment.type} "${attachment.name}" is saved at: ${attachmentPath}]`,
-      );
-      if (attachment.type === "file" && isTextLikeChatFileMime(attachment.mimeType)) {
-        try {
-          const raw = NodeFS.readFileSync(attachmentPath, "utf8");
-          const truncated =
-            raw.length > PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS
-              ? `${raw.slice(0, PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS)}
-
-[...truncated ${raw.length - PROVIDER_SEND_TURN_MAX_FILE_TEXT_CHARS} characters]`
-              : raw;
-          attachmentContextParts.push(
-            `[Attached file "${attachment.name}" contents]
-\`\`\`
-${truncated}
-\`\`\``,
-          );
-        } catch {
-          attachmentContextParts.push(
-            `[Attached file "${attachment.name}" could not be read as text; use the path above.]`,
-          );
-        }
-      } else if (attachment.type === "file") {
-        attachmentContextParts.push(
-          `[Attached file "${attachment.name}" (${attachment.mimeType}) — open/read it from the path above.]`,
-        );
-      }
-    }
+      return attachmentPath === null
+        ? []
+        : [`[Attached ${attachment.type} "${attachment.name}" is saved at: ${attachmentPath}]`];
+    });
     const inputTextWithAttachmentPaths =
-      attachmentContextParts.length === 0
+      attachmentPathLines.length === 0
         ? parsed.input
-        : [parsed.input, attachmentContextParts.join("\n\n")]
+        : [parsed.input, attachmentPathLines.join("\n")]
             .filter((part): part is string => typeof part === "string" && part.length > 0)
             .join("\n\n");
 
@@ -791,13 +756,12 @@ ${truncated}
       ...(inputTextWithAttachmentPaths !== undefined
         ? { input: inputTextWithAttachmentPaths }
         : {}),
-      attachments,
     };
     yield* Effect.annotateCurrentSpan({
       "provider.operation": "send-turn",
       "provider.thread_id": input.threadId,
       "provider.interaction_mode": input.interactionMode,
-      "provider.attachment_count": input.attachments.length,
+      "provider.attachment_count": attachments.length,
     });
     let metricProvider = "unknown";
     let metricModel = input.modelSelection?.model;
@@ -841,7 +805,7 @@ ${truncated}
         // often, since every toggle restarts the session. Recording it per turn
         // gives a usage-weighted view and lets it cross with interactionMode.
         runtimeMode: routed.runtimeMode,
-        attachmentCount: input.attachments.length,
+        attachmentCount: attachments.length,
         hasInput: typeof input.input === "string" && input.input.trim().length > 0,
       });
       return turn;
@@ -1152,6 +1116,47 @@ ${truncated}
     );
   });
 
+  const uploadFeedback: ProviderServiceMethod<"uploadFeedback"> = Effect.fn("uploadFeedback")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.uploadFeedback",
+        schema: ProviderUploadFeedbackInput,
+        payload: rawInput,
+      });
+      let routed = yield* resolveRoutableSession({
+        threadId: input.threadId,
+        operation: "ProviderService.uploadFeedback",
+        allowRecovery: false,
+      });
+      if (routed.adapter.uploadFeedback === undefined) {
+        return yield* toValidationError(
+          "ProviderService.uploadFeedback",
+          `Provider '${routed.adapter.provider}' does not support feedback uploads.`,
+        );
+      }
+      if (!routed.isActive) {
+        routed = yield* resolveRoutableSession({
+          threadId: input.threadId,
+          operation: "ProviderService.uploadFeedback",
+          allowRecovery: true,
+        });
+      }
+      const uploadFeedback = routed.adapter.uploadFeedback;
+      if (uploadFeedback === undefined) {
+        return yield* toValidationError(
+          "ProviderService.uploadFeedback",
+          `Provider '${routed.adapter.provider}' does not support feedback uploads.`,
+        );
+      }
+      yield* Effect.annotateCurrentSpan({
+        "provider.operation": "upload-feedback",
+        "provider.kind": routed.adapter.provider,
+        "provider.thread_id": input.threadId,
+      });
+      return yield* uploadFeedback(input);
+    },
+  );
+
   const runStopAll = Effect.fn("runStopAll")(function* () {
     const threadIds = yield* directory.listThreadIds();
     const currentAdapters = yield* getAdapterEntries;
@@ -1223,6 +1228,7 @@ ${truncated}
     getCapabilities,
     getInstanceInfo,
     rollbackConversation,
+    uploadFeedback,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.

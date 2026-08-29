@@ -12,10 +12,12 @@ import { connectCommand } from "./cli/connect.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { sharedServerCommandFlags } from "./cli/config.ts";
+import { isEntrypoint } from "./entrypoint.ts";
 import { projectCommand } from "./cli/project.ts";
 import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { serviceCommand } from "./cli/service.ts";
 import { servicePreflightCommand } from "./cli/servicePreflight.ts";
+import { themeCommand } from "./cli/theme.ts";
 import { triageCommand } from "./cli/triage.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
@@ -56,6 +58,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       projectCommand,
       serviceCommand,
       servicePreflightCommand,
+      themeCommand,
       triageCommand,
       cloudEnabled ? connectCommand : connectUnavailableCommand,
     ]),
@@ -63,23 +66,16 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
 
 export const cli = makeCli();
 
-if (import.meta.main) {
-  // Hidden stdio MCP entry for jcode (see provider/jcodeMcpConfig.ts). Must run
-  // before Effect CLI so stdin stays available for NDJSON framing.
-  if (process.argv[2] === "__jcode-mcp-stdio") {
-    const { runJcodeMcpStdioBridge } = await import("./mcp/jcodeMcpStdioBridge.ts");
-    try {
-      await runJcodeMcpStdioBridge();
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`t3 jcode MCP bridge failed: ${detail}\n`);
-      process.exit(1);
-    }
-  } else {
-    Command.run(cli, { version: packageJson.version }).pipe(
-      Effect.scoped,
-      Effect.provide(CliRuntimeLayer),
-      NodeRuntime.runMain,
-    );
-  }
+if (
+  isEntrypoint({
+    moduleUrl: import.meta.url,
+    entryPath: process.argv[1],
+    runtimeMain: import.meta.main,
+  })
+) {
+  Command.run(cli, { version: packageJson.version }).pipe(
+    Effect.scoped,
+    Effect.provide(CliRuntimeLayer),
+    NodeRuntime.runMain,
+  );
 }

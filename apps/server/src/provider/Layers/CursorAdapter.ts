@@ -43,7 +43,6 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
-import { prependWorkModeInstruction, resolveWorkMode } from "../WorkMode.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -225,7 +224,7 @@ function resolveRequestedModeId(input: {
     return undefined;
   }
 
-  if (resolveWorkMode(input.interactionMode)?.nativeInteractionMode === "plan") {
+  if (input.interactionMode === "plan") {
     return findModeByAliases(modeState.availableModes, ACP_PLAN_MODE_ALIASES)?.id;
   }
 
@@ -968,12 +967,13 @@ export function makeCursorAdapter(
           }
 
           const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
-          const text = prependWorkModeInstruction(input.interactionMode, input.input);
-          if (text) {
-            promptParts.push({ type: "text", text });
+          if (input.input?.trim()) {
+            promptParts.push({ type: "text", text: input.input.trim() });
           }
           if (input.attachments && input.attachments.length > 0) {
             for (const attachment of input.attachments) {
+              // Cursor ingests images only. Generic files reach the agent
+              // through the path line ProviderService puts in the prompt.
               if (attachment.type !== "image") {
                 continue;
               }
