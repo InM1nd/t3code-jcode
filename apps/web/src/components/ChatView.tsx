@@ -54,6 +54,7 @@ import {
 } from "@t3tools/shared/model";
 import { indexProjectBoardItemsByTurnId } from "@t3tools/shared/projectBoard";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
+import { consumeBoardItemAwaitingTurnLink } from "~/lib/boardTurnLinkPending";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import { truncate } from "@t3tools/shared/String";
 import {
@@ -171,6 +172,8 @@ import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
 import { RightPanelTabs, type PullRequestTabStatus } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
+import { ProjectBoardPanel } from "./ProjectBoardPanel";
+import { ProjectActivityPanel } from "./ProjectActivityPanel";
 import {
   deriveAgentPanelModel,
   foldSubagentActivities,
@@ -1294,6 +1297,9 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const routeThreadKey = useMemo(() => scopedThreadKey(routeThreadRef), [routeThreadRef]);
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
+  const upsertBoardItem = useAtomCommand(projectEnvironment.upsertBoardItem, {
+    reportFailure: false,
+  });
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
@@ -1835,6 +1841,27 @@ function ChatViewContent(props: ChatViewProps) {
     () => indexProjectBoardItemsByTurnId(activeProject?.boardItems ?? []),
     [activeProject?.boardItems],
   );
+  useEffect(() => {
+    if (!activeThread || !activeLatestTurn?.turnId || !activeProject) return;
+    const itemId = consumeBoardItemAwaitingTurnLink(activeThread.id);
+    if (!itemId) return;
+    const item = (activeProject.boardItems ?? []).find((entry) => entry.id === itemId);
+    if (!item) return;
+    if (item.linkedTurnIds?.includes(activeLatestTurn.turnId)) return;
+    void upsertBoardItem({
+      environmentId: activeThread.environmentId,
+      input: {
+        projectId: activeThread.projectId,
+        itemId: item.id,
+        title: item.title,
+        status: item.status,
+        ...(item.notes !== undefined ? { notes: item.notes } : {}),
+        source: item.source,
+        sourceThreadId: item.sourceThreadId ?? activeThread.id,
+        linkTurnId: activeLatestTurn.turnId,
+      },
+    });
+  }, [activeLatestTurn?.turnId, activeProject, activeThread, upsertBoardItem]);
   const handleNewThreadInActiveProject = useCallback(() => {
     startNewThreadForProject(activeProjectRef, handleNewThread);
   }, [activeProjectRef, handleNewThread]);
@@ -3533,6 +3560,18 @@ function ChatViewContent(props: ChatViewProps) {
   const addAgentsSurface = useCallback(() => {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
+  }, [activeThreadRef]);
+  const addBoardSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "board");
+  }, [activeThreadRef]);
+  const addActivitySurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "activity");
+  }, [activeThreadRef]);
+  const toggleBoardSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().toggle(activeThreadRef, "board");
   }, [activeThreadRef]);
   const openFileSurface = useCallback(
     (relativePath: string) => {
@@ -5274,6 +5313,13 @@ function ChatViewContent(props: ChatViewProps) {
         return;
       }
 
+      if (command === "board.toggle") {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleBoardSurface();
+        return;
+      }
+
       if (command === "rightPanel.toggleMaximized") {
         event.preventDefault();
         event.stopPropagation();
@@ -5385,6 +5431,7 @@ function ChatViewContent(props: ChatViewProps) {
     supportsPinning,
     supportsSettlement,
     confirmAndUnpinThread,
+    toggleBoardSurface,
     toggleRightPanel,
     toggleRightPanelMaximized,
     toggleTerminalVisibility,
@@ -7008,6 +7055,21 @@ function ChatViewContent(props: ChatViewProps) {
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
       />
+    ) : activeRightPanelSurface?.kind === "board" && activeProject ? (
+      <ProjectBoardPanel
+        environmentId={activeProject.environmentId}
+        projectId={activeProject.id}
+        sourceThreadId={activeThreadRef?.threadId ?? null}
+        selectedItemId={activeRightPanelSurface.selectedItemId}
+        onSelectItem={(itemId) =>
+          useRightPanelStore.getState().selectBoardItem(activeThreadRef, itemId)
+        }
+      />
+    ) : activeRightPanelSurface?.kind === "activity" && activeProject ? (
+      <ProjectActivityPanel
+        environmentId={activeProject.environmentId}
+        projectId={activeProject.id}
+      />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&
       activeWorkspaceRoot ? (
@@ -7486,6 +7548,8 @@ function ChatViewContent(props: ChatViewProps) {
           onAddFiles={addFilesSurface}
           onAddPullRequest={addPullRequestSurface}
           onAddAgents={addAgentsSurface}
+          onAddBoard={addBoardSurface}
+          onAddActivity={addActivitySurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
@@ -7526,6 +7590,8 @@ function ChatViewContent(props: ChatViewProps) {
             onAddFiles={addFilesSurface}
             onAddPullRequest={addPullRequestSurface}
             onAddAgents={addAgentsSurface}
+            onAddBoard={addBoardSurface}
+            onAddActivity={addActivitySurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
