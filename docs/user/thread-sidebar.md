@@ -4,6 +4,17 @@ On web and desktop, the sidebar groups each project's chats together. Select a p
 collapse or expand its history; T3 Code remembers that choice on this device. Pins, active chats,
 snoozed chats, and settled chats remain in their project and keep their usual actions.
 
+## Starting a thread in the right workspace
+
+When you start a new thread in a Git project, select its workspace in the composer context strip:
+
+- **Current checkout** keeps the repository's main checkout.
+- **Existing worktrees** lists worktrees already used by the project, with their branch and path.
+- **New worktree** prepares a separate worktree; choose its base branch in the branch selector.
+
+Model selection remains independent of the workspace choice, so a new thread can use a different
+model in any existing worktree. A started thread keeps its selected workspace.
+
 A project with a long settled history shows recent chats first. Select **Show more** inside that
 project to reveal older settled chats.
 

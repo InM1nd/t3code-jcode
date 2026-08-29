@@ -77,6 +77,7 @@ interface BranchToolbarBranchSelectorProps {
   onActiveThreadBranchOverrideChange?: (refName: string | null) => void;
   startFromOrigin: boolean;
   onStartFromOriginChange: (startFromOrigin: boolean) => void;
+  showStartFromOriginControl?: boolean;
   onCheckoutPullRequestRequest?: (reference: string) => void;
   onComposerFocusRequest?: () => void;
 }
@@ -96,6 +97,7 @@ export function BranchToolbarBranchSelector({
   onActiveThreadBranchOverrideChange,
   startFromOrigin,
   onStartFromOriginChange,
+  showStartFromOriginControl = true,
   onCheckoutPullRequestRequest,
   onComposerFocusRequest,
 }: BranchToolbarBranchSelectorProps) {
@@ -835,7 +837,7 @@ export function BranchToolbarBranchSelector({
               />
             </ComboboxListVirtualized>
           </div>
-          {isSelectingWorktreeBase ? (
+          {isSelectingWorktreeBase && showStartFromOriginControl ? (
             <Tooltip>
               <TooltipTrigger
                 render={

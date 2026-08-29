@@ -19,6 +19,7 @@ const EMPTY_BOARD_ITEMS_BY_TURN_ID = new Map<
   TurnId,
   ReadonlyArray<Pick<ProjectBoardItem, "id" | "title" | "status">>
 >();
+const EMPTY_TURN_USAGE_BY_TURN_ID = new Map<TurnId, TandemTurnUsageValue>();
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
 import {
   createContext,
@@ -41,6 +42,9 @@ import {
   workEntryDisplayIndicatesToolFailure,
   workLogEntryIsToolLike,
 } from "../../session-logic";
+import { formatQuietBoardLabel } from "../../tandem/quietBoard";
+import { TandemTurnUsage } from "../../tandem/TandemTurnUsage";
+import type { TandemTurnUsage as TandemTurnUsageValue } from "../../tandem/turnUsage";
 import { type TurnDiffSummary } from "../../types";
 import {
   getRenderablePatch,
@@ -154,6 +158,7 @@ interface TimelineRowSharedState {
     TurnId,
     ReadonlyArray<Pick<ProjectBoardItem, "id" | "title" | "status">>
   >;
+  turnUsageByTurnId: ReadonlyMap<TurnId, TandemTurnUsageValue>;
 }
 
 interface TimelineRowActivityState {
@@ -254,6 +259,8 @@ interface MessagesTimelineProps {
     TurnId,
     ReadonlyArray<Pick<ProjectBoardItem, "id" | "title" | "status">>
   >;
+  /** Provider-reported token usage indexed by turn. Missing means it was not reported. */
+  turnUsageByTurnId?: ReadonlyMap<TurnId, TandemTurnUsageValue>;
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +300,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   topFadeEnabled = false,
   loadEarlier = null,
   boardItemsByTurnId = EMPTY_BOARD_ITEMS_BY_TURN_ID,
+  turnUsageByTurnId = EMPTY_TURN_USAGE_BY_TURN_ID,
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -531,6 +539,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       agentPanelModel,
       onOpenAgents,
       boardItemsByTurnId,
+      turnUsageByTurnId,
     }),
     [
       timestampFormat,
@@ -548,6 +557,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       agentPanelModel,
       onOpenAgents,
       boardItemsByTurnId,
+      turnUsageByTurnId,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -994,17 +1004,15 @@ function BoardTurnBadges({ turnId }: { turnId: TurnId | null | undefined }) {
   if (!turnId) return null;
   const items = ctx.boardItemsByTurnId.get(turnId);
   if (!items || items.length === 0) return null;
+  const titles = items.map((item) => item.title).join("\n");
   return (
-    <div className="mb-1.5 flex max-w-full flex-wrap gap-1">
-      {items.map((item) => (
-        <span
-          key={item.id}
-          className="inline-flex max-w-full items-center truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-          title={item.title}
-        >
-          Board · {item.title}
-        </span>
-      ))}
+    <div className="mb-1.5 flex max-w-full">
+      <span
+        className="inline-flex max-w-full items-center truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+        title={titles}
+      >
+        {formatQuietBoardLabel(items.length)}
+      </span>
     </div>
   );
 }
@@ -1039,7 +1047,6 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   return (
     <div className="group flex flex-col items-end gap-1">
       <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
-        <BoardTurnBadges turnId={row.message.turnId} />
         {regularFiles.length > 0 ? (
           <div className="mb-2 flex max-w-[420px] flex-col gap-1.5">
             {regularFiles.map((file) => (
@@ -1187,7 +1194,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   return (
     <>
       <div className="relative min-w-0 px-1 py-0.5">
-        <BoardTurnBadges turnId={row.message.turnId} />
+        <BoardTurnBadges turnId={row.showAssistantMeta ? row.message.turnId : null} />
         <ChatMarkdown
           text={messageText}
           cwd={ctx.markdownCwd}
@@ -1205,6 +1212,9 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         {row.showAssistantMeta ? (
           <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/assistant:opacity-100">
             <AssistantCopyButton row={row} />
+            <TandemTurnUsage
+              usage={row.message.turnId ? ctx.turnUsageByTurnId.get(row.message.turnId) : undefined}
+            />
             {!row.message.streaming && (
               <Tooltip>
                 <TooltipTrigger

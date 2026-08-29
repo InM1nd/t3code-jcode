@@ -13,6 +13,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
+import { TandemDraftWorkspacePicker } from "../tandem/TandemDraftWorkspacePicker";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   type EnvMode,
@@ -472,20 +473,24 @@ export const BranchToolbar = memo(function BranchToolbar({
       className="chat-composer-context-strip group/composer-context -mt-4 mx-auto flex w-[calc(100%-2.75rem)] max-w-[calc(48rem-2.75rem)] items-center gap-2 overflow-x-clip overflow-y-visible ps-1 pe-2 pt-5 pb-1"
     >
       {isMobile && showGitControls ? (
-        <MobileRunContextSelector
-          envLocked={envLocked}
-          envModeLocked={envModeLocked}
-          environmentId={environmentId}
-          availableEnvironments={availableEnvironments}
-          showEnvironmentPicker={showEnvironmentPicker}
-          showEnvironmentIndicator={showEnvironmentIndicator}
-          onEnvironmentChange={onEnvironmentChange}
-          effectiveEnvMode={effectiveEnvMode}
-          activeWorktreePath={activeWorktreePath}
-          onEnvModeChange={onEnvModeChange}
-          previousWorktreeLabel={previousWorktreeLabel}
-          onUsePreviousWorktree={onUsePreviousWorktree}
-        />
+        draftThread && serverThread === null && draftId ? (
+          <TandemDraftWorkspacePicker draftId={draftId} />
+        ) : (
+          <MobileRunContextSelector
+            envLocked={envLocked}
+            envModeLocked={envModeLocked}
+            environmentId={environmentId}
+            availableEnvironments={availableEnvironments}
+            showEnvironmentPicker={showEnvironmentPicker}
+            showEnvironmentIndicator={showEnvironmentIndicator}
+            onEnvironmentChange={onEnvironmentChange}
+            effectiveEnvMode={effectiveEnvMode}
+            activeWorktreePath={activeWorktreePath}
+            onEnvModeChange={onEnvModeChange}
+            previousWorktreeLabel={previousWorktreeLabel}
+            onUsePreviousWorktree={onUsePreviousWorktree}
+          />
+        )
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-1">
           {showEnvironmentIndicator && availableEnvironments && (
@@ -506,14 +511,18 @@ export const BranchToolbar = memo(function BranchToolbar({
             </>
           )}
           {showGitControls ? (
-            <BranchToolbarEnvModeSelector
-              envLocked={envModeLocked}
-              effectiveEnvMode={effectiveEnvMode}
-              activeWorktreePath={activeWorktreePath}
-              onEnvModeChange={onEnvModeChange}
-              previousWorktreeLabel={previousWorktreeLabel}
-              onUsePreviousWorktree={onUsePreviousWorktree}
-            />
+            draftThread && serverThread === null && draftId ? (
+              <TandemDraftWorkspacePicker draftId={draftId} />
+            ) : (
+              <BranchToolbarEnvModeSelector
+                envLocked={envModeLocked}
+                effectiveEnvMode={effectiveEnvMode}
+                activeWorktreePath={activeWorktreePath}
+                onEnvModeChange={onEnvModeChange}
+                previousWorktreeLabel={previousWorktreeLabel}
+                onUsePreviousWorktree={onUsePreviousWorktree}
+              />
+            )
           ) : null}
         </div>
       )}
@@ -530,6 +539,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
           startFromOrigin={startFromOrigin}
           onStartFromOriginChange={onStartFromOriginChange}
+          showStartFromOriginControl={!(draftThread && serverThread === null && draftId)}
           {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
           {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
         />
