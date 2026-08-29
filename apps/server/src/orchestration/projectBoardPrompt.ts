@@ -35,7 +35,7 @@ export function formatProjectBoardPromptBlock(
     "<project_board>",
     `Shared project todos (${summary}).`,
     `Use MCP tools ${toolList}`,
-    "Call board_digest for orientation, board_get_brief before working a card, and board_handoff when transferring work.",
+    "Use board_digest only when board-wide orientation is relevant, board_get_brief before working a known card, and board_handoff when transferring work.",
     "Board rules: One card tracks one deliverable, not a phase or implementation step.",
     "Use status for workflow phases.",
     "Do not encode phases, priority, or ownership in titles.",

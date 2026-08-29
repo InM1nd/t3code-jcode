@@ -28,6 +28,8 @@ const dependencies = [
 
 const BoardListResult = Schema.Struct({
   projectId: ProjectId,
+  totalCount: Schema.Number,
+  nextOffset: Schema.NullOr(Schema.Number),
   items: Schema.Array(ProjectBoardItem),
 });
 
@@ -51,10 +53,13 @@ const BoardMutateResult = Schema.Struct({
 
 export const BoardListTool = Tool.make("board_list", {
   description:
-    "List project board todos as structured data (shared across all threads in the project). Returns id/title/status only by default — cheap. Pass includeDetails: true to also include notes, brief, and latest handoff for every item; that is far more expensive than the default and than board_digest, so only use it when you must bulk-read details across many cards at once. For orientation, prefer board_digest. For one card's detail, use board_get_brief.",
+    "List project board todos as paginated structured data (shared across all project threads). Returns at most 50 id/title/status items by default. Filter by status or pass offset/limit to browse more. Pass includeDetails: true only when bulk-reading details is necessary; for one card use board_get_brief.",
   parameters: Schema.Struct({
     includeArchived: Schema.optional(Schema.Boolean),
     includeDetails: Schema.optional(Schema.Boolean),
+    status: Schema.optional(ProjectBoardItemStatus),
+    offset: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 }))),
+    limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
   }),
   success: BoardListResult,
   failure: BoardToolError,
@@ -67,7 +72,7 @@ export const BoardListTool = Tool.make("board_list", {
 
 export const BoardDigestTool = Tool.make("board_digest", {
   description:
-    "Return a compact project board digest (counts + titles by status). Prefer this over board_list when you only need orientation.",
+    "Return a compact project board digest (all status counts plus at most 20 prioritized titles). Use only when board-wide orientation is relevant.",
   // Empty `Schema.Struct({})` encodes to an invalid root `anyOf: [object,
   // array]` JSON Schema in this Effect version instead of `type: "object"`.
   // Claude Code's MCP client silently drops every tool from a server whose

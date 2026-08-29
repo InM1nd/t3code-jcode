@@ -2,12 +2,14 @@ import { memo, useEffect, useRef } from "react";
 import { textmode, type Textmodifier } from "textmode.js";
 
 import { cn } from "~/lib/utils";
+import { useClientSettings } from "~/hooks/useSettings";
 import {
   idleBackgroundRgb,
   idleGlyphRgba,
   readJcodeAsciiThemeColors,
   type JcodeAsciiThemeColors,
 } from "./jcodeAsciiTheme";
+import { paintJcodeAsciiLogo } from "./jcodeAsciiLogo";
 
 const RAMP = " .·:;=+*#%@";
 const TARGET_FPS = 12;
@@ -93,6 +95,9 @@ function paintBlob(
 /** Decorative ASCII blob — empty jcode chats only. Colors follow the active theme. */
 export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: string }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const animation = useClientSettings((settings) => settings.jcodeAsciiAnimation);
+  const animationRef = useRef(animation);
+  animationRef.current = animation;
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -144,7 +149,8 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
       tm.draw(() => {
         if (!tm) return;
         const started = showPerf ? performance.now() : 0;
-        paintBlob(tm, activeRamp, theme);
+        if (animationRef.current === "logo") paintJcodeAsciiLogo(tm, theme);
+        else paintBlob(tm, activeRamp, theme);
         if (showPerf && perfEl) {
           const ms = performance.now() - started;
           frameMsEma = frameMsEma === 0 ? ms : frameMsEma * 0.9 + ms * 0.1;

@@ -22,7 +22,7 @@ import {
 } from "./baseSchemas.ts";
 
 /** Soft cap so shell snapshots stay small when the board rides on project-upserted. */
-export const PROJECT_BOARD_ITEM_LIMIT = 100;
+export const PROJECT_BOARD_ITEM_LIMIT = 500;
 
 const CanonicalProjectBoardItemStatus = Schema.Literals([
   "backlog",

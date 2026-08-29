@@ -36,6 +36,29 @@ export function listProjectBoardItems(
   return includeArchived ? items : items.filter((item) => !item.archivedAt);
 }
 
+export const BOARD_LIST_DEFAULT_LIMIT = 50;
+
+export function paginateProjectBoardItems(
+  items: ReadonlyArray<ProjectBoardItem>,
+  input: {
+    readonly includeArchived?: boolean | undefined;
+    readonly status?: ProjectBoardItemStatus | undefined;
+    readonly offset?: number | undefined;
+    readonly limit?: number | undefined;
+  },
+) {
+  const matchingItems = listProjectBoardItems(items, input.includeArchived).filter(
+    (item) => input.status === undefined || item.status === input.status,
+  );
+  const offset = input.offset ?? 0;
+  const pageItems = matchingItems.slice(offset, offset + (input.limit ?? BOARD_LIST_DEFAULT_LIMIT));
+  return {
+    totalCount: matchingItems.length,
+    nextOffset: offset + pageItems.length < matchingItems.length ? offset + pageItems.length : null,
+    items: pageItems,
+  };
+}
+
 /**
  * Strips an item down to id/title/status for the default `board_list`
  * response. `notes`/`brief`/`latestHandoff`/`linkedTurnIds` are omitted
@@ -187,15 +210,20 @@ const handlers = {
   board_list: (input: {
     readonly includeArchived?: boolean | undefined;
     readonly includeDetails?: boolean | undefined;
+    readonly status?: ProjectBoardItemStatus | undefined;
+    readonly offset?: number | undefined;
+    readonly limit?: number | undefined;
   }) =>
     Effect.gen(function* () {
       const scope = yield* requireBoardScope();
       const projectId = yield* resolveProjectId(scope.threadId);
       const project = yield* loadBoard(projectId);
-      const items = listProjectBoardItems(project.boardItems ?? [], input.includeArchived);
+      const page = paginateProjectBoardItems(project.boardItems ?? [], input);
       return {
         projectId,
-        items: input.includeDetails === true ? items : items.map(toCompactBoardListItem),
+        totalCount: page.totalCount,
+        nextOffset: page.nextOffset,
+        items: input.includeDetails === true ? page.items : page.items.map(toCompactBoardListItem),
       };
     }),
 

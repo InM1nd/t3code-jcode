@@ -1,7 +1,11 @@
 import type { ProjectBoardItem } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { listProjectBoardItems, toCompactBoardListItem } from "./handlers.ts";
+import {
+  listProjectBoardItems,
+  paginateProjectBoardItems,
+  toCompactBoardListItem,
+} from "./handlers.ts";
 
 const item = (id: string, archivedAt: string | null): ProjectBoardItem => ({
   id: id as ProjectBoardItem["id"],
@@ -19,6 +23,31 @@ describe("listProjectBoardItems", () => {
 
     expect(listProjectBoardItems(items).map((entry) => entry.id)).toEqual(["active"]);
     expect(listProjectBoardItems(items, true)).toEqual(items);
+  });
+
+  it("filters and paginates board_list responses", () => {
+    const items = [
+      { ...item("backlog-1", null), status: "backlog" as const },
+      { ...item("ready-1", null), status: "ready" as const },
+      { ...item("backlog-2", null), status: "backlog" as const },
+      { ...item("backlog-3", null), status: "backlog" as const },
+    ];
+
+    expect(paginateProjectBoardItems(items, { status: "backlog", limit: 2 })).toMatchObject({
+      totalCount: 3,
+      nextOffset: 2,
+      items: [
+        expect.objectContaining({ id: "backlog-1" }),
+        expect.objectContaining({ id: "backlog-2" }),
+      ],
+    });
+    expect(
+      paginateProjectBoardItems(items, { status: "backlog", offset: 2, limit: 2 }),
+    ).toMatchObject({
+      totalCount: 3,
+      nextOffset: null,
+      items: [expect.objectContaining({ id: "backlog-3" })],
+    });
   });
 });
 

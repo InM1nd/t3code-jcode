@@ -23,6 +23,7 @@ import {
   ProviderInstanceId,
   type ProviderDriverKind,
 } from "./providerInstance.ts";
+import { DEFAULT_JCODE_ASCII_ANIMATION, JcodeAsciiAnimation } from "./jcodeAsciiAnimation.ts";
 
 // ── Client Settings (local-only) ───────────────────────────────
 
@@ -246,6 +247,9 @@ export const ClientSettingsSchema = Schema.Struct({
   // Floating ASCII companion overlay in the web/desktop client. Off by
   // default so it stays an opt-in bit of chrome, not a surprise.
   petEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  jcodeAsciiAnimation: JcodeAsciiAnimation.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_JCODE_ASCII_ANIMATION)),
+  ),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -673,7 +677,7 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_BACKGROUND_ACTIVITY_PROFILE)),
   ),
   defaultThreadEnvMode: ThreadEnvMode.pipe(
-    Schema.withDecodingDefault(Effect.succeed("local" as const satisfies ThreadEnvMode)),
+    Schema.withDecodingDefault(Effect.succeed("worktree" as const satisfies ThreadEnvMode)),
   ),
   newWorktreesStartFromOrigin: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
@@ -976,5 +980,6 @@ export const ClientSettingsPatch = Schema.Struct({
   timestampFormat: Schema.optionalKey(TimestampFormat),
   wordWrap: Schema.optionalKey(Schema.Boolean),
   petEnabled: Schema.optionalKey(Schema.Boolean),
+  jcodeAsciiAnimation: Schema.optionalKey(JcodeAsciiAnimation),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

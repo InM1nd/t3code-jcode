@@ -89,7 +89,7 @@ export function buildRolloverSeedPrompt(input: {
       "Continue from the next step the latest handoff names. Ask me if the handoff and the digest disagree.",
     );
   } else {
-    lines.push("Before doing anything, call board_digest to orient, then ask me what to pick up.");
+    lines.push("Review the digest above, then ask me what to pick up.");
   }
   return lines.join("\n");
 }

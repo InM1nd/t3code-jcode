@@ -1,6 +1,7 @@
 import type { ProjectBoardItem, ProjectBoardItemStatus, TurnId } from "@t3tools/contracts";
 
 export const PROJECT_BOARD_LINKED_TURN_LIMIT = 20;
+export const PROJECT_BOARD_DIGEST_ITEM_LIMIT = 20;
 
 export function mergeProjectBoardLinkedTurnIds(input: {
   existing: ReadonlyArray<TurnId> | undefined;
@@ -137,12 +138,25 @@ export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>)
     }
   };
 
-  for (const status of statuses) {
-    const sectionItems = status === "completed" ? byStatus[status].slice(0, 10) : byStatus[status];
+  const digestStatusOrder: ReadonlyArray<ProjectBoardItemStatus> = [
+    "inProgress",
+    "ready",
+    "inReview",
+    "blocked",
+    "backlog",
+    "completed",
+    "cancelled",
+  ];
+  let remainingItems = PROJECT_BOARD_DIGEST_ITEM_LIMIT;
+  for (const status of digestStatusOrder) {
+    const sectionItems = byStatus[status].slice(0, remainingItems);
     appendSection(status, sectionItems);
+    remainingItems -= sectionItems.length;
   }
-  if (byStatus.completed.length > 10) {
-    lines.push(`- …and ${byStatus.completed.length - 10} more done`);
+  if (activeItems.length > PROJECT_BOARD_DIGEST_ITEM_LIMIT) {
+    lines.push(
+      `- …and ${activeItems.length - PROJECT_BOARD_DIGEST_ITEM_LIMIT} more active items; use board_list with status and pagination to browse them.`,
+    );
   }
 
   return lines.join("\n");

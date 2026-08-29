@@ -7,11 +7,19 @@ import {
   OrchestrationEvent,
   OrchestrationProjectShell,
 } from "./orchestration.ts";
-import { ProjectBoardItem, ProjectBoardItemStatus } from "./projectBoard.ts";
+import {
+  PROJECT_BOARD_ITEM_LIMIT,
+  ProjectBoardItem,
+  ProjectBoardItemStatus,
+} from "./projectBoard.ts";
 
 const decodeOrchestrationCommand = Schema.decodeUnknownEffect(OrchestrationCommand);
 const decodeOrchestrationEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
 const decodeOrchestrationProjectShell = Schema.decodeUnknownEffect(OrchestrationProjectShell);
+
+it("allows up to 500 board items per project", () => {
+  assert.strictEqual(PROJECT_BOARD_ITEM_LIMIT, 500);
+});
 
 it("decodes Board lifecycle statuses and legacy pending items", () => {
   const now = "2026-08-13T12:00:00.000Z";

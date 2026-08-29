@@ -49,6 +49,7 @@ const clientSettings: ClientSettings = {
   timestampFormat: "24-hour",
   wordWrap: true,
   petEnabled: false,
+  jcodeAsciiAnimation: "blob",
 };
 
 const decodeClientSettingsJson = Schema.decodeEffect(Schema.fromJsonString(ClientSettingsSchema));

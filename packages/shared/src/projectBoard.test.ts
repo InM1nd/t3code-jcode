@@ -4,6 +4,7 @@ import type { ProjectBoardItem, TurnId } from "@t3tools/contracts";
 import {
   formatProjectBoardDigest,
   indexProjectBoardItemsByTurnId,
+  PROJECT_BOARD_DIGEST_ITEM_LIMIT,
   mergeProjectBoardLinkedTurnIds,
   PROJECT_BOARD_LINKED_TURN_LIMIT,
 } from "./projectBoard.ts";
@@ -121,6 +122,23 @@ describe("formatProjectBoardDigest", () => {
     expect(digest).toContain("No active items (1 archived).");
     expect(digest).not.toContain("Archived task");
     expect(formatProjectBoardDigest([])).toContain("Board is empty.");
+  });
+
+  it("caps card titles and prioritizes current work", () => {
+    const digest = formatProjectBoardDigest([
+      item({ id: "wip" as ProjectBoardItem["id"], title: "Current work", status: "inProgress" }),
+      ...Array.from({ length: PROJECT_BOARD_DIGEST_ITEM_LIMIT + 5 }, (_, index) =>
+        item({
+          id: `backlog-${index}` as ProjectBoardItem["id"],
+          title: `Backlog ${index}`,
+          status: "backlog",
+        }),
+      ),
+    ]);
+
+    expect(digest).toContain("Current work");
+    expect(digest).toContain("…and 6 more active items");
+    expect(digest).not.toContain(`Backlog ${PROJECT_BOARD_DIGEST_ITEM_LIMIT + 4}`);
   });
 });
 
