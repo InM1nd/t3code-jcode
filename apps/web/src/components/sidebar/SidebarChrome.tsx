@@ -33,6 +33,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { TandemAgentAttention } from "../../tandem/TandemAgentAttention";
+import { TandemBrandMark } from "../../tandem/TandemBrandMark";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -92,6 +93,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       )}
       to="/"
     >
+      <TandemBrandMark />
       <span
         className={cn(
           "truncate text-sm font-semibold tracking-tight",
