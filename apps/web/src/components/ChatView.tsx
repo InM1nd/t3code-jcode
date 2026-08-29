@@ -269,6 +269,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { JcodeAsciiIdle } from "./chat/JcodeAsciiIdle";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import { deriveTurnUsageByTurnId } from "../tandem/turnUsage";
 import { resolveTimelineIsAtEnd } from "./chat/MessagesTimeline.logic";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
@@ -2641,6 +2642,10 @@ function ChatViewContent(props: ChatViewProps) {
         turnPlans,
       ),
     [activeThread?.proposedPlans, timelineMessages, turnPlans, workLogEntries],
+  );
+  const turnUsageByTurnId = useMemo(
+    () => deriveTurnUsageByTurnId(activeThread?.activities ?? []),
+    [activeThread?.activities],
   );
   const [dockedDraftHeroThreadKey, setDockedDraftHeroThreadKey] = useState<string | null>(null);
   const draftHeroDockRequested =
@@ -6559,6 +6564,7 @@ function ChatViewContent(props: ChatViewProps) {
                 topFadeEnabled={!hasTimelineTopBanner}
                 loadEarlier={loadEarlierTurns}
                 boardItemsByTurnId={boardItemsByTurnId}
+                turnUsageByTurnId={turnUsageByTurnId}
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}

@@ -35,11 +35,17 @@ For remote connections, update the client and server together before using the e
 
 ## Agents
 
+### Preparing an executor
+
+For parallel work, ask a coordinator thread to create a Board card with status **Ready** and fill in its brief and handoff. In **Agent control**, the card appears under **Ready to delegate**. Select **Launch** to open a separate draft configured for a new worktree with only that card's task capsule. Choose or adjust the model and base branch before sending the first message.
+
+The executor prompt avoids `board_digest` by default. It reads `board_get_brief` only when the card needs clarification, keeping its context focused on the assigned task.
+
 When an agent session is connected through T3 Code’s MCP tools (Claude, Cursor, Codex, Grok, OpenCode), it can list and update the same board with `board_digest`, `board_list`, `board_get_brief`, `board_upsert`, `board_set_status`, `board_link_turn`, `board_handoff`, `board_archive`, `board_restore`, and `board_delete`. Changes show up live in the panel for every connected client. Lists and digests hide archived items by default; `board_list` can include them when requested.
 
 Use `board_get_brief` before starting a card and `board_handoff` when you are transferring work. A handoff is always tied to the agent’s current project thread.
 
-Status mutations automatically link the current thread’s latest turn to the card. Linked turns show a **Board** badge in the chat timeline, and each card shows how many turns are attached.
+Status mutations automatically link the current thread’s latest turn to the card. The chat timeline shows one compact **Board** update at the end of an affected turn; hover it to see the linked card titles. Reading a board digest or list alone does not create a timeline update. Each card still shows how many turns are attached.
 
 Use the command palette action **Insert project board digest** for a compact status summary in the composer without dumping every note into the prompt.
 
