@@ -2083,20 +2083,16 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
-export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
-  // Tandem owns the nightly asset family; use it for every fork channel.
-  if (true || resolveDesktopUpdateChannel(version) === "nightly") {
-    return {
-      macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
-    };
-  }
-
+/**
+ * Tandem ships one icon family, stored under the nightly asset names it
+ * inherited from upstream. The channel does not select the icons here: every
+ * channel gets the fork's own marks.
+ */
+export function resolveDesktopBuildIconAssets(_version: string): DesktopBuildIconAssets {
   return {
-    macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
-    linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
-    windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+    macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
+    linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
+    windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
   };
 }
 

@@ -992,6 +992,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         readonly env?: Readonly<Record<string, string | undefined>>;
       };
     }> = [];
+    // The probe is identified by the binary it runs, not by
+    // ELECTRON_RUN_AS_NODE: the self-containment check inherits the ambient
+    // environment, so that variable is set on every spawn when the build itself
+    // runs under Electron-as-node.
     const spawnerLayer = Layer.succeed(
       ChildProcessSpawner.ChildProcessSpawner,
       ChildProcessSpawner.make((command) => {
@@ -1002,6 +1006,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
     return Effect.scoped(
       Effect.gen(function* () {
+        const path = yield* Path.Path;
         const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
         yield* validateWindowsPackagedPayload({
           stageDistDir: fixture.stageDistDir,
@@ -1010,7 +1015,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         });
 
         assert.isFalse(
-          commands.some((command) => command.options.env?.ELECTRON_RUN_AS_NODE === "1"),
+          commands.some(
+            (command) =>
+              command.command === path.join(fixture.packagedAppDir, fixture.appExecutableName),
+          ),
         );
         assert.isTrue(
           commands.some(
