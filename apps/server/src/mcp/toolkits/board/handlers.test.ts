@@ -1,7 +1,8 @@
-import type { ProjectBoardItem } from "@t3tools/contracts";
+import type { OrchestrationEvent, ProjectBoardItem } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  findUpsertedBoardItem,
   listProjectBoardItems,
   paginateProjectBoardItems,
   toCompactBoardListItem,
@@ -105,5 +106,21 @@ describe("toCompactBoardListItem", () => {
       sourceThreadId: "thread-1",
       archivedAt: "2026-08-13T12:00:00.000Z",
     });
+  });
+});
+
+describe("findUpsertedBoardItem", () => {
+  it("returns the item saved by the upsert event instead of relying on a later projection read", () => {
+    const saved = item("saved", null);
+
+    expect(
+      findUpsertedBoardItem(
+        [
+          { type: "thread.created", payload: {} },
+          { type: "project.board-item-upserted", payload: { item: saved } },
+        ] as unknown as readonly OrchestrationEvent[],
+        "saved" as ProjectBoardItem["id"],
+      ),
+    ).toEqual(saved);
   });
 });

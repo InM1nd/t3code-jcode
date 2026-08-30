@@ -4,6 +4,7 @@ import {
   type ProjectBoardItem,
   type ProjectBoardBrief,
   type ProjectBoardItemStatus,
+  type OrchestrationEvent,
   type ProjectId,
   type TurnId,
 } from "@t3tools/contracts";
@@ -11,6 +12,7 @@ import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Stream from "effect/Stream";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
@@ -78,6 +80,18 @@ export function toCompactBoardListItem(item: ProjectBoardItem): ProjectBoardItem
     ...(item.sourceThreadId ? { sourceThreadId: item.sourceThreadId } : {}),
     ...(item.archivedAt ? { archivedAt: item.archivedAt } : {}),
   };
+}
+
+export function findUpsertedBoardItem(
+  events: ReadonlyArray<OrchestrationEvent>,
+  itemId: ProjectBoardItemId,
+): ProjectBoardItem | null {
+  for (const event of events) {
+    if (event.type === "project.board-item-upserted" && event.payload.item.id === itemId) {
+      return event.payload.item;
+    }
+  }
+  return null;
 }
 
 const requireBoardScope = Effect.fn("BoardToolkit.requireScope")(function* () {
@@ -170,7 +184,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
   readonly linkTurnId?: TurnId | null | undefined;
 }) {
   const engine = yield* OrchestrationEngineService;
-  yield* engine
+  return (yield* engine
     .dispatch({
       type: "project.board.item.upsert",
       commandId: yield* nextCommandId(),
@@ -192,7 +206,7 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
             message: errorMessage(error),
           }),
       ),
-    );
+    )).sequence;
 });
 
 const dispatchBoardLifecycle = Effect.fn("BoardToolkit.dispatchBoardLifecycle")(function* (input: {
@@ -275,7 +289,7 @@ const handlers = {
       const projectId = yield* resolveProjectId(scope.threadId);
       const itemId = input.itemId ?? (yield* nextItemId());
       const linkTurnId = yield* resolveLatestTurnId(scope.threadId);
-      yield* dispatchUpsert({
+      const sequence = yield* dispatchUpsert({
         projectId,
         itemId,
         title: input.title,
@@ -286,9 +300,25 @@ const handlers = {
         sourceThreadId: scope.threadId,
         linkTurnId,
       });
-      const project = yield* loadBoard(projectId);
-      const item =
-        (project.boardItems ?? []).find((entry: ProjectBoardItem) => entry.id === itemId) ?? null;
+      const engine = yield* OrchestrationEngineService;
+      const item = findUpsertedBoardItem(
+        Array.from(
+          yield* Stream.runCollect(engine.readEvents(sequence - 1, 1)).pipe(
+            Effect.mapError(
+              (error) =>
+                new BoardToolError({
+                  message: `Failed to read saved board item: ${errorMessage(error)}`,
+                }),
+            ),
+          ),
+        ),
+        itemId,
+      );
+      if (!item) {
+        return yield* new BoardToolError({
+          message: `Board item '${itemId}' was accepted but its event could not be read.`,
+        });
+      }
       return { projectId, item };
     }),
 
