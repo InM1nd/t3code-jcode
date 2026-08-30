@@ -160,7 +160,10 @@ export const readProviderLimits = Effect.fn("readProviderLimits")(function* ({
   const readCodex = Effect.gen(function* () {
     const files = yield* Effect.promise(() => listTranscriptFiles(codexSessionsDir, 0));
     const file = files
-      .filter((entry) => entry.path.includes("/rollout-") && entry.path.endsWith(".jsonl"))
+      .filter((entry) => {
+        const name = path.basename(entry.path);
+        return name.startsWith("rollout-") && name.endsWith(".jsonl");
+      })
       .toSorted((left, right) => right.mtimeMs - left.mtimeMs)[0];
     if (file === undefined) return null;
     const text = yield* fileSystem
