@@ -4015,6 +4015,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     />
                   ) : (
                     <>
+                      <CompactComposerControlsMenu
+                        interactionMode={interactionMode}
+                        runtimeMode={runtimeMode}
+                        onInteractionModeChange={handleInteractionModeChange}
+                        onRuntimeModeChange={handleRuntimeModeChange}
+                      />
                       {providerTraitsPicker ? (
                         <>
                           <Separator
