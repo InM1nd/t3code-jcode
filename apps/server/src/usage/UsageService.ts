@@ -43,6 +43,7 @@ import { UsageAggregator } from "./usageAggregation.ts";
 import { fetchCursorUsageEvents } from "./cursorDashboardApi.ts";
 import { readCursorSessionToken } from "./cursorSession.ts";
 import { parseRateTable, type RateTable } from "./usagePricing.ts";
+import { readProviderLimits } from "./providerLimits.ts";
 import {
   listTranscriptFiles,
   readDirectoryVolumeId,
@@ -116,6 +117,7 @@ export const layerTest = Layer.succeed(
           fetchedAt: null,
           knownModels: 0,
         },
+        limits: [],
         scanDurationMs: 0,
       }),
   }),
@@ -523,6 +525,24 @@ export const make = Effect.gen(function* () {
     yield* persistScanCache();
 
     const aggregated = aggregator.finish();
+    const claudeTranscriptDir = dirs.find((entry) => entry.provider === "claude")?.dir;
+    const codexSessionsDir = dirs.find((entry) => entry.provider === "codex")?.dir;
+    const limits = yield* readProviderLimits({
+      claudeCredentialsFile: path.join(
+        path.dirname(claudeTranscriptDir ?? path.join(NodeOS.homedir(), ".claude", "projects")),
+        ".credentials.json",
+      ),
+      codexSessionsDir: codexSessionsDir ?? path.join(NodeOS.homedir(), ".codex", "sessions"),
+      cursorCookie:
+        cursorSessionResult._tag === "Success" ? cursorSessionResult.success.cookie : null,
+      environment: hostEnvironment,
+      homeDirectory: NodeOS.homedir(),
+    }).pipe(
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(Path.Path, path),
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+      Effect.catchCause(() => Effect.succeed([])),
+    );
     const readAt = yield* DateTime.now;
     const finishedAtMs = yield* Clock.currentTimeMillis;
 
@@ -543,6 +563,7 @@ export const make = Effect.gen(function* () {
             : DateTime.formatIso(DateTime.makeUnsafe(ratesFetchedAtMs)),
         knownModels: rates.size,
       },
+      limits,
       scanDurationMs: Math.max(0, finishedAtMs - startedAtMs),
     } satisfies UsageSummary;
   });
