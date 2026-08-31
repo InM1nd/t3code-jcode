@@ -21,7 +21,8 @@ permission mode, and providers without an equivalent (such as OpenCode) fall bac
 Supervised.
 
 **Full access**: allow commands and edits without prompts. The default. The agent runs
-unattended until it finishes or asks a question of its own.
+unattended until it finishes or asks a question of its own. If a thread is attached to a worktree
+and the agent still runs in a different checkout, T3 Code shows a warning in the thread.
 
 Approvals appear inline in the conversation. Approve or reject one and the agent continues from
 there.

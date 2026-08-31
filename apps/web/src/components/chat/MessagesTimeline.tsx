@@ -128,6 +128,10 @@ import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
+import {
+  parseWorkspaceScopeWarning,
+  WorkspaceScopeWarningRow,
+} from "../../workspaceScopeWarningUi";
 
 import {
   buildInlineTerminalContextText,
@@ -2718,7 +2722,17 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
   isExpandedToolGroupEntry: boolean;
 }) {
   const { workEntry, workspaceRoot, isExpandedToolGroupEntry } = props;
+  const workspaceScopeMismatch = parseWorkspaceScopeWarning(workEntry);
   const [expanded, setExpanded] = useState(false);
+  if (workspaceScopeMismatch) {
+    return (
+      <WorkspaceScopeWarningRow
+        label={workEntry.label}
+        mismatch={workspaceScopeMismatch}
+        isExpandedToolGroupEntry={isExpandedToolGroupEntry}
+      />
+    );
+  }
   const iconConfig = workToneIcon(workEntry.tone);
   const showWarningIndicator = workEntry.sourceActivityKind === "runtime.warning";
   const showFailedIndicator = workEntryDisplayIndicatesToolFailure(workEntry);
