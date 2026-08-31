@@ -30,6 +30,7 @@ import {
   useSidebar,
 } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ProviderLimitsWidgetButton } from "../usage/ProviderLimitsPopover";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { TandemAgentAttention } from "../../tandem/TandemAgentAttention";
@@ -211,6 +212,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
+          <ProviderLimitsWidgetButton />
         </>
       )}
       <SidebarUpdatePill />

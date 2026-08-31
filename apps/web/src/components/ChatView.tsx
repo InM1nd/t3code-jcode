@@ -421,6 +421,7 @@ const ATTACHMENT_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more files without additional text. Respond using the conversation context and the attached files.]";
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
+const NEW_THREAD_PREFERRED_PROVIDER_INSTANCE_ID = ProviderInstanceId.make("cursor");
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
@@ -2346,9 +2347,13 @@ function ChatViewContent(props: ChatViewProps) {
     versionMismatchServerLabel,
   ]);
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;
+  // A brand-new thread with no explicit or project-configured provider yet
+  // prefers Cursor (its "auto" model routes to whichever underlying model
+  // fits); resolveSelectableProvider falls through to its normal enabled-
+  // provider order when Cursor isn't available.
   const unlockedSelectedProvider = resolveSelectableProvider(
     providerStatuses,
-    selectedProviderByThreadId ?? threadProvider,
+    selectedProviderByThreadId ?? threadProvider ?? NEW_THREAD_PREFERRED_PROVIDER_INSTANCE_ID,
   );
   const selectedProvider: ProviderDriverKind = lockedProvider ?? unlockedSelectedProvider;
   const phase = derivePhase(activeThread?.session ?? null);

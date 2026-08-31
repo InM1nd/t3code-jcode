@@ -249,6 +249,7 @@ const CLAUDE_MODEL_CATALOG: ReadonlyArray<ServerProviderModel> = [
     slug: "claude-sonnet-5",
     name: "Claude Sonnet 5",
     isCustom: false,
+    isDefault: true,
     capabilities: createModelCapabilities({
       optionDescriptors: [
         buildSelectOptionDescriptor({
