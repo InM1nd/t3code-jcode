@@ -242,6 +242,10 @@
     "./claudeCompaction": {
       "types": "./src/claudeCompaction.ts",
       "import": "./src/claudeCompaction.ts"
+    },
+    "./workspaceScope": {
+      "types": "./src/workspaceScope.ts",
+      "import": "./src/workspaceScope.ts"
     }
   },
   "scripts": {

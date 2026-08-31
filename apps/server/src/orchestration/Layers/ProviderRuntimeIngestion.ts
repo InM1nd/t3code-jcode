@@ -42,6 +42,7 @@ import {
   type ProviderRuntimeIngestionShape,
 } from "../Services/ProviderRuntimeIngestion.ts";
 import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
+import { maybeWorkspaceScopeWarningActivity } from "../workspaceScopeWarning.ts";
 import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { canReplaceThreadTitle } from "../threadTitles.ts";
@@ -900,6 +901,7 @@ const make = Effect.gen(function* () {
     crypto.randomUUIDv4.pipe(
       Effect.map((uuid) => CommandId.make(`provider:${event.eventId}:${tag}:${uuid}`)),
     );
+  const warnedWorkspaceScopeKeys = new Set<string>();
 
   const turnMessageIdsByTurnKey = yield* Cache.make<string, Set<MessageId>>({
     capacity: TURN_MESSAGE_IDS_BY_TURN_CACHE_CAPACITY,
@@ -2041,6 +2043,21 @@ const make = Effect.gen(function* () {
           ),
         ),
       ).pipe(Effect.asVoid);
+      const workspaceScopeWarning = maybeWorkspaceScopeWarningActivity({
+        event,
+        worktreePath: thread.worktreePath,
+        warnedKeys: warnedWorkspaceScopeKeys,
+      });
+      if (workspaceScopeWarning) {
+        const commandId = yield* providerCommandId(event, "thread-activity-append-workspace-scope");
+        yield* orchestrationEngine.dispatch({
+          type: "thread.activity.append",
+          commandId,
+          threadId: thread.id,
+          activity: workspaceScopeWarning,
+          createdAt: workspaceScopeWarning.createdAt,
+        });
+      }
     });
 
   const processDomainEvent = (_event: TurnStartRequestedDomainEvent) => Effect.void;

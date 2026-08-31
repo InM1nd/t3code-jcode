@@ -43,6 +43,10 @@ import {
   formatProjectBoardPromptBlock,
 } from "../projectBoardPrompt.ts";
 import {
+  formatWorkspaceScopePromptBlock,
+  prependWorkspaceScopeToTurnInput,
+} from "../workspaceScopePrompt.ts";
+import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
@@ -862,6 +866,12 @@ const make = Effect.gen(function* () {
       });
       if (!rulesAlreadySent) threadsWithBoardRulesSent.add(input.threadId);
       turnInput = appendProjectBoardToTurnInput(turnInput, boardBlock);
+    }
+    if (turnInput && thread.worktreePath) {
+      turnInput = prependWorkspaceScopeToTurnInput(
+        turnInput,
+        formatWorkspaceScopePromptBlock({ cwd: thread.worktreePath, branch: thread.branch }),
+      );
     }
 
     return {

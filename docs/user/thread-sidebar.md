@@ -18,6 +18,10 @@ When you start a new thread in a Git project, select its workspace in the compos
 Model selection remains independent of the workspace choice, so a new thread can use a different
 model in any existing worktree. A started thread keeps its selected workspace.
 
+The agent is told to edit files, run commands, and use Git only in that workspace. If it uses a
+different folder — for example another clone of the same repository — T3 Code shows a warning in
+the thread.
+
 A project with a long settled history shows recent chats first. Select **Show more** inside that
 project to reveal older settled chats.
 
