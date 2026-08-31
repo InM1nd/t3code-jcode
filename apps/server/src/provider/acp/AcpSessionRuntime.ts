@@ -21,6 +21,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 
+import { tokenUsageEventFromAcpPromptResponse } from "./acpTokenUsage.ts";
 import {
   collectSessionConfigOptionValues,
   decideToolCallUpdateEmission,
@@ -772,6 +773,10 @@ export const make = (
                   assistantSegmentRef,
                 }),
               ),
+              Effect.tap((result) => {
+                const event = tokenUsageEventFromAcpPromptResponse(result);
+                return event ? Queue.offer(eventQueue, event) : Effect.void;
+              }),
             );
           }),
         ),

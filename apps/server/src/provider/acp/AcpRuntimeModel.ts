@@ -5,7 +5,9 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import { deriveToolActivityPresentation } from "@t3tools/shared/toolActivity";
-import type { ToolLifecycleItemType } from "@t3tools/contracts";
+import type { ThreadTokenUsageSnapshot, ToolLifecycleItemType } from "@t3tools/contracts";
+
+import { tokenUsageEventFromAcpSessionUpdate } from "./acpTokenUsage.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -107,6 +109,11 @@ export type AcpParsedSessionEvent =
       readonly _tag: "ContentDelta";
       readonly itemId?: string;
       readonly text: string;
+      readonly rawPayload: unknown;
+    }
+  | {
+      readonly _tag: "TokenUsageUpdated";
+      readonly usage: ThreadTokenUsageSnapshot;
       readonly rawPayload: unknown;
     };
 
@@ -823,8 +830,13 @@ export function parseSessionUpdateEvent(params: EffectAcpSchema.SessionNotificat
       }
       break;
     }
-    default:
+    default: {
+      const tokenUsage = tokenUsageEventFromAcpSessionUpdate(params);
+      if (tokenUsage) {
+        events.push(tokenUsage);
+      }
       break;
+    }
   }
 
   return { ...(modeId !== undefined ? { modeId } : {}), events };

@@ -54,6 +54,7 @@ import type * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
 import {
   makeAcpAssistantItemEvent,
   makeAcpContentDeltaEvent,
+  makeAcpTokenUsageEvent,
   makeAcpPlanUpdatedEvent,
   makeAcpRequestOpenedEvent,
   makeAcpRequestResolvedEvent,
@@ -863,6 +864,18 @@ export function makeCursorAdapter(
                         turnId: ctx.activeTurnId,
                         ...(event.itemId ? { itemId: event.itemId } : {}),
                         text: event.text,
+                        rawPayload: event.rawPayload,
+                      }),
+                    );
+                    return;
+                  case "TokenUsageUpdated":
+                    yield* offerRuntimeEvent(
+                      makeAcpTokenUsageEvent({
+                        stamp: yield* makeEventStamp(),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: ctx.activeTurnId,
+                        usage: event.usage,
                         rawPayload: event.rawPayload,
                       }),
                     );
