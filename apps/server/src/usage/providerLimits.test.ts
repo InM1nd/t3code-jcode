@@ -1,6 +1,9 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import { HttpClient, type HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 
-import { parseProviderLimitResponse } from "./providerLimits.ts";
+import { parseProviderLimitResponse, readProviderLimits } from "./providerLimits.ts";
 
 describe("parseProviderLimitResponse", () => {
   it("normalizes the four provider limit payloads without exposing credentials", () => {
@@ -63,4 +66,44 @@ describe("parseProviderLimitResponse", () => {
       ],
     });
   });
+});
+
+it.layer(NodeServices.layer)("readProviderLimits", (it) => {
+  it.effect("sends the Cursor access token as a Bearer credential, not the dashboard cookie", () =>
+    Effect.gen(function* () {
+      const execute = (request: HttpClientRequest.HttpClientRequest) => {
+        expect(request.headers["authorization"]).toBe("Bearer test-access-token");
+        expect(request.headers["cookie"]).toBeUndefined();
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            Response.json({
+              billingCycleEnd: "1789000000000",
+              autoModelSelectedDisplayMessage: "You've used 18% of your included total usage",
+              namedModelSelectedDisplayMessage: "You've used 3.5% of your included total usage",
+            }),
+          ),
+        );
+      };
+
+      const limits = yield* readProviderLimits({
+        claudeCredentialsFile: "/nonexistent/.credentials.json",
+        codexSessionsDir: "/nonexistent/codex-sessions",
+        cursorAccessToken: "test-access-token",
+        environment: {},
+        homeDirectory: "/nonexistent",
+        platform: "linux",
+      }).pipe(Effect.provideService(HttpClient.HttpClient, HttpClient.make(execute)));
+
+      expect(limits).toEqual([
+        {
+          provider: "cursor",
+          windows: [
+            { label: "Cursor Models", usedPercent: 18, resetsAt: "2026-09-10T00:26:40.000Z" },
+            { label: "Other Models", usedPercent: 3.5, resetsAt: "2026-09-10T00:26:40.000Z" },
+          ],
+        },
+      ]);
+    }),
+  );
 });

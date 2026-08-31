@@ -11,6 +11,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   backgroundActivitySharedPolicySettings,
   buildProviderInstanceUpdatePatch,
+  describeBulkDefaultModelApplyResult,
   formatDiagnosticsDescription,
   getChangedBrowserSettingLabels,
   getChangedTypographySettingLabels,
@@ -293,5 +294,28 @@ describe("isSamePreviewViewport", () => {
         { _tag: "preset", width: 390, height: 844, presetId: "iphone-12-pro" },
       ),
     ).toBe(false);
+  });
+});
+
+describe("describeBulkDefaultModelApplyResult", () => {
+  it("reports success when every project updates cleanly", () => {
+    expect(describeBulkDefaultModelApplyResult(3, 0)).toEqual({
+      type: "success",
+      title: "Default model applied to 3 projects",
+    });
+  });
+
+  it("uses singular phrasing for exactly one project", () => {
+    expect(describeBulkDefaultModelApplyResult(1, 0)).toEqual({
+      type: "success",
+      title: "Default model applied to 1 project",
+    });
+  });
+
+  it("reports a failure when any project's update fails", () => {
+    expect(describeBulkDefaultModelApplyResult(4, 1)).toEqual({
+      type: "error",
+      title: "Failed to update 1 of 4 projects",
+    });
   });
 });

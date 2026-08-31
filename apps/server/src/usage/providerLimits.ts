@@ -1,3 +1,7 @@
+// @effect-diagnostics nodeBuiltinImport:off - a one-shot sync `security` read of the macOS keychain, not a managed subprocess.
+import * as NodeChildProcess from "node:child_process";
+import * as NodeOS from "node:os";
+
 import type { ProviderLimit, ProviderLimitProvider } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -123,6 +127,32 @@ function claudeAccessToken(credentials: unknown): string | null {
   );
 }
 
+/**
+ * Claude Code stores its OAuth credentials in the macOS login keychain, not
+ * `~/.claude/.credentials.json` (see the same note in `ClaudeHome.ts`), so
+ * the file read above always misses on macOS. Read the same keychain entry
+ * the CLI itself uses.
+ */
+function claudeAccessTokenFromMacKeychain(): string | null {
+  try {
+    const raw = NodeChildProcess.execFileSync(
+      "security",
+      [
+        "find-generic-password",
+        "-a",
+        NodeOS.userInfo().username,
+        "-s",
+        "Claude Code-credentials",
+        "-w",
+      ],
+      { encoding: "utf8", timeout: 5_000 },
+    );
+    return claudeAccessToken(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
 function openCodeKey(credentials: unknown): string | null {
   return nonEmptyString(record(record(credentials)?.["opencode"])?.["key"]);
 }
@@ -130,15 +160,17 @@ function openCodeKey(credentials: unknown): string | null {
 export const readProviderLimits = Effect.fn("readProviderLimits")(function* ({
   claudeCredentialsFile,
   codexSessionsDir,
-  cursorCookie,
+  cursorAccessToken,
   environment,
   homeDirectory,
+  platform,
 }: {
   readonly claudeCredentialsFile: string;
   readonly codexSessionsDir: string;
-  readonly cursorCookie: string | null;
+  readonly cursorAccessToken: string | null;
   readonly environment: Record<string, string | undefined>;
   readonly homeDirectory: string;
+  readonly platform: NodeJS.Platform;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -179,7 +211,9 @@ export const readProviderLimits = Effect.fn("readProviderLimits")(function* ({
     return null;
   }).pipe(Effect.catchCause(() => Effect.succeed(null)));
   const readClaude = Effect.gen(function* () {
-    const token = claudeAccessToken(yield* readJson(claudeCredentialsFile));
+    const token =
+      claudeAccessToken(yield* readJson(claudeCredentialsFile)) ??
+      (platform === "darwin" ? claudeAccessTokenFromMacKeychain() : null);
     if (token === null) return null;
     const payload = yield* fetchJson(
       HttpClientRequest.get("https://api.anthropic.com/api/oauth/usage").pipe(
@@ -193,13 +227,16 @@ export const readProviderLimits = Effect.fn("readProviderLimits")(function* ({
     return parsed.windows.length > 0 ? parsed : null;
   });
   const readCursor = Effect.gen(function* () {
-    if (cursorCookie === null) return null;
+    if (cursorAccessToken === null) return null;
+    // The dashboard *website* takes the WorkOS session cookie, but this
+    // Connect-RPC backend now rejects it (401 unauthenticated) and only
+    // accepts the raw OAuth token as a Bearer credential.
     const payload = yield* fetchJson(
       HttpClientRequest.post(
         "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage",
       ).pipe(
         HttpClientRequest.setHeaders({
-          Cookie: cursorCookie,
+          Authorization: `Bearer ${cursorAccessToken}`,
           "Connect-Protocol-Version": "1",
           "Content-Type": "application/json",
         }),

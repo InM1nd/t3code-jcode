@@ -331,3 +331,24 @@ export function backgroundActivityOverrideSettings(
     },
   };
 }
+
+/**
+ * Toast copy for the "apply default model to all projects" bulk action.
+ * Partial fan-out failures (some projects updated, some not) still count as
+ * a failure toast since the state is now inconsistent across projects.
+ */
+export function describeBulkDefaultModelApplyResult(
+  totalCount: number,
+  failureCount: number,
+): { type: "success" | "error"; title: string } {
+  if (failureCount === 0) {
+    return {
+      type: "success",
+      title: `Default model applied to ${totalCount} project${totalCount === 1 ? "" : "s"}`,
+    };
+  }
+  return {
+    type: "error",
+    title: `Failed to update ${failureCount} of ${totalCount} projects`,
+  };
+}

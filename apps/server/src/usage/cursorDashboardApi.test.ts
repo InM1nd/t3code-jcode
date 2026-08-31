@@ -7,6 +7,7 @@ import type { CursorSession } from "./cursorSession.ts";
 
 const session: CursorSession = {
   cookie: "WorkosCursorSessionToken=user_123::jwt",
+  accessToken: "jwt",
   userId: "user_123",
 };
 

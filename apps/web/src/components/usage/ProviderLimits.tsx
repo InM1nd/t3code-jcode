@@ -12,16 +12,29 @@ const PROVIDER_LABEL: Record<ProviderLimit["provider"], string> = {
 
 const ALL_PROVIDERS = Object.keys(PROVIDER_LABEL) as ProviderLimit["provider"][];
 
+/** Compact drops seconds, year, and the "UTC" suffix: "Resets 08-31 00:02" instead of the full timestamp. */
+function formatResetsAt(resetsAt: string, compact: boolean): string {
+  const normalized = resetsAt.replace("T", " ").replace(".000Z", " UTC");
+  return compact ? normalized.slice(5, 16) : normalized;
+}
+
 export function ProviderLimits({
   environments,
   gridClassName,
+  compact = false,
 }: {
   readonly environments: readonly EnvironmentUsageStatus[];
   /** Overrides the default responsive grid, e.g. for a fixed-width popover. */
   readonly gridClassName?: string;
+  /** Tighter spacing and no section title, for a sidebar popover. */
+  readonly compact?: boolean;
 }) {
   const environmentsWithData = environments.filter((environment) => environment.summary !== null);
   if (environmentsWithData.length === 0) return null;
+
+  // One environment repeating its own name on every card wastes space and
+  // says nothing; only worth showing once there's something to tell apart.
+  const showEnvironmentLabel = environmentsWithData.length > 1;
 
   const limits = environmentsWithData.flatMap((environment) =>
     ALL_PROVIDERS.map((provider) => ({
@@ -32,22 +45,34 @@ export function ProviderLimits({
   );
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-foreground">Provider limits</h2>
-      <div className={cn("grid gap-3", gridClassName ?? "md:grid-cols-2 xl:grid-cols-4")}>
+    <section className={cn("flex flex-col", compact ? "gap-2" : "gap-3")}>
+      {compact ? null : <h2 className="text-sm font-medium text-foreground">Provider limits</h2>}
+      <div
+        className={cn(
+          "grid",
+          compact ? "gap-2" : "gap-3",
+          gridClassName ?? "md:grid-cols-2 xl:grid-cols-4",
+        )}
+      >
         {limits.map(({ environment, limit, provider }) => (
           <article
             key={`${environment.environmentId}:${provider}`}
-            className="border border-border p-3"
+            className={cn("border border-border", compact ? "p-2" : "p-3")}
           >
-            <div className="mb-3 flex items-baseline justify-between gap-2">
-              <span className="font-medium text-foreground">{PROVIDER_LABEL[provider]}</span>
-              <span className="truncate text-xs text-muted-foreground">{environment.label}</span>
+            <div
+              className={cn("flex items-baseline justify-between gap-2", compact ? "mb-1" : "mb-3")}
+            >
+              <span className={cn("font-medium text-foreground", compact ? "text-xs" : "text-sm")}>
+                {PROVIDER_LABEL[provider]}
+              </span>
+              {showEnvironmentLabel ? (
+                <span className="truncate text-xs text-muted-foreground">{environment.label}</span>
+              ) : null}
             </div>
             {limit === null ? (
               <p className="text-xs text-muted-foreground">No limit data</p>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className={cn("flex flex-col", compact ? "gap-1" : "gap-2")}>
                 {limit.windows.map((window) => (
                   <div key={window.label} className="flex flex-col gap-1">
                     <div className="flex items-baseline justify-between gap-2 text-xs">
@@ -64,7 +89,7 @@ export function ProviderLimits({
                     </div>
                     {window.resetsAt === null ? null : (
                       <span className="text-[11px] text-muted-foreground">
-                        Resets {window.resetsAt.replace("T", " ").replace(".000Z", " UTC")}
+                        Resets {formatResetsAt(window.resetsAt, compact)}
                       </span>
                     )}
                   </div>

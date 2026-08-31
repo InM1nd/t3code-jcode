@@ -21,9 +21,9 @@ function ProviderLimitsPopoverBody() {
   const hasData = environments.some((environment) => environment.summary !== null);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {hasData ? (
-        <ProviderLimits environments={environments} gridClassName="grid-cols-1" />
+        <ProviderLimits environments={environments} gridClassName="grid-cols-1" compact />
       ) : (
         <p className="text-muted-foreground text-xs">
           {isPending ? "Checking provider limits…" : "No limit data yet."}
@@ -47,7 +47,7 @@ export function ProviderLimitsWidgetButton() {
         <PopoverTrigger render={<SidebarMenuButton aria-label="Provider limits" size="icon" />}>
           <GaugeIcon />
         </PopoverTrigger>
-        <PopoverPopup className="w-[min(90vw,26rem)]" side="top" align="end">
+        <PopoverPopup className="w-[min(85vw,16rem)]" side="top" align="end">
           <ProviderLimitsPopoverBody />
         </PopoverPopup>
       </Popover>

@@ -21,7 +21,7 @@ import {
   type UsageSummaryInput,
   UsageReadError,
 } from "@t3tools/contracts";
-import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
+import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -130,6 +130,7 @@ export const make = Effect.gen(function* () {
   const settingsService = yield* ServerSettings.ServerSettingsService;
   const httpClient = yield* HttpClient.HttpClient;
   const hostEnvironment = yield* HostProcessEnvironment;
+  const hostPlatform = yield* HostProcessPlatform;
 
   const fileCache: ScanCache = new Map();
   let cacheDirty = false;
@@ -533,10 +534,11 @@ export const make = Effect.gen(function* () {
         ".credentials.json",
       ),
       codexSessionsDir: codexSessionsDir ?? path.join(NodeOS.homedir(), ".codex", "sessions"),
-      cursorCookie:
-        cursorSessionResult._tag === "Success" ? cursorSessionResult.success.cookie : null,
+      cursorAccessToken:
+        cursorSessionResult._tag === "Success" ? cursorSessionResult.success.accessToken : null,
       environment: hostEnvironment,
       homeDirectory: NodeOS.homedir(),
+      platform: hostPlatform,
     }).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),

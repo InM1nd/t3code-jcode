@@ -19,8 +19,10 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 export interface CursorSession {
-  /** `Cookie` header value for the dashboard API. */
+  /** `Cookie` header value for the `cursor.com` dashboard API. */
   readonly cookie: string;
+  /** Raw OAuth token: `api2.cursor.sh`'s Connect-RPC endpoints want a Bearer token, not the cookie. */
+  readonly accessToken: string;
   readonly userId: string;
 }
 
@@ -131,6 +133,10 @@ export const readCursorSessionToken = Effect.fn("readCursorSessionToken")(
       return yield* new CursorSessionError({ reason: "sessionExpired" });
     }
 
-    return { cookie: `WorkosCursorSessionToken=${payload.sub}::${token}`, userId: payload.sub };
+    return {
+      cookie: `WorkosCursorSessionToken=${payload.sub}::${token}`,
+      accessToken: token,
+      userId: payload.sub,
+    };
   },
 );

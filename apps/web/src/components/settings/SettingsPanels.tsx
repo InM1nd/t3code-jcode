@@ -6,6 +6,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   type BackgroundActivityProfile,
   type DesktopUpdateChannel,
+  type ModelSelection,
   ProviderDriverKind,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
@@ -75,12 +76,15 @@ import {
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
+  resolveDefaultProviderModelSelection,
   sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import { isMacPlatform } from "../../lib/utils";
 import { primaryServerObservabilityAtom, primaryServerProvidersAtom } from "../../state/server";
 import { useProjects } from "../../state/entities";
+import { projectEnvironment } from "../../state/projects";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { Button } from "../ui/button";
@@ -123,6 +127,7 @@ import { ThemeLibrary } from "./ThemeSettings";
 import {
   backgroundActivityOverrideSettings,
   backgroundActivitySharedPolicySettings,
+  describeBulkDefaultModelApplyResult,
   durationToSeconds,
   formatDiagnosticsDescription,
   getChangedBrowserSettingLabels,
@@ -1927,6 +1932,50 @@ export function GeneralSettingsPanel() {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+
+  // One-shot bulk write, not a persistent setting: picking a model here and
+  // clicking Apply sets every project's own "New threads → Model" at once,
+  // reusing the same per-project field the settings panel already exposes.
+  const projects = useProjects();
+  const updateProjectDefaultModel = useAtomCommand(projectEnvironment.update, {
+    reportFailure: false,
+  });
+  const [bulkDefaultModelSelection, setBulkDefaultModelSelection] = useState<ModelSelection | null>(
+    null,
+  );
+  const resolvedBulkDefaultModel = resolveDefaultProviderModelSelection(
+    serverProviders,
+    bulkDefaultModelSelection,
+  );
+  const bulkDefaultModelEntry = textGenerationModelInstanceEntries.find(
+    (entry) => entry.instanceId === resolvedBulkDefaultModel?.instanceId,
+  );
+  const bulkDefaultModelOptionsByInstance = getCustomModelOptionsByInstance(
+    settings,
+    serverProviders,
+    resolvedBulkDefaultModel?.instanceId,
+    resolvedBulkDefaultModel?.model,
+  );
+  const [isApplyingDefaultModelToAllProjects, setIsApplyingDefaultModelToAllProjects] =
+    useState(false);
+  const applyDefaultModelToAllProjects = useCallback(async () => {
+    if (!resolvedBulkDefaultModel || projects.length === 0) return;
+    setIsApplyingDefaultModelToAllProjects(true);
+    let failureCount = 0;
+    for (const project of projects) {
+      const result = await updateProjectDefaultModel({
+        environmentId: project.environmentId,
+        input: { projectId: project.id, defaultModelSelection: resolvedBulkDefaultModel },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        failureCount += 1;
+      }
+    }
+    setIsApplyingDefaultModelToAllProjects(false);
+    toastManager.add(
+      stackedThreadToast(describeBulkDefaultModelApplyResult(projects.length, failureCount)),
+    );
+  }, [projects, resolvedBulkDefaultModel, updateProjectDefaultModel]);
   const resolvedBackgroundActivity = resolveServerBackgroundActivitySettings(settings);
   const activeBackgroundActivityProfile = resolvedBackgroundActivity.profile;
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
@@ -2529,6 +2578,41 @@ export function GeneralSettingsPanel() {
                 }}
               />
             </div>
+          }
+        />
+
+        <SettingsRow
+          title="Default model for all projects"
+          description="Sets every project's own New threads model at once, instead of changing each one by hand."
+          control={
+            resolvedBulkDefaultModel && bulkDefaultModelEntry ? (
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <ProviderModelPicker
+                  activeInstanceId={resolvedBulkDefaultModel.instanceId}
+                  model={resolvedBulkDefaultModel.model}
+                  lockedProvider={null}
+                  instanceEntries={textGenerationModelInstanceEntries}
+                  modelOptionsByInstance={bulkDefaultModelOptionsByInstance}
+                  triggerVariant="outline"
+                  triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                  onInstanceModelChange={(instanceId, model) => {
+                    setBulkDefaultModelSelection(createModelSelection(instanceId, model));
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isApplyingDefaultModelToAllProjects || projects.length === 0}
+                  onClick={() => void applyDefaultModelToAllProjects()}
+                >
+                  {isApplyingDefaultModelToAllProjects
+                    ? "Applying…"
+                    : `Apply to all projects (${projects.length})`}
+                </Button>
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground">No providers available</span>
+            )
           }
         />
       </SettingsSection>
