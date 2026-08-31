@@ -7,7 +7,16 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
-import { Archive, ChevronDown, ChevronRight, ListTodo, Play, RotateCcw, X } from "lucide-react";
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  ListTodo,
+  Play,
+  RotateCcw,
+  Search,
+  X,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -35,6 +44,7 @@ import {
   buildBoardImplementPrompt,
   createBoardItemDraft,
   filterProjectBoardItemsByArea,
+  filterProjectBoardItemsByQuery,
   findDraftIdForThread,
   getProjectBoardAreas,
   getProjectBoardCockpit,
@@ -303,14 +313,22 @@ export function ProjectBoardPanel({
   const [handoffDecisions, setHandoffDecisions] = useState("");
   const [handoffNextStep, setHandoffNextStep] = useState("");
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const boardItems = project?.boardItems ?? [];
   const detailItem = boardItems.find((item) => item.id === selectedItemId) ?? null;
-  const groupedItems = useMemo(() => groupProjectBoardItems(boardItems), [boardItems]);
+  const searchFilteredItems = useMemo(
+    () => filterProjectBoardItemsByQuery(boardItems, searchQuery),
+    [boardItems, searchQuery],
+  );
+  const groupedItems = useMemo(
+    () => groupProjectBoardItems(searchFilteredItems),
+    [searchFilteredItems],
+  );
   const areas = useMemo(() => getProjectBoardAreas(boardItems), [boardItems]);
   const areaFilteredItems = useMemo(
-    () => filterProjectBoardItemsByArea(boardItems, selectedArea),
-    [boardItems, selectedArea],
+    () => filterProjectBoardItemsByArea(searchFilteredItems, selectedArea),
+    [searchFilteredItems, selectedArea],
   );
   const cockpit = useMemo(() => getProjectBoardCockpit(areaFilteredItems), [areaFilteredItems]);
 
@@ -581,7 +599,11 @@ export function ProjectBoardPanel({
     (total, status) => total + groupedItems.active[status].length,
     0,
   );
-  const isEmpty = activeCount === 0 && groupedItems.archived.length === 0;
+  // The board itself vs. the current filters/search matching nothing are
+  // different states: the former hides search and area chips entirely, the
+  // latter must keep them so the user can clear a query that over-narrowed.
+  const isEmpty = boardItems.length === 0;
+  const hasNoFilterMatches = !isEmpty && activeCount === 0 && groupedItems.archived.length === 0;
 
   const rowHandlers = {
     onToggleDone,
@@ -810,6 +832,18 @@ export function ProjectBoardPanel({
           ) : (
             <ScrollArea className="min-h-0 flex-1">
               <div className="flex flex-col gap-2 p-2">
+                <div className="relative px-1.5">
+                  <Search className="pointer-events-none absolute top-1/2 left-4 size-3 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    size="sm"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search board items…"
+                    aria-label="Search board items"
+                    className="[&_[data-slot=input]]:pl-7"
+                  />
+                </div>
                 <div className="flex flex-wrap gap-1 px-1.5 py-1">
                   {PROJECT_BOARD_STATUS_ORDER.map((status) =>
                     cockpit.counts[status] > 0 ? (
@@ -855,6 +889,11 @@ export function ProjectBoardPanel({
                       </button>
                     ))}
                   </div>
+                ) : null}
+                {hasNoFilterMatches ? (
+                  <p className="px-1.5 py-4 text-center text-xs text-muted-foreground">
+                    No board items match your search.
+                  </p>
                 ) : null}
                 {cockpit.attention.length > 0 ? (
                   <BoardSection

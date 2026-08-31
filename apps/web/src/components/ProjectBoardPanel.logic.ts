@@ -170,6 +170,20 @@ export function filterProjectBoardItemsByArea(
   return items.filter((item) => item.area === area);
 }
 
+/** Case-insensitive match against title, notes, and area — the fields a user would recall a card by. */
+export function filterProjectBoardItemsByQuery(
+  items: ReadonlyArray<ProjectBoardItem>,
+  query: string,
+): ProjectBoardItem[] {
+  const trimmed = query.trim().toLowerCase();
+  if (trimmed.length === 0) return [...items];
+  return items.filter((item) =>
+    [projectBoardItemDisplayTitle(item.title), item.notes, item.area].some((field) =>
+      field?.toLowerCase().includes(trimmed),
+    ),
+  );
+}
+
 export function buildBoardImplementPrompt(item: ProjectBoardItem): string {
   const lines = [
     `Implement this project board item: ${item.title}`,

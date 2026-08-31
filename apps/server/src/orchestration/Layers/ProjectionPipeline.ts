@@ -570,6 +570,115 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        // Board items live on the same projected project row as scripts and
+        // favicon. Mirrors the in-memory projector's board-item cases so MCP
+        // and UI reads (which hit this SQL-backed row, not the in-memory
+        // engine model) see items right after they're created.
+        case "project.board-item-upserted": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          const currentItems = existingRow.value.boardItems ?? [];
+          const existingIndex = currentItems.findIndex((item) => item.id === event.payload.item.id);
+          const boardItems =
+            existingIndex === -1
+              ? [...currentItems, event.payload.item]
+              : currentItems.map((item, index) =>
+                  index === existingIndex ? event.payload.item : item,
+                );
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "project.board-item-deleted": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems: (existingRow.value.boardItems ?? []).filter(
+              (item) => item.id !== event.payload.itemId,
+            ),
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "project.board-item-handoff-appended": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems: (existingRow.value.boardItems ?? []).map((item) =>
+              item.id === event.payload.itemId
+                ? {
+                    ...item,
+                    latestHandoff: event.payload.handoff,
+                    updatedAt: event.payload.updatedAt,
+                  }
+                : item,
+            ),
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "project.board.item.archived": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems: (existingRow.value.boardItems ?? []).map((item) =>
+              item.id === event.payload.itemId
+                ? {
+                    ...item,
+                    archivedAt: event.payload.archivedAt,
+                    updatedAt: event.payload.updatedAt,
+                  }
+                : item,
+            ),
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "project.board.item.restored": {
+          const existingRow = yield* projectionProjectRepository.getById({
+            projectId: event.payload.projectId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionProjectRepository.upsert({
+            ...existingRow.value,
+            boardItems: (existingRow.value.boardItems ?? []).map((item) =>
+              item.id === event.payload.itemId
+                ? { ...item, archivedAt: null, updatedAt: event.payload.updatedAt }
+                : item,
+            ),
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         default:
           return;
       }

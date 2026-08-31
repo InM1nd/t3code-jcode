@@ -36,6 +36,7 @@ describe("ProviderLimitsWidgetButton", () => {
         },
       ],
       isPending: false,
+      refresh: vi.fn(),
     });
 
     const markup = renderToStaticMarkup(<ProviderLimitsWidgetButton />);
@@ -43,10 +44,11 @@ describe("ProviderLimitsWidgetButton", () => {
     expect(markup).toContain("Codex");
     expect(markup).toContain("42%");
     expect(markup).toContain("View usage history");
+    expect(markup).toContain("Refresh provider limits");
   });
 
   it("shows a pending state before any environment answers", () => {
-    testState.useUsage.mockReturnValue({ environments: [], isPending: true });
+    testState.useUsage.mockReturnValue({ environments: [], isPending: true, refresh: vi.fn() });
 
     const markup = renderToStaticMarkup(<ProviderLimitsWidgetButton />);
 

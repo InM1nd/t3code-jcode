@@ -15,6 +15,8 @@ import { composerWorkModes, type ComposerWorkMode } from "./workModes";
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
+  /** The active provider doesn't support interaction modes at all (e.g. Codex). */
+  showWorkModeOptions: boolean;
   traitsMenuContent?: ReactNode;
   onInteractionModeChange: (mode: ComposerWorkMode) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
@@ -40,24 +42,28 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
             <MenuDivider />
           </>
         ) : null}
-        <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Work mode</div>
-        <MenuRadioGroup
-          value={props.interactionMode === "default" ? "build" : props.interactionMode}
-          onValueChange={(value) => {
-            if (!value || value === props.interactionMode) return;
-            props.onInteractionModeChange(value as ComposerWorkMode);
-          }}
-        >
-          {composerWorkModes.map((option) => (
-            <MenuRadioItem key={option.mode} value={option.mode}>
-              <div className="grid gap-0.5">
-                <span>{option.label}</span>
-                <span className="text-muted-foreground text-xs">{option.description}</span>
-              </div>
-            </MenuRadioItem>
-          ))}
-        </MenuRadioGroup>
-        <MenuDivider />
+        {props.showWorkModeOptions ? (
+          <>
+            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Work mode</div>
+            <MenuRadioGroup
+              value={props.interactionMode === "default" ? "build" : props.interactionMode}
+              onValueChange={(value) => {
+                if (!value || value === props.interactionMode) return;
+                props.onInteractionModeChange(value as ComposerWorkMode);
+              }}
+            >
+              {composerWorkModes.map((option) => (
+                <MenuRadioItem key={option.mode} value={option.mode}>
+                  <div className="grid gap-0.5">
+                    <span>{option.label}</span>
+                    <span className="text-muted-foreground text-xs">{option.description}</span>
+                  </div>
+                </MenuRadioItem>
+              ))}
+            </MenuRadioGroup>
+            <MenuDivider />
+          </>
+        ) : null}
         <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
         <MenuRadioGroup
           value={props.runtimeMode}

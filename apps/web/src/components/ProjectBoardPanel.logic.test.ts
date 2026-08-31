@@ -10,6 +10,7 @@ import {
   buildBoardImplementPrompt,
   createBoardItemDraft,
   filterProjectBoardItemsByArea,
+  filterProjectBoardItemsByQuery,
   findDraftIdForThread,
   getProjectBoardAreas,
   getProjectBoardCockpit,
@@ -192,6 +193,41 @@ describe("filterProjectBoardItemsByArea", () => {
 
   it("keeps only items matching the selected area", () => {
     expect(filterProjectBoardItemsByArea(items, "mobile").map((entry) => entry.id)).toEqual(["1"]);
+  });
+});
+
+describe("filterProjectBoardItemsByQuery", () => {
+  const items = [
+    item({
+      id: "1" as ProjectBoardItem["id"],
+      title: "[legacy] Fix the login flow",
+      status: "backlog",
+      area: "auth",
+    }),
+    item({
+      id: "2" as ProjectBoardItem["id"],
+      title: "Ship the pricing page",
+      status: "backlog",
+      notes: "Coordinate with SEO",
+    }),
+    item({ id: "3" as ProjectBoardItem["id"], title: "Unrelated card", status: "backlog" }),
+  ];
+
+  it("returns every item for a blank query", () => {
+    expect(filterProjectBoardItemsByQuery(items, "  ")).toHaveLength(3);
+  });
+
+  it("matches the display title case-insensitively, ignoring the legacy prefix", () => {
+    expect(filterProjectBoardItemsByQuery(items, "LOGIN").map((entry) => entry.id)).toEqual(["1"]);
+  });
+
+  it("matches notes and area in addition to title", () => {
+    expect(filterProjectBoardItemsByQuery(items, "seo").map((entry) => entry.id)).toEqual(["2"]);
+    expect(filterProjectBoardItemsByQuery(items, "auth").map((entry) => entry.id)).toEqual(["1"]);
+  });
+
+  it("returns nothing when no field matches", () => {
+    expect(filterProjectBoardItemsByQuery(items, "nonexistent")).toEqual([]);
   });
 });
 

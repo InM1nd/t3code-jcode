@@ -4,6 +4,8 @@ import {
   CorrelationId,
   EventId,
   MessageId,
+  ProjectBoardHandoffId,
+  ProjectBoardItemId,
   ProjectId,
   ThreadId,
   TurnId,
@@ -3218,3 +3220,195 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
     }),
   );
 });
+
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-board-item-projection-")))(
+  "OrchestrationProjectionPipeline board items",
+  (it) => {
+    it.effect(
+      "persists board item upsert/handoff/archive/restore/delete to the projected project row",
+      () =>
+        Effect.gen(function* () {
+          const projectionPipeline = yield* OrchestrationProjectionPipeline;
+          const eventStore = yield* OrchestrationEventStore;
+          const sql = yield* SqlClient.SqlClient;
+          const now = "2026-01-01T00:00:00.000Z";
+          const projectId = ProjectId.make("board-project-1");
+          const itemId = ProjectBoardItemId.make("board-item-1");
+          const threadId = ThreadId.make("board-thread-1");
+
+          const boardItemsJson = () =>
+            sql<{ readonly boardItemsJson: string }>`
+              SELECT board_items_json AS "boardItemsJson"
+              FROM projection_projects
+              WHERE project_id = ${projectId}
+            `.pipe(Effect.map((rows) => JSON.parse(rows[0]!.boardItemsJson)));
+
+          yield* eventStore.append({
+            type: "project.created",
+            eventId: EventId.make("evt-board-project"),
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: now,
+            commandId: CommandId.make("cmd-board-project"),
+            causationEventId: null,
+            correlationId: CommandId.make("cmd-board-project"),
+            metadata: {},
+            payload: {
+              projectId,
+              title: "Board Project",
+              workspaceRoot: "/tmp/board-project",
+              defaultModelSelection: null,
+              scripts: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          });
+
+          yield* eventStore.append({
+            type: "thread.created",
+            eventId: EventId.make("evt-board-thread"),
+            aggregateKind: "thread",
+            aggregateId: threadId,
+            occurredAt: now,
+            commandId: CommandId.make("cmd-board-thread"),
+            causationEventId: null,
+            correlationId: CommandId.make("cmd-board-thread"),
+            metadata: {},
+            payload: {
+              threadId,
+              projectId,
+              title: "Board Thread",
+              modelSelection: {
+                instanceId: ProviderInstanceId.make("codex"),
+                model: "gpt-5-codex",
+              },
+              runtimeMode: "full-access",
+              branch: null,
+              worktreePath: null,
+              createdAt: now,
+              updatedAt: now,
+            },
+          });
+
+          yield* eventStore.append({
+            type: "project.board-item-upserted",
+            eventId: EventId.make("evt-board-upsert"),
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: now,
+            commandId: CommandId.make("cmd-board-upsert"),
+            causationEventId: null,
+            correlationId: CommandId.make("cmd-board-upsert"),
+            metadata: {},
+            payload: {
+              projectId,
+              item: {
+                id: itemId,
+                title: "Ship the thing",
+                status: "backlog",
+                source: "agent",
+                createdAt: now,
+                updatedAt: now,
+              },
+              updatedAt: now,
+            },
+          });
+
+          yield* projectionPipeline.bootstrap;
+
+          // The bug this guards: board items only lived in the in-memory
+          // engine model and the raw event log, never in the SQL-backed
+          // projected row that MCP/UI reads hit — so a create would succeed
+          // but an immediate read-back reported "not found".
+          assert.deepEqual(yield* boardItemsJson(), [
+            {
+              id: itemId,
+              title: "Ship the thing",
+              status: "backlog",
+              source: "agent",
+              createdAt: now,
+              updatedAt: now,
+            },
+          ]);
+
+          yield* eventStore.append({
+            type: "project.board-item-handoff-appended",
+            eventId: EventId.make("evt-board-handoff"),
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: now,
+            commandId: CommandId.make("cmd-board-handoff"),
+            causationEventId: null,
+            correlationId: CommandId.make("cmd-board-handoff"),
+            metadata: {},
+            payload: {
+              projectId,
+              itemId,
+              itemTitle: "Ship the thing",
+              handoff: {
+                id: ProjectBoardHandoffId.make("handoff-1"),
+                sourceThreadId: threadId,
+                summary: "Did the thing",
+                decisions: [],
+                nextStep: "Ship it",
+                createdAt: now,
+              },
+              updatedAt: now,
+            },
+          });
+
+          yield* eventStore.append({
+            type: "project.board.item.archived",
+            eventId: EventId.make("evt-board-archived"),
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: now,
+            commandId: CommandId.make("cmd-board-archived"),
+            causationEventId: null,
+            correlationId: CommandId.make("cmd-board-archived"),
+            metadata: {},
+            payload: { projectId, itemId, archivedAt: now, updatedAt: now },
+          });
+
+          yield* projectionPipeline.bootstrap;
+
+          const afterHandoffAndArchive = yield* boardItemsJson();
+          assert.strictEqual(afterHandoffAndArchive.length, 1);
+          assert.strictEqual(afterHandoffAndArchive[0].latestHandoff.summary, "Did the thing");
+          assert.strictEqual(afterHandoffAndArchive[0].archivedAt, now);
+
+          yield* eventStore.append({
+            type: "project.board.item.restored",
+            eventId: EventId.make("evt-board-restored"),
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: now,
+            commandId: CommandId.make("cmd-board-restored"),
+            causationEventId: null,
+            correlationId: CommandId.make("cmd-board-restored"),
+            metadata: {},
+            payload: { projectId, itemId, updatedAt: now },
+          });
+
+          yield* projectionPipeline.bootstrap;
+          assert.isNull((yield* boardItemsJson())[0].archivedAt);
+
+          yield* eventStore.append({
+            type: "project.board-item-deleted",
+            eventId: EventId.make("evt-board-deleted"),
+            aggregateKind: "project",
+            aggregateId: projectId,
+            occurredAt: now,
+            commandId: CommandId.make("cmd-board-deleted"),
+            causationEventId: null,
+            correlationId: CommandId.make("cmd-board-deleted"),
+            metadata: {},
+            payload: { projectId, itemId, updatedAt: now },
+          });
+
+          yield* projectionPipeline.bootstrap;
+          assert.deepEqual(yield* boardItemsJson(), []);
+        }),
+    );
+  },
+);

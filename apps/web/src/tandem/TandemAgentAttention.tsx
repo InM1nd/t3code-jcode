@@ -7,12 +7,15 @@ import {
   CircleCheckIcon,
   CircleHelpIcon,
   LoaderCircleIcon,
+  XIcon,
 } from "lucide-react";
 import { useMemo } from "react";
 import { useRouter } from "@tanstack/react-router";
 
 import { resolveSidebarThreadStatus } from "../components/Sidebar.logic";
 import { Popover, PopoverPopup, PopoverTrigger } from "../components/ui/popover";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
+import { useThreadActions } from "../hooks/useThreadActions";
 import { useThreadShells } from "../state/entities";
 import { buildThreadRouteParams } from "../threadRoutes";
 import {
@@ -54,6 +57,7 @@ const statePresentation = {
 
 export function TandemAgentAttention() {
   const router = useRouter();
+  const { archiveThread } = useThreadActions();
   const threads = useThreadShells();
   const entries = useMemo<ReadonlyArray<AgentEntry>>(
     () =>
@@ -97,6 +101,12 @@ export function TandemAgentAttention() {
     });
   };
 
+  // Archiving (not deleting) an errored thread only hides it from this list;
+  // the thread and its history stay reachable from the sidebar's archive.
+  const dismissThread = (entry: AgentEntry) => {
+    void archiveThread(scopeThreadRef(entry.environmentId, entry.threadId));
+  };
+
   return (
     <Popover>
       <PopoverTrigger
@@ -130,6 +140,7 @@ export function TandemAgentAttention() {
         <AgentSection
           entries={visibleEntries.needsAction}
           label="Needs you"
+          onDismissThread={dismissThread}
           onOpenThread={openThread}
         />
         <AgentSection
@@ -152,10 +163,13 @@ function AgentSection({
   entries,
   label,
   onOpenThread,
+  onDismissThread,
 }: {
   entries: ReadonlyArray<AgentEntry | undefined>;
   label: string;
   onOpenThread: (entry: AgentEntry) => void;
+  /** Only offered for states the user can't act on further, e.g. "error". */
+  onDismissThread?: (entry: AgentEntry) => void;
 }) {
   const visible = entries.filter((entry): entry is AgentEntry => entry !== undefined);
   if (visible.length === 0) return null;
@@ -168,19 +182,43 @@ function AgentSection({
       {visible.map((entry) => {
         const presentation = statePresentation[entry.state];
         return (
-          <button
+          <div
             key={`${entry.environmentId}:${entry.threadId}`}
-            type="button"
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => onOpenThread(entry)}
+            className="group flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-accent"
           >
-            <presentation.Icon
-              aria-hidden
-              className={`size-3.5 shrink-0 ${presentation.className}`}
-            />
-            <span className="min-w-0 flex-1 truncate text-sm">{entry.title}</span>
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => onOpenThread(entry)}
+            >
+              <presentation.Icon
+                aria-hidden
+                className={`size-3.5 shrink-0 ${presentation.className}`}
+              />
+              <span className="min-w-0 flex-1 truncate text-sm">{entry.title}</span>
+            </button>
             <span className="shrink-0 text-[11px] text-muted-foreground">{presentation.label}</span>
-          </button>
+            {onDismissThread && entry.state === "error" ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="Dismiss (archives the thread)"
+                      className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDismissThread(entry);
+                      }}
+                    />
+                  }
+                >
+                  <XIcon aria-hidden className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipPopup side="top">Dismiss (archives the thread)</TooltipPopup>
+              </Tooltip>
+            ) : null}
+          </div>
         );
       })}
     </section>
