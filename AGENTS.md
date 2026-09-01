@@ -112,6 +112,10 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
+- This repo is a fork. Every commit, push, and PR targets `origin` (this fork) and its own default
+  branch — never the `upstream` remote (the original template repo). `gh pr create` defaults to the
+  parent repo when run from a GitHub fork, so always pass `--repo` explicitly matching `origin`, and
+  double-check the created PR's base repo before doing anything else with it.
 - Conventional commit titles, plain language: `fix(web): new threads no longer spike CPU`.
 - Body: the problem in a sentence or two, then how you fixed it. End with the model and harness that did the work.
 - UI changes need before/after images. Motion or timing needs a short video.
