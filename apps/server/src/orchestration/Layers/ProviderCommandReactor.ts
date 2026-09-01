@@ -46,6 +46,8 @@ import {
   formatWorkspaceScopePromptBlock,
   prependWorkspaceScopeToTurnInput,
 } from "../workspaceScopePrompt.ts";
+import { buildActivePortsTurnInputPrefix } from "../activePortsPrompt.ts";
+import * as PortScanner from "../../preview/PortScanner.ts";
 import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
@@ -323,6 +325,7 @@ const make = Effect.gen(function* () {
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+  const portDiscovery = yield* PortScanner.PortDiscovery;
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -873,6 +876,16 @@ const make = Effect.gen(function* () {
         formatWorkspaceScopePromptBlock({ cwd: thread.worktreePath, branch: thread.branch }),
       );
     }
+    turnInput = yield* buildActivePortsTurnInputPrefix({
+      turnInput,
+      currentThreadId: input.threadId,
+      portDiscovery,
+      getThreadTitle: (threadId) =>
+        projectionSnapshotQuery.getThreadShellById(threadId).pipe(
+          Effect.map((shell) => Option.getOrNull(shell)?.title ?? null),
+          Effect.orElseSucceed(() => null),
+        ),
+    });
 
     return {
       threadId: input.threadId,

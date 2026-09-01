@@ -62,6 +62,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
+import * as PortScanner from "../../preview/PortScanner.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
@@ -418,6 +419,17 @@ describe("ProviderCommandReactor", () => {
             Effect.die("refreshLocalStatus should not be called in this test"),
           refreshStatus,
           streamStatus: () => Stream.die("streamStatus should not be called in this test"),
+        }),
+      ),
+      Layer.provideMerge(
+        Layer.succeed(PortScanner.PortDiscovery, {
+          scan: () => Effect.succeed([]),
+          subscribe: () => Effect.die("subscribe should not be called in this test"),
+          retain: Effect.die("retain should not be called in this test"),
+          registerTerminalProcesses: () =>
+            Effect.die("registerTerminalProcesses should not be called in this test"),
+          unregisterTerminal: () =>
+            Effect.die("unregisterTerminal should not be called in this test"),
         }),
       ),
       Layer.provideMerge(
