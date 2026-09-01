@@ -154,3 +154,16 @@ The moved code did not shrink — it lives in `decider.projectBoard.ts`,
 `projectBoard.ts`, `projectBoard.test.ts`, `projectBoardPalette.tsx`,
 `composerAttachmentsPalette.tsx`, and `threadRollover.tsx`, which upstream will
 never touch.
+
+## CI runners
+
+Upstream's workflows in `.github/workflows/` run on Blacksmith (`blacksmith-*` runner labels), a
+paid fleet tied to upstream's own account. That subscription does not carry over to a fork, so
+those jobs queue forever with no runner ever picked up — this is not a broken build, it's a runner
+label with no fleet behind it on this fork.
+
+This fork runs the same jobs on free GitHub-hosted runners instead (`ubuntu-latest`,
+`macos-latest`, `windows-latest`), with the original label kept as a trailing comment
+(`runs-on: ubuntu-latest  # blacksmith-8vcpu-ubuntu-2404`) so a future upstream sync shows exactly
+what changed and why, rather than a silent runner swap. Pulling in an upstream workflow change
+needs the same substitution re-applied to whatever new `blacksmith-*` lines it adds.
