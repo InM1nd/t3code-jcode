@@ -896,6 +896,7 @@ const make = Effect.gen(function* () {
                 }),
               }),
             ),
+            Effect.orElseSucceed(() => null),
           ),
         );
         turnInput = prependActivePortsToTurnInput(
