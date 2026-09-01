@@ -46,11 +46,7 @@ import {
   formatWorkspaceScopePromptBlock,
   prependWorkspaceScopeToTurnInput,
 } from "../workspaceScopePrompt.ts";
-import {
-  formatActivePortsPromptBlock,
-  prependActivePortsToTurnInput,
-} from "../activePortsPrompt.ts";
-import { selectOtherThreadPortOwners } from "../activePortOwners.ts";
+import { buildActivePortsTurnInputPrefix } from "../activePortsPrompt.ts";
 import * as PortScanner from "../../preview/PortScanner.ts";
 import {
   ProviderCommandReactor,
@@ -880,33 +876,16 @@ const make = Effect.gen(function* () {
         formatWorkspaceScopePromptBlock({ cwd: thread.worktreePath, branch: thread.branch }),
       );
     }
-    if (turnInput) {
-      const discoveredServers = yield* portDiscovery.scan();
-      const otherOwners = selectOtherThreadPortOwners(discoveredServers, input.threadId);
-      if (otherOwners.length > 0) {
-        const resolvedEntries = yield* Effect.forEach(otherOwners, (owner) =>
-          projectionSnapshotQuery.getThreadShellById(owner.threadId).pipe(
-            Effect.map((shellOption) =>
-              Option.match(shellOption, {
-                onNone: () => null,
-                onSome: (shell) => ({
-                  port: owner.port,
-                  processName: owner.processName,
-                  threadTitle: shell.title,
-                }),
-              }),
-            ),
-            Effect.orElseSucceed(() => null),
-          ),
-        );
-        turnInput = prependActivePortsToTurnInput(
-          turnInput,
-          formatActivePortsPromptBlock(
-            resolvedEntries.filter((entry): entry is NonNullable<typeof entry> => entry !== null),
-          ),
-        );
-      }
-    }
+    turnInput = yield* buildActivePortsTurnInputPrefix({
+      turnInput,
+      currentThreadId: input.threadId,
+      portDiscovery,
+      getThreadTitle: (threadId) =>
+        projectionSnapshotQuery.getThreadShellById(threadId).pipe(
+          Effect.map((shell) => Option.getOrNull(shell)?.title ?? null),
+          Effect.orElseSucceed(() => null),
+        ),
+    });
 
     return {
       threadId: input.threadId,
