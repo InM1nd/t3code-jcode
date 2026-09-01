@@ -8,6 +8,7 @@ const otherThreadId = ThreadId.make("thread-other");
 const mocks = vi.hoisted(() => ({
   servers: [] as ReadonlyArray<DiscoveredLocalServer>,
   environments: [] as ReadonlyArray<{ environmentId: EnvironmentId; label: string }>,
+  threadRefs: [] as ReadonlyArray<{ environmentId: EnvironmentId; threadId: ThreadId }>,
 }));
 
 vi.mock("~/state/environments", () => ({
@@ -15,10 +16,13 @@ vi.mock("~/state/environments", () => ({
 }));
 vi.mock("~/state/entities", () => ({
   useActiveEnvironmentId: () => envId,
-  findThreadRef: (threadId: ThreadId) =>
-    threadId === otherThreadId ? { environmentId: envId, threadId: otherThreadId } : null,
+  useEnvironmentThreadRefs: () => mocks.threadRefs,
   useThreadShell: () => ({ title: "Landing redesign" }),
 }));
+vi.mock("~/browser/browserTargetResolver", () => ({
+  resolveDiscoveredServerUrl: (_environmentId: EnvironmentId, url: string) => url,
+}));
+vi.mock("~/localApi", () => ({ readLocalApi: () => undefined }));
 vi.mock("~/portDiscoveryState", () => ({
   useDiscoveredPorts: () => mocks.servers,
 }));
@@ -53,6 +57,7 @@ describe("PortsPage", () => {
 
   it("lists a discovered port with its owning thread", () => {
     mocks.environments = [{ environmentId: envId, label: "Local" }];
+    mocks.threadRefs = [{ environmentId: envId, threadId: otherThreadId }];
     mocks.servers = [
       {
         host: "localhost",
@@ -67,6 +72,26 @@ describe("PortsPage", () => {
     expect(html).toContain("localhost:5173");
     expect(html).toContain("vite");
     expect(html).toContain("Landing redesign");
+  });
+
+  it("falls back to a generic owner label until the owning thread's ref is known", () => {
+    mocks.environments = [{ environmentId: envId, label: "Local" }];
+    // Thread refs read reactively, so a row rendered before they arrive shows
+    // the fallback and swaps to the title once the atom emits.
+    mocks.threadRefs = [];
+    mocks.servers = [
+      {
+        host: "localhost",
+        port: 5173,
+        url: "http://localhost:5173",
+        processName: "vite",
+        pid: 1234,
+        terminal: { threadId: otherThreadId, terminalId: "term-1" },
+      },
+    ];
+    const html = renderToStaticMarkup(<PortsPage />);
+    expect(html).toContain("Another thread");
+    expect(html).not.toContain("Landing redesign");
   });
 
   it("sorts by host before port so same-port rows on different hosts don't look identical", () => {

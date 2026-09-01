@@ -1,10 +1,13 @@
-import type { DiscoveredLocalServer, EnvironmentId } from "@t3tools/contracts";
+import type { DiscoveredLocalServer, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import { RadioTowerIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
+import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { readLocalApi } from "~/localApi";
 import { useDiscoveredPorts } from "~/portDiscoveryState";
-import { findThreadRef, useActiveEnvironmentId, useThreadShell } from "~/state/entities";
+import { useActiveEnvironmentId, useEnvironmentThreadRefs, useThreadShell } from "~/state/entities";
 import { useEnvironments } from "~/state/environments";
 
 import { isElectron } from "../../env";
@@ -16,8 +19,17 @@ import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadc
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 
-function PortOwnerCell({ server }: { server: DiscoveredLocalServer }) {
-  const ownerRef = server.terminal ? findThreadRef(server.terminal.threadId) : null;
+function PortOwnerCell({
+  server,
+  threadRefs,
+}: {
+  server: DiscoveredLocalServer;
+  threadRefs: ReadonlyArray<ScopedThreadRef>;
+}) {
+  // Reactive on purpose: a cold deep-link to /ports can render before thread
+  // refs finish bootstrapping, and a one-shot snapshot read would leave the row
+  // stuck on the fallback label forever.
+  const ownerRef = threadRefs.find((ref) => ref.threadId === server.terminal?.threadId) ?? null;
   const ownerShell = useThreadShell(ownerRef);
   if (!server.terminal) {
     return <span className="text-muted-foreground">Not attributed</span>;
@@ -36,7 +48,19 @@ function PortOwnerCell({ server }: { server: DiscoveredLocalServer }) {
   );
 }
 
-function PortRow({ server }: { server: DiscoveredLocalServer }) {
+function PortRow({
+  server,
+  environmentId,
+  threadRefs,
+}: {
+  server: DiscoveredLocalServer;
+  environmentId: EnvironmentId;
+  threadRefs: ReadonlyArray<ScopedThreadRef>;
+}) {
+  const { copyToClipboard } = useCopyToClipboard({ target: "URL" });
+  // server.url is localhost from the *environment's* point of view; on a remote
+  // client that host is the wrong machine until it's resolved.
+  const resolvedUrl = resolveDiscoveredServerUrl(environmentId, server.url);
   return (
     <div className="flex items-center gap-3 border-b border-border/60 px-3 py-2 text-sm last:border-b-0">
       <span className="w-36 shrink-0 truncate font-mono text-foreground">
@@ -46,20 +70,22 @@ function PortRow({ server }: { server: DiscoveredLocalServer }) {
         {server.processName ?? "Listening"}
       </span>
       <span className="min-w-0 flex-1 truncate">
-        <PortOwnerCell server={server} />
+        <PortOwnerCell server={server} threadRefs={threadRefs} />
       </span>
       <Button
         size="sm"
         variant="outline"
-        onClick={() => window.open(server.url, "_blank", "noopener,noreferrer")}
+        onClick={() => {
+          void readLocalApi()
+            ?.shell.openExternal(resolvedUrl)
+            .catch((error: unknown) => {
+              console.error(error);
+            });
+        }}
       >
         Open
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => void navigator.clipboard.writeText(server.url)}
-      >
+      <Button size="sm" variant="ghost" onClick={() => copyToClipboard(resolvedUrl, undefined)}>
         Copy URL
       </Button>
     </div>
@@ -75,6 +101,7 @@ export function PortsPage() {
   const environmentId =
     selectedEnvironmentId ?? activeEnvironmentId ?? environments[0]?.environmentId ?? null;
   const servers = useDiscoveredPorts(environmentId);
+  const threadRefs = useEnvironmentThreadRefs(environmentId);
   const sortedServers = useMemo(
     () => servers.toSorted((a, b) => a.host.localeCompare(b.host) || a.port - b.port),
     [servers],
@@ -117,7 +144,7 @@ export function PortsPage() {
       <WorkspacePageHeader electron={isElectron}>{topbarContent}</WorkspacePageHeader>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <WorkspacePageContainer width="wide">
-          {sortedServers.length === 0 ? (
+          {sortedServers.length === 0 || environmentId === null ? (
             <Empty>
               <EmptyMedia variant="icon">
                 <RadioTowerIcon className="size-4.5 text-muted-foreground" />
@@ -131,7 +158,12 @@ export function PortsPage() {
           ) : (
             <div className="overflow-hidden rounded-xl border border-border/70 bg-background">
               {sortedServers.map((server) => (
-                <PortRow key={`${server.host}:${server.port}`} server={server} />
+                <PortRow
+                  key={`${server.host}:${server.port}`}
+                  server={server}
+                  environmentId={environmentId}
+                  threadRefs={threadRefs}
+                />
               ))}
             </div>
           )}
