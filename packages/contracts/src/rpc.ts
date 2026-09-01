@@ -193,6 +193,7 @@ import {
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
 import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import { LocalDomainsRpcGroup } from "./localDomainsRpc.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   SourceControlCloneRepositoryInput,
@@ -1140,3 +1141,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
 );
+
+/** The base group plus fork-owned RPCs, used wherever the wire protocol needs the full method set. */
+export const WsFullRpcGroup = WsRpcGroup.merge(LocalDomainsRpcGroup);

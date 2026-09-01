@@ -114,6 +114,7 @@ import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
+import { LocalDomains } from "./localDomains.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
@@ -398,6 +399,7 @@ const buildAppUnderTest = (options?: {
   layers?: {
     keybindings?: Partial<Keybindings.Keybindings["Service"]>;
     environmentTheme?: Partial<EnvironmentTheme.EnvironmentThemeService["Service"]>;
+    localDomains?: Partial<LocalDomains["Service"]>;
     providerRegistry?: Partial<ProviderRegistry.ProviderRegistry["Service"]>;
     providerService?: Partial<ProviderService.ProviderService["Service"]>;
     serverSettings?: Partial<ServerSettings.ServerSettingsService["Service"]>;
@@ -646,6 +648,12 @@ const buildAppUnderTest = (options?: {
             current: Effect.succeed([]),
             streamChanges: Stream.empty,
             ...options?.layers?.environmentTheme,
+          }),
+          Layer.mock(LocalDomains)({
+            list: Effect.succeed({ domains: [], supported: false, proxyError: null }),
+            publish: () => Effect.die("Local domains are not stubbed in this test"),
+            unpublish: () => Effect.die("Local domains are not stubbed in this test"),
+            ...options?.layers?.localDomains,
           }),
         ),
       ),

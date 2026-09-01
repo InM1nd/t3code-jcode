@@ -6,18 +6,19 @@ import {
   AuthRelayWriteScope,
   AuthReviewWriteScope,
   AuthTerminalOperateScope,
+  LOCAL_DOMAINS_WS_METHODS,
   ORCHESTRATION_WS_METHODS,
   type AuthEnvironmentScope,
   WS_METHODS,
-  WsRpcGroup,
+  WsFullRpcGroup,
 } from "@t3tools/contracts";
 import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
-type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
+type WsRpcMethod = RpcGroup.Rpcs<typeof WsFullRpcGroup>["_tag"];
 
 /**
  * Keep authorization coverage coupled to the RPC group itself. Adding an RPC to
- * `WsRpcGroup` without choosing a scope is a type error instead of a production
+ * `WsFullRpcGroup` without choosing a scope is a type error instead of a production
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
@@ -124,6 +125,9 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.previewAutomationFocusHost]: AuthOrchestrationOperateScope,
   [WS_METHODS.subscribePreviewEvents]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeDiscoveredLocalServers]: AuthOrchestrationReadScope,
+  [LOCAL_DOMAINS_WS_METHODS.list]: AuthOrchestrationReadScope,
+  [LOCAL_DOMAINS_WS_METHODS.publish]: AuthOrchestrationOperateScope,
+  [LOCAL_DOMAINS_WS_METHODS.unpublish]: AuthOrchestrationOperateScope,
   [WS_METHODS.subscribeServerConfig]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeServerLifecycle]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeAuthAccess]: AuthAccessReadScope,

@@ -65,6 +65,7 @@ import {
   type TerminalEvent,
   type TerminalMetadataStreamEvent,
   WS_METHODS,
+  WsFullRpcGroup,
   WsRpcGroup,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
@@ -75,6 +76,7 @@ import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
+import { LocalDomainsWsRpcLayer } from "./localDomainsWs.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import {
   projectActivityEvent,
@@ -2569,7 +2571,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         const clientAnalyticsProps = readClientAnalyticsProps(request);
         yield* sessions.recordClientConnection(session.sessionId, clientOrigin);
         yield* analytics.record("client.connected", clientAnalyticsProps);
-        const rpcWebSocketHttpEffect = yield* RpcServer.toHttpEffectWebsocket(WsRpcGroup, {
+        const rpcWebSocketHttpEffect = yield* RpcServer.toHttpEffectWebsocket(WsFullRpcGroup, {
           disableTracing: true,
         }).pipe(
           Effect.provide(
@@ -2579,6 +2581,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               clientAnalyticsProps,
               previewAutomationBroker,
             ).pipe(
+              Layer.provideMerge(LocalDomainsWsRpcLayer),
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
