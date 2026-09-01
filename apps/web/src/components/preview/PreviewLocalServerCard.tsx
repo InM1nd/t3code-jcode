@@ -1,6 +1,9 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
 
+import { findThreadRef, useThreadShell } from "~/state/entities";
+
 import { PreviewFaviconIcon } from "./PreviewFaviconIcon";
+import { portOwnerLabel } from "./portOwnerLabel";
 import type { PreviewableServer } from "./useDiscoveredLocalServers";
 
 interface Props {
@@ -11,6 +14,16 @@ interface Props {
 
 export function PreviewLocalServerCard({ threadRef, server, onOpen }: Props) {
   const subtitle = describeServer(server);
+  const ownerRef =
+    server.terminal && server.terminal.threadId !== threadRef.threadId
+      ? findThreadRef(server.terminal.threadId)
+      : null;
+  const ownerShell = useThreadShell(ownerRef);
+  const ownerLabel = portOwnerLabel({
+    terminal: server.terminal,
+    currentThreadId: threadRef.threadId,
+    ownerTitle: ownerShell?.title ?? null,
+  });
   return (
     <button
       type="button"
@@ -22,6 +35,7 @@ export function PreviewLocalServerCard({ threadRef, server, onOpen }: Props) {
         <span className="truncate text-sm font-medium text-foreground">{subtitle}</span>
         <span className="truncate text-xs text-muted-foreground">
           {server.host}:{server.port}
+          {ownerLabel ? ` · ${ownerLabel}` : ""}
         </span>
       </div>
     </button>
