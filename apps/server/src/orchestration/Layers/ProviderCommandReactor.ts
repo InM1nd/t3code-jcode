@@ -47,6 +47,12 @@ import {
   prependWorkspaceScopeToTurnInput,
 } from "../workspaceScopePrompt.ts";
 import {
+  formatActivePortsPromptBlock,
+  prependActivePortsToTurnInput,
+} from "../activePortsPrompt.ts";
+import { selectOtherThreadPortOwners } from "../activePortOwners.ts";
+import * as PortScanner from "../../preview/PortScanner.ts";
+import {
   ProviderCommandReactor,
   type ProviderCommandReactorShape,
 } from "../Services/ProviderCommandReactor.ts";
@@ -323,6 +329,7 @@ const make = Effect.gen(function* () {
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+  const portDiscovery = yield* PortScanner.PortDiscovery;
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -872,6 +879,32 @@ const make = Effect.gen(function* () {
         turnInput,
         formatWorkspaceScopePromptBlock({ cwd: thread.worktreePath, branch: thread.branch }),
       );
+    }
+    if (turnInput) {
+      const discoveredServers = yield* portDiscovery.scan();
+      const otherOwners = selectOtherThreadPortOwners(discoveredServers, input.threadId);
+      if (otherOwners.length > 0) {
+        const resolvedEntries = yield* Effect.forEach(otherOwners, (owner) =>
+          projectionSnapshotQuery.getThreadShellById(owner.threadId).pipe(
+            Effect.map((shellOption) =>
+              Option.match(shellOption, {
+                onNone: () => null,
+                onSome: (shell) => ({
+                  port: owner.port,
+                  processName: owner.processName,
+                  threadTitle: shell.title,
+                }),
+              }),
+            ),
+          ),
+        );
+        turnInput = prependActivePortsToTurnInput(
+          turnInput,
+          formatActivePortsPromptBlock(
+            resolvedEntries.filter((entry): entry is NonNullable<typeof entry> => entry !== null),
+          ),
+        );
+      }
     }
 
     return {

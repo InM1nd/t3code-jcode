@@ -81,6 +81,7 @@ import * as WorkspacePaths from "../src/workspace/WorkspacePaths.ts";
 import * as VcsDriverRegistry from "../src/vcs/VcsDriverRegistry.ts";
 import { VcsStatusBroadcaster } from "../src/vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../src/git/GitWorkflowService.ts";
+import * as PortScanner from "../src/preview/PortScanner.ts";
 import * as VcsProcess from "../src/vcs/VcsProcess.ts";
 import * as AgentAwarenessRelay from "../src/relay/AgentAwarenessRelay.ts";
 
@@ -337,6 +338,17 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provideMerge(gitWorkflowLayer),
       Layer.provideMerge(textGenerationLayer),
       Layer.provideMerge(serverSettingsLayer),
+      Layer.provideMerge(
+        Layer.succeed(PortScanner.PortDiscovery, {
+          scan: () => Effect.succeed([]),
+          subscribe: () => Effect.die("subscribe should not be called in this test"),
+          retain: Effect.die("retain should not be called in this test"),
+          registerTerminalProcesses: () =>
+            Effect.die("registerTerminalProcesses should not be called in this test"),
+          unregisterTerminal: () =>
+            Effect.die("unregisterTerminal should not be called in this test"),
+        }),
+      ),
     );
     const checkpointReactorLayer = CheckpointReactorLive.pipe(
       Layer.provideMerge(runtimeServicesLayer),
