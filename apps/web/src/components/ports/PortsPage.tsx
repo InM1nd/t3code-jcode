@@ -18,6 +18,7 @@ import { SidebarInset } from "../ui/sidebar";
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { LocalDomainsPortControls } from "./LocalDomainsPortControls";
 
 function PortOwnerCell({
   server,
@@ -62,7 +63,7 @@ function PortRow({
   // client that host is the wrong machine until it's resolved.
   const resolvedUrl = resolveDiscoveredServerUrl(environmentId, server.url);
   return (
-    <div className="flex items-center gap-3 border-b border-border/60 px-3 py-2 text-sm last:border-b-0">
+    <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-3 py-2 text-sm last:border-b-0">
       <span className="w-36 shrink-0 truncate font-mono text-foreground">
         {server.host}:{server.port}
       </span>
@@ -88,6 +89,7 @@ function PortRow({
       <Button size="sm" variant="ghost" onClick={() => copyToClipboard(resolvedUrl, undefined)}>
         Copy URL
       </Button>
+      <LocalDomainsPortControls server={server} environmentId={environmentId} />
     </div>
   );
 }

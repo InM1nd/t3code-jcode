@@ -26,6 +26,7 @@ vi.mock("~/localApi", () => ({ readLocalApi: () => undefined }));
 vi.mock("~/portDiscoveryState", () => ({
   useDiscoveredPorts: () => mocks.servers,
 }));
+vi.mock("./LocalDomainsPortControls", () => ({ LocalDomainsPortControls: () => null }));
 // PortsPage isn't rendered inside a <RouterProvider> in this unit test, and
 // @tanstack/react-router's <Link> throws without one. UsagePage's sibling
 // ProviderLimitsPopover.test.tsx hits the same issue and works around it the

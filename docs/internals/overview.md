@@ -31,8 +31,9 @@ there, never in the client.
 ## The RPC boundary
 
 The client/server contract is an Effect RPC group, not a hand-rolled push protocol. [`rpc.ts`][rpc]
-declares `WS_METHODS` and assembles `WsRpcGroup`; each member is either unary or a server stream
-(`stream: true`). Streaming members such as `orchestration.subscribeShell`,
+declares `WS_METHODS` and assembles `WsRpcGroup`; fork-owned RPC groups merge into it as
+`WsFullRpcGroup`, which is what's actually served and used by clients. Each member is either unary
+or a server stream (`stream: true`). Streaming members such as `orchestration.subscribeShell`,
 `orchestration.subscribeThread`, `subscribeServerConfig`, and `terminal.attach` replace what used to
 be a broadcast push bus: a client subscribes to what it needs and the server pushes only on that
 subscription.
