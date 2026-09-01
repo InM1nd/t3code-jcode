@@ -39,7 +39,9 @@ function PortOwnerCell({ server }: { server: DiscoveredLocalServer }) {
 function PortRow({ server }: { server: DiscoveredLocalServer }) {
   return (
     <div className="flex items-center gap-3 border-b border-border/60 px-3 py-2 text-sm last:border-b-0">
-      <span className="w-20 shrink-0 font-mono text-foreground">{server.port}</span>
+      <span className="w-36 shrink-0 truncate font-mono text-foreground">
+        {server.host}:{server.port}
+      </span>
       <span className="w-32 shrink-0 truncate text-muted-foreground">
         {server.processName ?? "Listening"}
       </span>
@@ -73,7 +75,10 @@ export function PortsPage() {
   const environmentId =
     selectedEnvironmentId ?? activeEnvironmentId ?? environments[0]?.environmentId ?? null;
   const servers = useDiscoveredPorts(environmentId);
-  const sortedServers = useMemo(() => servers.toSorted((a, b) => a.port - b.port), [servers]);
+  const sortedServers = useMemo(
+    () => servers.toSorted((a, b) => a.host.localeCompare(b.host) || a.port - b.port),
+    [servers],
+  );
 
   const topbarContent = (
     <div className="flex w-full min-w-0 items-center gap-3">

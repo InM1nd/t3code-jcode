@@ -64,9 +64,36 @@ describe("PortsPage", () => {
       },
     ];
     const html = renderToStaticMarkup(<PortsPage />);
-    expect(html).toContain("5173");
+    expect(html).toContain("localhost:5173");
     expect(html).toContain("vite");
     expect(html).toContain("Landing redesign");
+  });
+
+  it("sorts by host before port so same-port rows on different hosts don't look identical", () => {
+    mocks.environments = [{ environmentId: envId, label: "Local" }];
+    mocks.servers = [
+      {
+        host: "192.168.1.5",
+        port: 3000,
+        url: "http://192.168.1.5:3000",
+        processName: "next",
+        pid: null,
+        terminal: null,
+      },
+      {
+        host: "localhost",
+        port: 3000,
+        url: "http://localhost:3000",
+        processName: "vite",
+        pid: null,
+        terminal: null,
+      },
+    ];
+    const html = renderToStaticMarkup(<PortsPage />);
+    // "192.168.1.5" sorts before "localhost" (localeCompare), so it must
+    // appear first in the markup despite both rows sharing port 3000 — proof
+    // the comparator breaks ties on host, not just port.
+    expect(html.indexOf("192.168.1.5:3000")).toBeLessThan(html.indexOf("localhost:3000"));
   });
 
   it("shows 'Not attributed' for a port with no terminal owner", () => {
