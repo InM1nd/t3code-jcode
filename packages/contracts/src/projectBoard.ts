@@ -85,6 +85,9 @@ export const ProjectBoardItem = Schema.Struct({
   notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
   latestHandoff: Schema.optional(Schema.NullOr(ProjectBoardHandoff)),
+  // Older handoffs, newest first, capped by PROJECT_BOARD_HANDOFF_HISTORY_LIMIT.
+  // latestHandoff is kept alongside this for older servers/clients.
+  handoffHistory: Schema.optional(Schema.Array(ProjectBoardHandoff)),
   source: ProjectBoardItemSource,
   sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Turns that touched this card. Optional for older servers/clients.
@@ -93,6 +96,10 @@ export const ProjectBoardItem = Schema.Struct({
   // fixed enum: projects differ too much to share one taxonomy. Optional for
   // older servers/clients.
   area: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  // External URLs (GitHub issue/PR, doc, etc) this card tracks.
+  externalRefs: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  // Other board items this card relates to or depends on.
+  relatedItemIds: Schema.optional(Schema.Array(ProjectBoardItemId)),
   archivedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -115,6 +122,9 @@ export const ProjectBoardItemUpsertCommand = Schema.Struct({
   // Append a single turn id (deduped, capped) when provided.
   linkTurnId: Schema.optional(Schema.NullOr(TurnId)),
   area: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  // Replaces the full list when provided (same semantics as linkedTurnIds).
+  externalRefs: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  relatedItemIds: Schema.optional(Schema.Array(ProjectBoardItemId)),
 });
 
 export const ProjectBoardItemHandoffAppendCommand = Schema.Struct({

@@ -200,6 +200,84 @@ it.layer(NodeServices.layer)("decider project board", (it) => {
     }),
   );
 
+  it.effect(
+    "preserves externalRefs/relatedItemIds across an omitted update, replaces on provide, and drops self-references",
+    () =>
+      Effect.gen(function* () {
+        const now = "2026-01-01T00:00:00.000Z";
+        const projectId = asProjectId("project-board-refs");
+        let readModel = yield* projectEvent(
+          createEmptyReadModel(now),
+          createProjectEvent({ sequence: 1, projectId, now }),
+        );
+
+        const created = yield* decideOrchestrationCommand({
+          command: {
+            type: "project.board.item.upsert",
+            commandId: CommandId.make("cmd-board-refs-create"),
+            projectId,
+            itemId: asItemId("item-1"),
+            title: "Tracked card",
+            status: "backlog",
+            externalRefs: ["https://github.com/example/repo/issues/1"],
+            relatedItemIds: [asItemId("item-1"), asItemId("item-2")],
+          },
+          readModel,
+        });
+        const createdEvent = Array.isArray(created) ? created[0] : created;
+        if (!createdEvent || createdEvent.type !== "project.board-item-upserted") {
+          throw new Error("expected create event");
+        }
+        // self-id is filtered out of relatedItemIds.
+        expect(createdEvent.payload.item.relatedItemIds).toEqual([asItemId("item-2")]);
+        expect(createdEvent.payload.item.externalRefs).toEqual([
+          "https://github.com/example/repo/issues/1",
+        ]);
+        readModel = yield* projectEvent(readModel, createdEvent);
+
+        const statusOnly = yield* decideOrchestrationCommand({
+          command: {
+            type: "project.board.item.upsert",
+            commandId: CommandId.make("cmd-board-refs-status"),
+            projectId,
+            itemId: asItemId("item-1"),
+            title: "Tracked card",
+            status: "ready",
+          },
+          readModel,
+        });
+        const statusOnlyEvent = Array.isArray(statusOnly) ? statusOnly[0] : statusOnly;
+        if (!statusOnlyEvent || statusOnlyEvent.type !== "project.board-item-upserted") {
+          throw new Error("expected status-only update event");
+        }
+        expect(statusOnlyEvent.payload.item.externalRefs).toEqual([
+          "https://github.com/example/repo/issues/1",
+        ]);
+        expect(statusOnlyEvent.payload.item.relatedItemIds).toEqual([asItemId("item-2")]);
+        readModel = yield* projectEvent(readModel, statusOnlyEvent);
+
+        const cleared = yield* decideOrchestrationCommand({
+          command: {
+            type: "project.board.item.upsert",
+            commandId: CommandId.make("cmd-board-refs-clear"),
+            projectId,
+            itemId: asItemId("item-1"),
+            title: "Tracked card",
+            status: "ready",
+            externalRefs: [],
+            relatedItemIds: [],
+          },
+          readModel,
+        });
+        const clearedEvent = Array.isArray(cleared) ? cleared[0] : cleared;
+        if (!clearedEvent || clearedEvent.type !== "project.board-item-upserted") {
+          throw new Error("expected clear event");
+        }
+        expect(clearedEvent.payload.item.externalRefs).toEqual([]);
+        expect(clearedEvent.payload.item.relatedItemIds).toEqual([]);
+      }),
+  );
+
   it.effect("archives and restores a board item without changing its status", () =>
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";

@@ -1,6 +1,7 @@
 import type {
   EnvironmentId,
   ProjectBoardItem,
+  ProjectBoardItemId,
   ProjectBoardItemStatus,
   ThreadId,
 } from "@t3tools/contracts";
@@ -138,6 +139,8 @@ export interface BoardItemDraft {
   briefCriteria: string;
   briefFiles: string;
   briefNotes: string;
+  externalRefs: string;
+  relatedItemIds: ProjectBoardItemId[];
 }
 
 export function createBoardItemDraft(item: ProjectBoardItem): BoardItemDraft {
@@ -150,6 +153,8 @@ export function createBoardItemDraft(item: ProjectBoardItem): BoardItemDraft {
     briefCriteria: item.brief?.acceptanceCriteria.join("\n") ?? "",
     briefFiles: item.brief?.importantFiles.join("\n") ?? "",
     briefNotes: item.brief?.notes ?? "",
+    externalRefs: item.externalRefs?.join("\n") ?? "",
+    relatedItemIds: item.relatedItemIds ? [...item.relatedItemIds] : [],
   };
 }
 

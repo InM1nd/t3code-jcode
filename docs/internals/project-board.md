@@ -11,7 +11,9 @@ Project-scoped todos shared across threads. Source of truth is the orchestration
 - Projection: `projection_projects.board_items_json` (migration `041_ProjectionProjectsBoardItems`)
 - Shell: `OrchestrationProjectShell.boardItems` (optional on the wire; treat missing as `[]`)
 
-`brief` and `latestHandoff` are optional/null-compatible fields. Upsert owns the brief; an explicit `null` clears it. Handoff append events are immutable and the projector replaces only `latestHandoff` on the card. Earlier handoffs stay in the orchestration event log and are intentionally not rendered as a history list yet. The decider verifies the source thread belongs to the target project before appending.
+`brief` and `latestHandoff` are optional/null-compatible fields. Upsert owns the brief; an explicit `null` clears it. Handoff append events are immutable; the projector keeps `latestHandoff` and prepends into `handoffHistory` (newest first, capped at `PROJECT_BOARD_HANDOFF_HISTORY_LIMIT`). The decider verifies the source thread belongs to the target project before appending.
+
+Upsert also owns `externalRefs` (plain URLs — GitHub issue/PR, docs) and `relatedItemIds` (other board item ids), both capped and replaced-in-full when provided (same semantics as `linkedTurnIds`); omit to leave unchanged, send `[]` to clear. Caps and merge helpers live in `@t3tools/shared/projectBoard`.
 
 ## Live updates
 

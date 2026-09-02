@@ -1,7 +1,16 @@
-import type { ProjectBoardItem, ProjectBoardItemStatus, TurnId } from "@t3tools/contracts";
+import type {
+  ProjectBoardHandoff,
+  ProjectBoardItem,
+  ProjectBoardItemId,
+  ProjectBoardItemStatus,
+  TurnId,
+} from "@t3tools/contracts";
 
 export const PROJECT_BOARD_LINKED_TURN_LIMIT = 20;
 export const PROJECT_BOARD_DIGEST_ITEM_LIMIT = 20;
+export const PROJECT_BOARD_HANDOFF_HISTORY_LIMIT = 10;
+export const PROJECT_BOARD_EXTERNAL_REF_LIMIT = 10;
+export const PROJECT_BOARD_RELATED_ITEM_LIMIT = 20;
 
 export function mergeProjectBoardLinkedTurnIds(input: {
   existing: ReadonlyArray<TurnId> | undefined;
@@ -19,6 +28,41 @@ export function mergeProjectBoardLinkedTurnIds(input: {
   }
   if (base.length <= limit) return base;
   return base.slice(base.length - limit);
+}
+
+/** Prepends a new handoff and caps the history so shell snapshots stay small. */
+export function pushProjectBoardHandoffHistory(input: {
+  existing: ReadonlyArray<ProjectBoardHandoff> | undefined;
+  handoff: ProjectBoardHandoff;
+  limit?: number;
+}): ProjectBoardHandoff[] {
+  const limit = input.limit ?? PROJECT_BOARD_HANDOFF_HISTORY_LIMIT;
+  return [input.handoff, ...(input.existing ?? [])].slice(0, limit);
+}
+
+export function mergeProjectBoardExternalRefs(input: {
+  existing: ReadonlyArray<string> | undefined;
+  externalRefs?: ReadonlyArray<string> | undefined;
+  limit?: number;
+}): string[] {
+  const limit = input.limit ?? PROJECT_BOARD_EXTERNAL_REF_LIMIT;
+  const base =
+    input.externalRefs !== undefined ? [...input.externalRefs] : [...(input.existing ?? [])];
+  return base.slice(0, limit);
+}
+
+/** Replaces the full related-item list; drops self-references and duplicates. */
+export function mergeProjectBoardRelatedItemIds(input: {
+  existing: ReadonlyArray<ProjectBoardItemId> | undefined;
+  relatedItemIds?: ReadonlyArray<ProjectBoardItemId> | undefined;
+  selfId: ProjectBoardItemId;
+  limit?: number;
+}): ProjectBoardItemId[] {
+  const limit = input.limit ?? PROJECT_BOARD_RELATED_ITEM_LIMIT;
+  const base =
+    input.relatedItemIds !== undefined ? [...input.relatedItemIds] : [...(input.existing ?? [])];
+  const deduped = [...new Set(base)].filter((id) => id !== input.selfId);
+  return deduped.slice(0, limit);
 }
 
 export function indexProjectBoardItemsByTurnId(

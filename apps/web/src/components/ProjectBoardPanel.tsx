@@ -445,6 +445,8 @@ export function ProjectBoardPanel({
         status: itemDraft.status,
         notes: itemDraft.notes.trim() || null,
         area: itemDraft.area.trim() || null,
+        externalRefs: list(itemDraft.externalRefs),
+        relatedItemIds: itemDraft.relatedItemIds,
         source: detailItem.source,
         sourceThreadId: detailItem.sourceThreadId ?? null,
         brief: goal
@@ -698,6 +700,67 @@ export function ProjectBoardPanel({
               onChange={(event) => setItemDraft({ ...itemDraft, briefNotes: event.target.value })}
               placeholder="Brief notes"
             />
+            <Textarea
+              size="sm"
+              value={itemDraft.externalRefs}
+              onChange={(event) => setItemDraft({ ...itemDraft, externalRefs: event.target.value })}
+              placeholder="External links (issue/PR URLs, one per line)"
+            />
+            {detailItem.externalRefs && detailItem.externalRefs.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {detailItem.externalRefs.map((url) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground underline hover:text-foreground"
+                  >
+                    {url}
+                  </a>
+                ))}
+              </div>
+            ) : null}
+            <select
+              multiple
+              value={itemDraft.relatedItemIds}
+              onChange={(event) =>
+                setItemDraft({
+                  ...itemDraft,
+                  relatedItemIds: Array.from(
+                    event.target.selectedOptions,
+                    (option) => option.value as ProjectBoardItemId,
+                  ),
+                })
+              }
+              className="h-20 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm"
+              aria-label="Related board items"
+            >
+              {boardItems
+                .filter((candidate) => candidate.id !== detailItem.id)
+                .map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {projectBoardItemDisplayTitle(candidate.title)}
+                  </option>
+                ))}
+            </select>
+            {detailItem.relatedItemIds && detailItem.relatedItemIds.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {detailItem.relatedItemIds.map((relatedId) => {
+                  const related = boardItems.find((candidate) => candidate.id === relatedId);
+                  return (
+                    <button
+                      key={relatedId}
+                      type="button"
+                      onClick={() => onSelectItem(relatedId)}
+                      className="cursor-pointer truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                    >
+                      {related ? projectBoardItemDisplayTitle(related.title) : relatedId}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -765,6 +828,28 @@ export function ProjectBoardPanel({
                   Open source thread
                 </button>
               </div>
+            ) : null}
+            {detailItem.handoffHistory && detailItem.handoffHistory.length > 1 ? (
+              <Collapsible>
+                <CollapsibleTrigger className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                  {detailItem.handoffHistory.length - 1} earlier handoff
+                  {detailItem.handoffHistory.length - 1 === 1 ? "" : "s"}
+                </CollapsibleTrigger>
+                <CollapsiblePanel>
+                  <div className="mt-1 space-y-1">
+                    {detailItem.handoffHistory.slice(1).map((handoff) => (
+                      <div key={handoff.id} className="rounded bg-muted/30 p-2 text-xs">
+                        <p>{handoff.summary}</p>
+                        {handoff.decisions.length > 0 ? (
+                          <p className="mt-1">Decisions: {handoff.decisions.join(", ")}</p>
+                        ) : null}
+                        <p className="mt-1 text-muted-foreground">Next: {handoff.nextStep}</p>
+                        <p className="mt-1 text-muted-foreground">{handoff.createdAt}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsiblePanel>
+              </Collapsible>
             ) : null}
             {sourceThreadId ? (
               <div className="space-y-1 border-t border-border/50 pt-2">
