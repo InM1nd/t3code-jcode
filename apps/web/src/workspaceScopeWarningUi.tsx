@@ -2,6 +2,7 @@ import { isProviderDriverKind, type ProviderDriverKind } from "@t3tools/contract
 import { BotIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { ProviderInstanceIcon } from "./components/chat/ProviderInstanceIcon";
 import { formatWorktreePathForDisplay } from "./worktreeCleanup";
 
@@ -86,19 +87,21 @@ export function WorkspaceScopeWarningRow(props: {
           <p className="truncate text-sm font-medium leading-6 text-warning">{props.label}</p>
           <dl className="mt-0.5 grid grid-cols-[3.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 text-xs leading-5">
             <dt className="text-end text-muted-foreground">Thread</dt>
-            <dd
-              className="min-w-0 truncate font-medium text-foreground"
-              title={props.mismatch.threadWorktree}
-            >
-              {threadLabel}
-            </dd>
+            <Tooltip>
+              <TooltipTrigger
+                render={<dd className="min-w-0 truncate font-medium text-foreground" />}
+              >
+                {threadLabel}
+              </TooltipTrigger>
+              <TooltipPopup side="top">{props.mismatch.threadWorktree}</TooltipPopup>
+            </Tooltip>
             <dt className="text-end text-muted-foreground">Agent</dt>
-            <dd
-              className="min-w-0 truncate font-medium text-warning"
-              title={props.mismatch.usedPath}
-            >
-              {usedLabel}
-            </dd>
+            <Tooltip>
+              <TooltipTrigger render={<dd className="min-w-0 truncate font-medium text-warning" />}>
+                {usedLabel}
+              </TooltipTrigger>
+              <TooltipPopup side="top">{props.mismatch.usedPath}</TooltipPopup>
+            </Tooltip>
           </dl>
         </div>
       </div>

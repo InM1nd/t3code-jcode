@@ -8,6 +8,7 @@ import {
 
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { PROVIDER_ICON_BY_PROVIDER } from "./providerIconUtils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 const INNER_KIND_TO_DRIVER: Record<JcodeInnerProviderIconKind, ProviderDriverKind> = {
@@ -83,22 +84,26 @@ export const ThreadProviderIcons = memo(function ThreadProviderIcons(props: {
       : props.displayName;
 
   return (
-    <span
-      className={cn("inline-flex shrink-0 items-center gap-0.5", props.className)}
-      title={title}
-    >
-      <ProviderInstanceIcon
-        driverKind={props.driverKind}
-        displayName={props.displayName}
-        {...(props.accentColor ? { accentColor: props.accentColor } : {})}
-        {...(props.showBadge !== undefined ? { showBadge: props.showBadge } : {})}
-        {...(props.badgeContent ? { badgeContent: props.badgeContent } : {})}
-        {...(props.iconClassName ? { iconClassName: props.iconClassName } : {})}
-        {...(props.badgeClassName ? { badgeClassName: props.badgeClassName } : {})}
-      />
-      {InnerIcon ? (
-        <InnerIcon className={cn("size-3.5 shrink-0", props.iconClassName)} aria-hidden />
-      ) : null}
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className={cn("inline-flex shrink-0 items-center gap-0.5", props.className)} />
+        }
+      >
+        <ProviderInstanceIcon
+          driverKind={props.driverKind}
+          displayName={props.displayName}
+          {...(props.accentColor ? { accentColor: props.accentColor } : {})}
+          {...(props.showBadge !== undefined ? { showBadge: props.showBadge } : {})}
+          {...(props.badgeContent ? { badgeContent: props.badgeContent } : {})}
+          {...(props.iconClassName ? { iconClassName: props.iconClassName } : {})}
+          {...(props.badgeClassName ? { badgeClassName: props.badgeClassName } : {})}
+        />
+        {InnerIcon ? (
+          <InnerIcon className={cn("size-3.5 shrink-0", props.iconClassName)} aria-hidden />
+        ) : null}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{title}</TooltipPopup>
+    </Tooltip>
   );
 });

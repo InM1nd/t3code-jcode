@@ -22,7 +22,7 @@ describe("resolvePendingTaskInteractionMode", () => {
         draftInteractionMode: "plan",
         queuedInteractionMode: "plan",
       }),
-    ).toBe("default");
+    ).toBe("build");
   });
 
   it("keeps a fresh draft in build mode while the preference is loading", () => {
@@ -33,7 +33,7 @@ describe("resolvePendingTaskInteractionMode", () => {
         draftInteractionMode: "plan",
         queuedInteractionMode: undefined,
       }),
-    ).toBe("default");
+    ).toBe("build");
   });
 
   it("honors the draft's mode when the plan preference is enabled", () => {
@@ -52,6 +52,6 @@ describe("resolvePendingTaskInteractionMode", () => {
         draftInteractionMode: undefined,
         queuedInteractionMode: "plan",
       }),
-    ).toBe("default");
+    ).toBe("build");
   });
 });
