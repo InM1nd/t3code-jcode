@@ -53,6 +53,27 @@ export interface DesktopSecondaryBootstrapsReader {
   readonly readSnapshot: () => ReadonlyArray<DesktopEnvironmentBootstrap>;
 }
 
+function sameBootstraps(
+  previous: ReadonlyArray<DesktopEnvironmentBootstrap>,
+  next: ReadonlyArray<DesktopEnvironmentBootstrap>,
+): boolean {
+  return (
+    previous.length === next.length &&
+    previous.every((entry, index) => {
+      const candidate = next[index];
+      return (
+        candidate !== undefined &&
+        entry.id === candidate.id &&
+        entry.label === candidate.label &&
+        entry.runningDistro === candidate.runningDistro &&
+        entry.httpBaseUrl === candidate.httpBaseUrl &&
+        entry.wsBaseUrl === candidate.wsBaseUrl &&
+        entry.bootstrapToken === candidate.bootstrapToken
+      );
+    })
+  );
+}
+
 /**
  * Build a topology reader whose snapshot advances only after successful bridge
  * reads. A successful empty read is authoritative; a thrown read preserves the
@@ -64,16 +85,22 @@ export function createDesktopSecondaryBootstrapsReader(
 ): DesktopSecondaryBootstrapsReader {
   let snapshot: ReadonlyArray<DesktopEnvironmentBootstrap> = [];
 
+  const replaceSnapshot = (next: ReadonlyArray<DesktopEnvironmentBootstrap>) => {
+    if (!sameBootstraps(snapshot, next)) snapshot = next;
+  };
+
   const readResult = (): DesktopSecondaryBootstrapsRead => {
     const bridge = resolveBridge();
     if (bridge === undefined) {
-      snapshot = [];
+      replaceSnapshot([]);
       return { _tag: "Success", bootstraps: snapshot };
     }
     try {
-      snapshot = bridge
-        .getLocalEnvironmentBootstraps()
-        .filter((entry) => entry.id !== PRIMARY_LOCAL_ENVIRONMENT_ID);
+      replaceSnapshot(
+        bridge
+          .getLocalEnvironmentBootstraps()
+          .filter((entry) => entry.id !== PRIMARY_LOCAL_ENVIRONMENT_ID),
+      );
       return { _tag: "Success", bootstraps: snapshot };
     } catch (cause) {
       return { _tag: "Failure", cause };

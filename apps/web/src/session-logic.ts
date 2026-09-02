@@ -435,9 +435,10 @@ function isStalePendingRequestFailureDetail(detail: string | undefined): boolean
 
 export function derivePendingApprovals(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
+  activitiesAlreadyOrdered = false,
 ): PendingApproval[] {
   const openByRequestId = new Map<ApprovalRequestId, PendingApproval>();
-  const ordered = [...activities].toSorted(compareActivitiesByOrder);
+  const ordered = activitiesAlreadyOrdered ? activities : sortThreadActivitiesByOrder(activities);
 
   for (const activity of ordered) {
     const payload =
@@ -544,9 +545,10 @@ function parseUserInputQuestions(
 
 export function derivePendingUserInputs(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
+  activitiesAlreadyOrdered = false,
 ): PendingUserInput[] {
   const openByRequestId = new Map<ApprovalRequestId, PendingUserInput>();
-  const ordered = [...activities].toSorted(compareActivitiesByOrder);
+  const ordered = activitiesAlreadyOrdered ? activities : sortThreadActivitiesByOrder(activities);
 
   for (const activity of ordered) {
     const payload =
@@ -693,8 +695,9 @@ function addPlanStepDurations(
 export function deriveActivePlanState(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
   latestTurnId: TurnId | undefined,
+  activitiesAlreadyOrdered = false,
 ): ActivePlanState | null {
-  const ordered = [...activities].toSorted(compareActivitiesByOrder);
+  const ordered = activitiesAlreadyOrdered ? activities : sortThreadActivitiesByOrder(activities);
   const allPlanActivities = ordered.filter((activity) => activity.kind === "turn.plan.updated");
   // Prefer plan from the current turn; fall back to the most recent plan from any turn
   // so that TodoWrite tasks persist across follow-up messages.
@@ -734,8 +737,9 @@ export interface TurnPlanEntry {
  */
 export function deriveTurnPlans(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
+  activitiesAlreadyOrdered = false,
 ): TurnPlanEntry[] {
-  const ordered = [...activities].toSorted(compareActivitiesByOrder);
+  const ordered = activitiesAlreadyOrdered ? activities : sortThreadActivitiesByOrder(activities);
   const byTurn = new Map<
     string,
     { activities: OrchestrationThreadActivity[]; entry: TurnPlanEntry }
@@ -873,8 +877,9 @@ function isAgentInternalActivity(activity: OrchestrationThreadActivity): boolean
 
 export function deriveWorkLogEntries(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
+  activitiesAlreadyOrdered = false,
 ): WorkLogEntry[] {
-  const ordered = [...activities].toSorted(compareActivitiesByOrder);
+  const ordered = activitiesAlreadyOrdered ? activities : sortThreadActivitiesByOrder(activities);
   const entries: DerivedWorkLogEntry[] = [];
   for (const activity of ordered) {
     if (activity.kind === "tool.started") continue;
@@ -1806,6 +1811,17 @@ function extractChangedFiles(payload: Record<string, unknown> | null): string[] 
   const seen = new Set<string>();
   collectChangedFiles(asRecord(payload?.data), changedFiles, seen, 0);
   return changedFiles;
+}
+
+export function sortThreadActivitiesByOrder(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+): ReadonlyArray<OrchestrationThreadActivity> {
+  for (let index = 1; index < activities.length; index += 1) {
+    if (compareActivitiesByOrder(activities[index - 1]!, activities[index]!) > 0) {
+      return [...activities].toSorted(compareActivitiesByOrder);
+    }
+  }
+  return activities;
 }
 
 function compareActivitiesByOrder(
