@@ -127,6 +127,7 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import { composerWorkModeById, composerWorkModes, type ComposerWorkMode } from "./workModes";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
@@ -361,10 +362,18 @@ function isInsideComposerFloatingLayer(element: Element): boolean {
 
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   runtimeMode: RuntimeMode;
+  interactionMode: ProviderInteractionMode;
+  /** The active provider doesn't support interaction modes at all (e.g. Codex). */
+  showWorkModeOptions: boolean;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
+  onInteractionModeChange: (mode: ComposerWorkMode) => void;
 }) {
   const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
   const RuntimeModeIcon = runtimeModeOption.icon;
+  const currentWorkMode: ComposerWorkMode =
+    props.interactionMode === "default" ? "build" : props.interactionMode;
+  const workModeOption = composerWorkModeById[currentWorkMode];
+  const WorkModeIcon = workModeOption.icon;
 
   return (
     <>
@@ -405,6 +414,51 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
         </Select>
         <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
       </Tooltip>
+
+      {props.showWorkModeOptions ? (
+        <>
+          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+          <Tooltip>
+            <Select
+              value={currentWorkMode}
+              onValueChange={(value) => props.onInteractionModeChange(value as ComposerWorkMode)}
+            >
+              <TooltipTrigger
+                render={<ComposerSelectControl className="font-medium" aria-label="Work mode" />}
+              >
+                <ComposerControlIcon icon={WorkModeIcon} />
+                <SelectValue>{workModeOption.label}</SelectValue>
+              </TooltipTrigger>
+              <SelectPopup alignItemWithTrigger={false}>
+                {composerWorkModes.map((option) => {
+                  const OptionIcon = option.icon;
+                  return (
+                    <SelectItem
+                      key={option.mode}
+                      value={option.mode}
+                      hideIndicator
+                      className="min-w-64 py-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="grid min-w-0 flex-1 gap-0.5">
+                          <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                            <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                            {option.label}
+                          </span>
+                          <span className="text-muted-foreground text-xs leading-4">
+                            {option.description}
+                          </span>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectPopup>
+            </Select>
+            <TooltipPopup side="top">{workModeOption.description}</TooltipPopup>
+          </Tooltip>
+        </>
+      ) : null}
     </>
   );
 });
@@ -3972,13 +4026,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     />
                   ) : (
                     <>
-                      <CompactComposerControlsMenu
-                        interactionMode={interactionMode}
-                        runtimeMode={runtimeMode}
-                        showWorkModeOptions={composerProviderControls.showInteractionModeToggle}
-                        onInteractionModeChange={handleInteractionModeChange}
-                        onRuntimeModeChange={handleRuntimeModeChange}
-                      />
                       {providerTraitsPicker ? (
                         <>
                           <Separator
@@ -3990,7 +4037,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       ) : null}
                       <ComposerFooterModeControls
                         runtimeMode={runtimeMode}
+                        interactionMode={interactionMode}
+                        showWorkModeOptions={composerProviderControls.showInteractionModeToggle}
                         onRuntimeModeChange={handleRuntimeModeChange}
+                        onInteractionModeChange={handleInteractionModeChange}
                       />
                     </>
                   )}
