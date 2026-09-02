@@ -180,6 +180,8 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
   readonly notes?: string | null | undefined;
   readonly brief?: ProjectBoardBrief | null | undefined;
   readonly area?: string | null | undefined;
+  readonly externalRefs?: ReadonlyArray<string> | undefined;
+  readonly relatedItemIds?: ReadonlyArray<ProjectBoardItemId> | undefined;
   readonly sourceThreadId: McpInvocationContext.McpInvocationScope["threadId"];
   readonly linkTurnId?: TurnId | null | undefined;
 }) {
@@ -195,6 +197,8 @@ const dispatchUpsert = Effect.fn("BoardToolkit.dispatchUpsert")(function* (input
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
       ...(input.brief !== undefined ? { brief: input.brief } : {}),
       ...(input.area !== undefined ? { area: input.area } : {}),
+      ...(input.externalRefs !== undefined ? { externalRefs: input.externalRefs } : {}),
+      ...(input.relatedItemIds !== undefined ? { relatedItemIds: input.relatedItemIds } : {}),
       source: "agent",
       sourceThreadId: input.sourceThreadId,
       ...(input.linkTurnId ? { linkTurnId: input.linkTurnId } : {}),
@@ -283,6 +287,8 @@ const handlers = {
     readonly notes?: string | null | undefined;
     readonly brief?: ProjectBoardBrief | null | undefined;
     readonly area?: string | null | undefined;
+    readonly externalRefs?: ReadonlyArray<string> | undefined;
+    readonly relatedItemIds?: ReadonlyArray<ProjectBoardItemId> | undefined;
   }) =>
     Effect.gen(function* () {
       const scope = yield* requireBoardScope();
@@ -297,6 +303,8 @@ const handlers = {
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
         ...(input.brief !== undefined ? { brief: input.brief } : {}),
         ...(input.area !== undefined ? { area: input.area } : {}),
+        ...(input.externalRefs !== undefined ? { externalRefs: input.externalRefs } : {}),
+        ...(input.relatedItemIds !== undefined ? { relatedItemIds: input.relatedItemIds } : {}),
         sourceThreadId: scope.threadId,
         linkTurnId,
       });

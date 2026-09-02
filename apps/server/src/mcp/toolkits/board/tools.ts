@@ -110,6 +110,10 @@ export const BoardUpsertTool = Tool.make("board_upsert", {
     notes: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
     brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
     area: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+    // Replaces the full list when provided. External URLs (GitHub issue/PR, doc, etc).
+    externalRefs: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+    // Replaces the full list when provided. Other board item ids this card relates to.
+    relatedItemIds: Schema.optional(Schema.Array(ProjectBoardItemId)),
   }),
   success: BoardMutateResult,
   failure: BoardToolError,

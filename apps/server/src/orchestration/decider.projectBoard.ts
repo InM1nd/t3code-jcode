@@ -17,7 +17,11 @@ import {
   type OrchestrationReadModel,
   type ProjectBoardItem,
 } from "@t3tools/contracts";
-import { mergeProjectBoardLinkedTurnIds } from "@t3tools/shared/projectBoard";
+import {
+  mergeProjectBoardExternalRefs,
+  mergeProjectBoardLinkedTurnIds,
+  mergeProjectBoardRelatedItemIds,
+} from "@t3tools/shared/projectBoard";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import type * as PlatformError from "effect/PlatformError";
@@ -83,6 +87,7 @@ export const decideProjectBoardCommand = Effect.fn("decideProjectBoardCommand")(
         notes: command.notes === undefined ? (existing?.notes ?? null) : command.notes,
         brief: command.brief === undefined ? (existing?.brief ?? null) : command.brief,
         latestHandoff: existing?.latestHandoff ?? null,
+        handoffHistory: existing?.handoffHistory ?? [],
         source: command.source ?? existing?.source ?? "user",
         sourceThreadId:
           command.sourceThreadId === undefined
@@ -94,6 +99,17 @@ export const decideProjectBoardCommand = Effect.fn("decideProjectBoardCommand")(
           ...(command.linkTurnId !== undefined ? { linkTurnId: command.linkTurnId } : {}),
         }),
         area: command.area === undefined ? (existing?.area ?? null) : command.area,
+        externalRefs: mergeProjectBoardExternalRefs({
+          existing: existing?.externalRefs,
+          ...(command.externalRefs !== undefined ? { externalRefs: command.externalRefs } : {}),
+        }),
+        relatedItemIds: mergeProjectBoardRelatedItemIds({
+          existing: existing?.relatedItemIds,
+          ...(command.relatedItemIds !== undefined
+            ? { relatedItemIds: command.relatedItemIds }
+            : {}),
+          selfId: command.itemId,
+        }),
         archivedAt: existing?.archivedAt ?? null,
         createdAt: existing?.createdAt ?? occurredAt,
         updatedAt: occurredAt,

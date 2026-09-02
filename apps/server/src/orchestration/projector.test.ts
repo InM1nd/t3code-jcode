@@ -8,6 +8,9 @@ import {
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
+// Additive import: no-manual-effect-runtime-in-tests caps this file's Effect.runPromise
+// count at its existing baseline, so new tests use it.effect instead.
+import { it as itEffect } from "@effect/vitest";
 
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
@@ -122,6 +125,89 @@ describe("orchestration projector", () => {
       archivedAt: null,
     });
   });
+
+  itEffect.effect("accumulates handoffHistory newest-first and caps it", () =>
+    Effect.gen(function* () {
+      const createdAt = "2026-08-13T10:00:00.000Z";
+      let model = createEmptyReadModel(createdAt);
+      for (const event of [
+        makeEvent({
+          sequence: 1,
+          type: "project.created",
+          aggregateKind: "project",
+          aggregateId: "project-board",
+          occurredAt: createdAt,
+          commandId: "cmd-project",
+          payload: {
+            projectId: "project-board",
+            title: "Board",
+            workspaceRoot: "/tmp/board",
+            defaultModelSelection: null,
+            scripts: [],
+            createdAt,
+            updatedAt: createdAt,
+          },
+        }),
+        makeEvent({
+          sequence: 2,
+          type: "project.board-item-upserted",
+          aggregateKind: "project",
+          aggregateId: "project-board",
+          occurredAt: createdAt,
+          commandId: "cmd-upsert",
+          payload: {
+            projectId: "project-board",
+            item: {
+              id: "item-1",
+              title: "Handoff task",
+              status: "inProgress",
+              source: "user",
+              createdAt,
+              updatedAt: createdAt,
+            },
+            updatedAt: createdAt,
+          },
+        }),
+      ]) {
+        model = yield* projectEvent(model, event);
+      }
+
+      const handoffEvent = (sequence: number, summary: string) =>
+        makeEvent({
+          sequence,
+          type: "project.board-item-handoff-appended",
+          aggregateKind: "project",
+          aggregateId: "project-board",
+          occurredAt: createdAt,
+          commandId: `cmd-handoff-${sequence}`,
+          payload: {
+            projectId: "project-board",
+            itemId: "item-1",
+            itemTitle: "Handoff task",
+            handoff: {
+              id: `handoff-${sequence}`,
+              sourceThreadId: "thread-1",
+              summary,
+              decisions: [],
+              nextStep: "keep going",
+              createdAt,
+            },
+            updatedAt: createdAt,
+          },
+        });
+
+      for (let sequence = 3; sequence <= 13; sequence += 1) {
+        model = yield* projectEvent(model, handoffEvent(sequence, `handoff ${sequence}`));
+      }
+
+      const item = model.projects[0]?.boardItems?.[0];
+      expect(item?.latestHandoff?.summary).toBe("handoff 13");
+      // 11 handoffs appended (sequence 3..13), capped at 10, newest first.
+      expect(item?.handoffHistory).toHaveLength(10);
+      expect(item?.handoffHistory?.[0]?.summary).toBe("handoff 13");
+      expect(item?.handoffHistory?.[9]?.summary).toBe("handoff 4");
+    }),
+  );
 
   it("applies thread.created events", async () => {
     const now = "2026-01-01T00:00:00.000Z";

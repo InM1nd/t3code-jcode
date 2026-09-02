@@ -5,6 +5,7 @@ import {
   OrchestrationSession,
   OrchestrationThread,
 } from "@t3tools/contracts";
+import { pushProjectBoardHandoffHistory } from "@t3tools/shared/projectBoard";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -350,7 +351,15 @@ export function projectEvent(
                   ...project,
                   boardItems: (project.boardItems ?? []).map((item) =>
                     item.id === payload.itemId
-                      ? { ...item, latestHandoff: payload.handoff, updatedAt: payload.updatedAt }
+                      ? {
+                          ...item,
+                          latestHandoff: payload.handoff,
+                          handoffHistory: pushProjectBoardHandoffHistory({
+                            existing: item.handoffHistory,
+                            handoff: payload.handoff,
+                          }),
+                          updatedAt: payload.updatedAt,
+                        }
                       : item,
                   ),
                   updatedAt: payload.updatedAt,
