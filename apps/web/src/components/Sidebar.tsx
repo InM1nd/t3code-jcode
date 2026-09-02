@@ -270,8 +270,21 @@ function WorkingDuration(props: { startedAt: string | null }) {
   const [, setTick] = useState(0);
   useEffect(() => {
     if (Number.isNaN(startedMs)) return;
-    const id = window.setInterval(() => setTick((tick) => tick + 1), 1_000);
-    return () => window.clearInterval(id);
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const sync = () => {
+      if (interval !== undefined) clearInterval(interval);
+      interval = undefined;
+      if (document.visibilityState === "visible") {
+        setTick((tick) => tick + 1);
+        interval = setInterval(() => setTick((tick) => tick + 1), 1_000);
+      }
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      if (interval !== undefined) clearInterval(interval);
+      document.removeEventListener("visibilitychange", sync);
+    };
   }, [startedMs]);
   if (Number.isNaN(startedMs)) return null;
   return (

@@ -107,8 +107,21 @@ export function PolicyTooltip({ children }: { readonly children: string }) {
 export function useRelativeTimeTick(intervalMs = 1_000) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), intervalMs);
-    return () => clearInterval(id);
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const sync = () => {
+      if (interval !== undefined) clearInterval(interval);
+      interval = undefined;
+      if (document.visibilityState === "visible") {
+        setNowMs(Date.now());
+        interval = setInterval(() => setNowMs(Date.now()), intervalMs);
+      }
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      if (interval !== undefined) clearInterval(interval);
+      document.removeEventListener("visibilitychange", sync);
+    };
   }, [intervalMs]);
   return nowMs;
 }

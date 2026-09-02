@@ -2,7 +2,11 @@ import {
   BearerConnectionTarget,
   PrimaryConnectionTarget,
 } from "@t3tools/client-runtime/connection";
-import { EnvironmentId, PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  PRIMARY_LOCAL_ENVIRONMENT_ID,
+  type DesktopBridge,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -103,5 +107,22 @@ describe("desktop local topology reads", () => {
       throw new Error("IPC unavailable again");
     };
     expect(reader.readSnapshot()).toBe(removedSnapshot);
+  });
+
+  it("keeps the snapshot reference when the desktop topology is unchanged", () => {
+    const bridge = {
+      getLocalEnvironmentBootstraps: () => [
+        {
+          id: "wsl:ubuntu",
+          label: "WSL (Ubuntu)",
+          runningDistro: "Ubuntu",
+          httpBaseUrl: "http://127.0.0.1:3773",
+          wsBaseUrl: "ws://127.0.0.1:3773",
+        },
+      ],
+    } as Pick<DesktopBridge, "getLocalEnvironmentBootstraps">;
+    const reader = createDesktopSecondaryBootstrapsReader(() => bridge);
+
+    expect(reader.readSnapshot()).toBe(reader.readSnapshot());
   });
 });

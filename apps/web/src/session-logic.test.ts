@@ -19,6 +19,7 @@ import {
   findLatestProposedPlan,
   hasActionableProposedPlan,
   isLatestTurnSettled,
+  sortThreadActivitiesByOrder,
   workEntryIndicatesToolFailure,
   workEntryIndicatesToolNeutralStatus,
   workEntryIndicatesToolSuccess,
@@ -61,6 +62,20 @@ function makeActivity(overrides: {
   };
 }
 
+describe("sortThreadActivitiesByOrder", () => {
+  it("keeps an ordered activity list by reference and orders late events", () => {
+    const first = makeActivity({ id: "first", sequence: 1 });
+    const second = makeActivity({ id: "second", sequence: 2 });
+    const ordered = [first, second];
+
+    expect(sortThreadActivitiesByOrder(ordered)).toBe(ordered);
+    expect(sortThreadActivitiesByOrder([second, first]).map((activity) => activity.id)).toEqual([
+      "first",
+      "second",
+    ]);
+  });
+});
+
 describe("derivePendingApprovals", () => {
   it("tracks open approvals and removes resolved ones", () => {
     const activities: OrchestrationThreadActivity[] = [
@@ -95,6 +110,14 @@ describe("derivePendingApprovals", () => {
     ];
 
     expect(derivePendingApprovals(activities)).toEqual([
+      {
+        requestId: "req-1",
+        requestKind: "command",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        detail: "bun run lint",
+      },
+    ]);
+    expect(derivePendingApprovals([activities[0]!, activities[2]!, activities[1]!], true)).toEqual([
       {
         requestId: "req-1",
         requestKind: "command",

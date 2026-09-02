@@ -19,9 +19,21 @@ export function useDesktopLocalBootstraps(): ReadonlyArray<DesktopEnvironmentBoo
 
   useEffect(() => {
     const read = () => setBootstraps(readDesktopSecondaryBootstraps());
-    read();
-    const interval = setInterval(read, DESKTOP_LOCAL_BOOTSTRAP_POLL_MS);
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const sync = () => {
+      if (interval !== undefined) clearInterval(interval);
+      interval = undefined;
+      if (document.visibilityState === "visible") {
+        read();
+        interval = setInterval(read, DESKTOP_LOCAL_BOOTSTRAP_POLL_MS);
+      }
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      if (interval !== undefined) clearInterval(interval);
+      document.removeEventListener("visibilitychange", sync);
+    };
   }, []);
 
   return bootstraps;

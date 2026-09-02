@@ -476,21 +476,26 @@ function trace2ChildKey(record: Record<string, unknown>): string | null {
 
 const Trace2Record = Schema.Record(Schema.String, Schema.Unknown);
 
-const createTrace2Monitor = Effect.fn("createTrace2Monitor")(function* (
+const createTrace2Monitor = (
   input: Pick<GitVcsDriver.ExecuteGitInput, "operation" | "cwd" | "args">,
   progress: GitVcsDriver.ExecuteGitProgress | undefined,
+): Effect.Effect<
+  Trace2Monitor,
+  PlatformError.PlatformError,
+  Scope.Scope | FileSystem.FileSystem | Path.Path
+> =>
+  !progress?.onHookStarted && !progress?.onHookFinished
+    ? Effect.succeed({ env: {}, flush: Effect.void })
+    : createTrace2MonitorWithProgress(input, progress);
+
+const createTrace2MonitorWithProgress = Effect.fn("createTrace2Monitor")(function* (
+  input: Pick<GitVcsDriver.ExecuteGitInput, "operation" | "cwd" | "args">,
+  progress: GitVcsDriver.ExecuteGitProgress,
 ): Effect.fn.Return<
   Trace2Monitor,
   PlatformError.PlatformError,
   Scope.Scope | FileSystem.FileSystem | Path.Path
 > {
-  if (!progress?.onHookStarted && !progress?.onHookFinished) {
-    return {
-      env: {},
-      flush: Effect.void,
-    };
-  }
-
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const traceFilePath = yield* fs.makeTempFileScoped({

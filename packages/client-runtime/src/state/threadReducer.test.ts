@@ -728,6 +728,49 @@ describe("applyThreadDetailEvent", () => {
       }
     });
 
+    it("keeps activity order when an older live event arrives", () => {
+      const existingActivities = [
+        {
+          id: EventId.make("activity-20"),
+          tone: "tool" as const,
+          kind: "command",
+          summary: "Ran command 20",
+          payload: {},
+          turnId: TurnId.make("turn-1"),
+          sequence: 20,
+          createdAt: "2026-04-01T11:00:20.000Z",
+        },
+      ];
+      const result = applyThreadDetailEvent(
+        { ...baseThread, activities: existingActivities },
+        {
+          ...baseEventFields,
+          sequence: 10,
+          occurredAt: "2026-04-01T11:00:10.000Z",
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-1"),
+          type: "thread.activity-appended",
+          payload: {
+            threadId: ThreadId.make("thread-1"),
+            activity: {
+              ...existingActivities[0]!,
+              id: EventId.make("activity-10"),
+              sequence: 10,
+              createdAt: "2026-04-01T11:00:10.000Z",
+            },
+          },
+        },
+      );
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.activities.map((activity) => activity.id)).toEqual([
+          "activity-10",
+          "activity-20",
+        ]);
+      }
+    });
+
     it("replaces earlier resolvable context-window updates for the same turn", () => {
       const contextWindowActivity = (id: string, sequence: number, usedTokens: unknown) => ({
         id: EventId.make(id),

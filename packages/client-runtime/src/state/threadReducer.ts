@@ -35,6 +35,30 @@ const activityOrder = O.combineAll<OrchestrationThreadActivity>([
   O.mapInput(O.String, (a) => a.id),
 ]);
 
+function insertActivityInOrder(
+  activities: OrchestrationThread["activities"],
+  activity: OrchestrationThreadActivity,
+): OrchestrationThread["activities"] {
+  let low = 0;
+  let high = activities.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const current = activities[middle]!;
+    if (activityOrder(current, activity) < 0) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  // Activity events are immutable. Matching IDs therefore share the same
+  // sort position and can be replaced without re-sorting the entire history.
+  if (activities[low]?.id === activity.id) {
+    return [...activities.slice(0, low), activity, ...activities.slice(low + 1)];
+  }
+  return [...activities.slice(0, low), activity, ...activities.slice(low)];
+}
+
 /**
  * Matches the validity rule in `deriveLatestContextWindowSnapshot` (and the
  * server's snapshot-side `dropStaleContextWindowActivities`): rows without a
@@ -582,20 +606,17 @@ export function applyThreadDetailEvent(
       // thread.reverted that discards turns can still resolve a value from
       // the turns that survive.
       const supersedesContextWindow = isResolvableContextWindowActivity(activity);
-      const activities = pipe(
-        thread.activities,
-        Arr.filter(
-          (entry) =>
-            entry.id !== activity.id &&
-            !(
-              supersedesContextWindow &&
-              entry.turnId === activity.turnId &&
-              isResolvableContextWindowActivity(entry)
+      const retainedActivities = supersedesContextWindow
+        ? pipe(
+            thread.activities,
+            Arr.filter(
+              (entry) =>
+                entry.id !== activity.id &&
+                !(entry.turnId === activity.turnId && isResolvableContextWindowActivity(entry)),
             ),
-        ),
-        Arr.append(activity),
-        Arr.sort(activityOrder),
-      );
+          )
+        : thread.activities;
+      const activities = insertActivityInOrder(retainedActivities, activity);
 
       return {
         kind: "updated",
