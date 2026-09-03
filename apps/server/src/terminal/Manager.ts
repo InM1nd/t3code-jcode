@@ -59,6 +59,7 @@ import {
 } from "../observability/Metrics.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as PortScanner from "../preview/PortScanner.ts";
+import * as TerminalSessionRegistry from "../persistence/TerminalSessionRegistry.ts";
 import * as PtyAdapter from "./PtyAdapter.ts";
 
 export {
@@ -1127,17 +1128,50 @@ interface TerminalManagerOptions {
     readonly threadId: string;
     readonly terminalId: string;
   }) => Effect.Effect<void>;
+  // Mirrors the TerminalManager in-memory session state to disk so a
+  // crashed/killed server process can be reconciled on the next boot
+  // instead of leaking the OS process it spawned. See
+  // ./TerminalSessionReconciliation.ts for the reader.
+  persistSessionPid?: (input: {
+    readonly threadId: string;
+    readonly terminalId: string;
+    readonly pid: number;
+    readonly shellCommand: string;
+    readonly worktreePath: string | null;
+  }) => Effect.Effect<void>;
+  clearSessionPid?: (input: {
+    readonly threadId: string;
+    readonly terminalId: string;
+  }) => Effect.Effect<void>;
 }
 
 export const make = Effect.fn("TerminalManager.make")(function* () {
   const { terminalLogsDir } = yield* ServerConfig.ServerConfig;
   const ptyAdapter = yield* PtyAdapter.PtyAdapter;
   const portDiscovery = yield* PortScanner.PortDiscovery;
+  const terminalSessionRegistry = yield* TerminalSessionRegistry.TerminalSessionRegistryRepository;
   return yield* makeWithOptions({
     logsDir: terminalLogsDir,
     ptyAdapter,
     registerTerminalProcesses: portDiscovery.registerTerminalProcesses,
     unregisterTerminal: portDiscovery.unregisterTerminal,
+    persistSessionPid: (input) =>
+      nowIso.pipe(
+        Effect.flatMap((startedAt) =>
+          terminalSessionRegistry.upsert({
+            threadId: input.threadId,
+            terminalId: input.terminalId,
+            pid: input.pid,
+            shellCommand: input.shellCommand,
+            worktreePath: input.worktreePath,
+            serverPid: process.pid,
+            startedAt,
+          }),
+        ),
+        Effect.ignoreCause({ log: true }),
+      ),
+    clearSessionPid: (input) =>
+      terminalSessionRegistry.removeByKey(input).pipe(Effect.ignoreCause({ log: true })),
   });
 });
 
@@ -1187,6 +1221,8 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     options.maxRetainedInactiveSessions ?? DEFAULT_MAX_RETAINED_INACTIVE_SESSIONS;
   const registerTerminalProcesses = options.registerTerminalProcesses ?? (() => Effect.void);
   const unregisterTerminal = options.unregisterTerminal ?? (() => Effect.void);
+  const persistSessionPid = options.persistSessionPid ?? (() => Effect.void);
+  const clearSessionPid = options.clearSessionPid ?? (() => Effect.void);
 
   yield* fileSystem.makeDirectory(logsDir, { recursive: true }).pipe(Effect.orDie);
 
@@ -1732,6 +1768,10 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         threadId: action.threadId,
         terminalId: action.terminalId,
       });
+      yield* clearSessionPid({
+        threadId: action.threadId,
+        terminalId: action.terminalId,
+      });
       yield* publishEvent({
         type: "exited",
         threadId: action.threadId,
@@ -1767,6 +1807,10 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
 
     yield* clearKillFiber(process);
     yield* unregisterTerminal({
+      threadId: session.threadId,
+      terminalId: session.terminalId,
+    });
+    yield* clearSessionPid({
       threadId: session.threadId,
       terminalId: session.terminalId,
     });
@@ -1901,6 +1945,14 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
               return [undefined, state] as const;
             });
 
+            yield* persistSessionPid({
+              threadId: session.threadId,
+              terminalId: session.terminalId,
+              pid: processPid,
+              shellCommand: spawnResult.shellLabel,
+              worktreePath: session.worktreePath,
+            });
+
             yield* publishEvent({
               type: eventType,
               threadId: session.threadId,
@@ -1937,6 +1989,10 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         return [undefined, state] as const;
       });
       yield* unregisterTerminal({
+        threadId: session.threadId,
+        terminalId: session.terminalId,
+      });
+      yield* clearSessionPid({
         threadId: session.threadId,
         terminalId: session.terminalId,
       });
@@ -2133,6 +2189,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         if (!session.process) return;
         yield* clearKillFiber(session.process);
         yield* runKillEscalation(session.process, session.threadId, session.terminalId);
+        yield* clearSessionPid({ threadId: session.threadId, terminalId: session.terminalId });
       });
 
       yield* Effect.forEach(sessions, cleanupSession, {

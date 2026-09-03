@@ -30,6 +30,7 @@ import * as OrchestrationReactor from "../src/orchestration/Services/Orchestrati
 import * as ProjectionSnapshotQuery from "../src/orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeSqlitePersistenceLive } from "../src/persistence/Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "../src/persistence/ProviderSessionRuntime.ts";
+import * as TerminalSessionRegistry from "../src/persistence/TerminalSessionRegistry.ts";
 import * as ExternalLauncher from "../src/process/externalLauncher.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import * as ProviderService from "../src/provider/Services/ProviderService.ts";
@@ -61,7 +62,8 @@ const makePersistedRuntimeLayer = (dbPath: string) => {
     Layer.provide(ProviderSessionRuntime.layer),
     Layer.provide(persistence),
   );
-  return Layer.mergeAll(orchestration, directory);
+  const terminalSessionRegistry = TerminalSessionRegistry.layer.pipe(Layer.provide(persistence));
+  return Layer.mergeAll(orchestration, directory, terminalSessionRegistry);
 };
 
 const startupDependencies = Layer.mergeAll(
