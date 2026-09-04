@@ -47,6 +47,7 @@ import {
   type EnvironmentPresentation,
 } from "../../state/environments";
 import { EMPTY_SERVER_PROVIDERS, serverEnvironment } from "../../state/server";
+import { UpdateAllProvidersButton } from "../../UpdateAllProvidersButton";
 import { useEnvironmentSessionState } from "../../state/session";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { getRelativeTimeState } from "../../timestampFormat";
@@ -831,6 +832,10 @@ export function EnvironmentProviderSettings({
             </span>
             {!readOnly ? (
               <>
+                <UpdateAllProvidersButton
+                  environmentId={environmentId}
+                  providers={serverProviders}
+                />
                 <Tooltip>
                   <TooltipTrigger
                     render={
