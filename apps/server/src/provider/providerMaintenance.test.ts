@@ -479,18 +479,22 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
         },
       });
 
+      const realPackageBinPath = NodeFS.realpathSync(packageBinPath).replaceAll("\\", "/");
+      const prefixIndex = realPackageBinPath.toLowerCase().lastIndexOf("/lib/node_modules/");
+      const prefix = realPackageBinPath.slice(0, prefixIndex);
+
       expect(capabilities).toEqual({
         provider: driver("packageTool"),
         packageName: "@example/package-tool",
         update: {
-          command:
-            "npm install -g --allow-scripts=@example/package-tool @example/package-tool@latest",
+          command: `npm install -g --prefix=${prefix} --allow-scripts=@example/package-tool @example/package-tool@latest`,
 
           executable: "npm",
 
           args: [
             "install",
             "-g",
+            `--prefix=${prefix}`,
             "--allow-scripts=@example/package-tool",
             "@example/package-tool@latest",
           ],
@@ -500,6 +504,64 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
       });
     }),
   );
+
+  it("pins npm global updates to the prefix that owns the resolved binary", () => {
+    expect(
+      packageToolUpdate.resolve({
+        binaryPath: "/Users/me/.npm-global/bin/package-tool",
+        realCommandPath:
+          "/Users/me/.npm-global/lib/node_modules/@example/package-tool/bin/package-tool.js",
+      }),
+    ).toEqual({
+      provider: driver("packageTool"),
+      packageName: "@example/package-tool",
+      update: {
+        command:
+          "npm install -g --prefix=/Users/me/.npm-global --allow-scripts=@example/package-tool @example/package-tool@latest",
+
+        executable: "npm",
+
+        args: [
+          "install",
+          "-g",
+          "--prefix=/Users/me/.npm-global",
+          "--allow-scripts=@example/package-tool",
+          "@example/package-tool@latest",
+        ],
+
+        lockKey: "npm-global",
+      },
+    });
+  });
+
+  it("pins npm global updates to the Windows roaming npm prefix", () => {
+    expect(
+      packageToolUpdate.resolve({
+        binaryPath: "C:\\Users\\me\\AppData\\Roaming\\npm\\package-tool.cmd",
+        realCommandPath:
+          "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@example\\package-tool\\bin\\package-tool.js",
+      }),
+    ).toEqual({
+      provider: driver("packageTool"),
+      packageName: "@example/package-tool",
+      update: {
+        command:
+          "npm install -g --prefix=C:/Users/me/AppData/Roaming/npm --allow-scripts=@example/package-tool @example/package-tool@latest",
+
+        executable: "npm",
+
+        args: [
+          "install",
+          "-g",
+          "--prefix=C:/Users/me/AppData/Roaming/npm",
+          "--allow-scripts=@example/package-tool",
+          "@example/package-tool@latest",
+        ],
+
+        lockKey: "npm-global",
+      },
+    });
+  });
 
   it.effect("uses Effect FileSystem realPath when detecting pnpm global symlinks", () =>
     Effect.gen(function* () {
