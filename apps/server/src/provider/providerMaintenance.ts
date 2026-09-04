@@ -130,9 +130,29 @@ export function makeManualOnlyProviderMaintenanceCapabilities(input: {
   });
 }
 
+function resolveNpmGlobalPrefix(commandPath: string): string | null {
+  const slashPath = commandPath.replaceAll("\\", "/");
+  const lower = slashPath.toLowerCase();
+  const libMarker = "/lib/node_modules/";
+  const libIndex = lower.lastIndexOf(libMarker);
+  if (libIndex > 0) {
+    return slashPath.slice(0, libIndex);
+  }
+
+  const npmMarker = "/npm/node_modules/";
+  const npmIndex = lower.lastIndexOf(npmMarker);
+  if (npmIndex !== -1) {
+    return slashPath.slice(0, npmIndex + "/npm".length);
+  }
+
+  return null;
+}
+
 function makeNpmGlobalProviderMaintenanceCapabilities(
   definition: PackageManagedProviderMaintenanceDefinition,
+  commandPaths: ReadonlyArray<string> = [],
 ): ProviderMaintenanceCapabilities {
+  const prefix = commandPaths.map(resolveNpmGlobalPrefix).find((value) => value !== null) ?? null;
   return makeProviderMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
@@ -142,9 +162,13 @@ function makeNpmGlobalProviderMaintenanceCapabilities(
     // (claude copies its native binary over a placeholder stub) is left broken
     // while the update reports success. Allow this one package's scripts.
     // Older npm warns about the unknown config and continues.
+    // Pin --prefix to the tree that owns the resolved binary. A custom
+    // prefix like ~/.npm-global is invisible to a bare `npm install -g`,
+    // which writes to npm's default prefix instead.
     updateArgs: [
       "install",
       "-g",
+      ...(prefix === null ? [] : [`--prefix=${prefix}`]),
       `--allow-scripts=${definition.npmPackageName}`,
       `${definition.npmPackageName}@latest`,
     ],
@@ -298,7 +322,7 @@ export function resolvePackageManagedProviderMaintenance(
     ) {
       return (
         makeNativeProviderMaintenanceCapabilities(definition) ??
-        makeNpmGlobalProviderMaintenanceCapabilities(definition)
+        makeNpmGlobalProviderMaintenanceCapabilities(definition, commandPaths)
       );
     }
     if (commandPaths.some(isVitePlusGlobalCommandPath)) {
@@ -311,7 +335,7 @@ export function resolvePackageManagedProviderMaintenance(
       return makePnpmGlobalProviderMaintenanceCapabilities(definition);
     }
     if (commandPaths.some(isNpmGlobalCommandPath)) {
-      return makeNpmGlobalProviderMaintenanceCapabilities(definition);
+      return makeNpmGlobalProviderMaintenanceCapabilities(definition, commandPaths);
     }
     if (commandPaths.some(isHomebrewCommandPath)) {
       return makeHomebrewProviderMaintenanceCapabilities(definition);
