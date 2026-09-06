@@ -1037,12 +1037,18 @@ function BoardTurnBadges({ turnId }: { turnId: TurnId | null | undefined }) {
   const titles = items.map((item) => item.title).join("\n");
   return (
     <div className="mb-1.5 flex max-w-full">
-      <span
-        className="inline-flex max-w-full items-center truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-        title={titles}
-      >
-        {formatQuietBoardLabel(items.length)}
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span className="inline-flex max-w-full items-center truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground" />
+          }
+        >
+          {formatQuietBoardLabel(items.length)}
+        </TooltipTrigger>
+        <TooltipPopup side="top" className="whitespace-pre-wrap">
+          {titles}
+        </TooltipPopup>
+      </Tooltip>
     </div>
   );
 }
