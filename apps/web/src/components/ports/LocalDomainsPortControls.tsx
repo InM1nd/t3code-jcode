@@ -1,5 +1,5 @@
 import type { DiscoveredLocalServer, EnvironmentId } from "@t3tools/contracts";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { localDomainsEnvironment } from "~/localDomainsState";
@@ -25,6 +25,9 @@ export function LocalDomainsPortControls({
   const unpublish = useAtomCommand(localDomainsEnvironment.unpublish, { reportFailure: true });
   const domain = localDomains.data?.domains.find((binding) => binding.port === server.port);
   const [domainDraft, setDomainDraft] = useState(domain?.domain ?? `local-${server.port}`);
+  useEffect(() => {
+    setDomainDraft(domain?.domain ?? `local-${server.port}`);
+  }, [domain?.domain, server.port]);
   if (localDomains.data?.supported === false) {
     return (
       <span className="text-muted-foreground">

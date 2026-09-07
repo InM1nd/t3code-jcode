@@ -20,6 +20,7 @@ import {
   type ThreadShell,
 } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
+import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentThreadDetails } from "../state/threads";
@@ -542,7 +543,8 @@ export function getStartedThreadModelChangeBlockReason(input: {
   };
   if (
     currentModelSelection.instanceId === input.nextModelSelection.instanceId &&
-    currentModelSelection.model === input.nextModelSelection.model
+    currentModelSelection.model === input.nextModelSelection.model &&
+    Equal.equals(currentModelSelection.options, input.nextModelSelection.options)
   ) {
     return null;
   }

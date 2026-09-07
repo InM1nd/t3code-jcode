@@ -66,4 +66,26 @@ describe("LocalDomainsPortControls", () => {
     expect(html).toContain("Copy shop.tandem");
     expect(html).toContain("Unpublish");
   });
+
+  it("uses the published domain when the query resolves after the first render", () => {
+    mocks.domains = {
+      domains: [{ domain: "shop.tandem", port: 5173 }],
+      supported: true,
+      proxyError: null,
+    };
+    const html = renderToStaticMarkup(
+      <LocalDomainsPortControls
+        environmentId={environmentId}
+        server={{
+          host: "localhost",
+          port: 5173,
+          url: "http://localhost:5173",
+          processName: "vite",
+          pid: 1,
+          terminal: null,
+        }}
+      />,
+    );
+    expect(html).toContain('value="shop.tandem"');
+  });
 });

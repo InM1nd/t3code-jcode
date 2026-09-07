@@ -27,6 +27,9 @@ vi.mock("~/portDiscoveryState", () => ({
   useDiscoveredPorts: () => mocks.servers,
 }));
 vi.mock("./LocalDomainsPortControls", () => ({ LocalDomainsPortControls: () => null }));
+vi.mock("./PublishedDomainsSection", () => ({
+  PublishedDomainsSection: () => <div>Published domains</div>,
+}));
 // PortsPage isn't rendered inside a <RouterProvider> in this unit test, and
 // @tanstack/react-router's <Link> throws without one. UsagePage's sibling
 // ProviderLimitsPopover.test.tsx hits the same issue and works around it the
@@ -41,6 +44,7 @@ describe("PortsPage", () => {
     mocks.environments = [{ environmentId: envId, label: "Local" }];
     const html = renderToStaticMarkup(<PortsPage />);
     expect(html).toContain("No local dev servers");
+    expect(html).toContain("Published domains");
   });
 
   it("shows an environment selector labeled with the environment name when there are multiple environments", () => {
@@ -54,6 +58,14 @@ describe("PortsPage", () => {
     // id (base-ui's <SelectValue/> only resolves that by itself post-mount,
     // so PortsPage passes the label as children explicitly).
     expect(html).toMatch(/data-slot="select-value"[^>]*>Local</);
+  });
+
+  it("uses Dev servers as the page title while keeping the Ports route", () => {
+    mocks.servers = [];
+    mocks.environments = [{ environmentId: envId, label: "Local" }];
+    const html = renderToStaticMarkup(<PortsPage />);
+    expect(html).toContain(">Dev servers</h1>");
+    expect(html).not.toContain(">Ports</h1>");
   });
 
   it("lists a discovered port with its owning thread", () => {

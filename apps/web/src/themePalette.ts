@@ -1508,6 +1508,7 @@ export const SIGNAL_THEME: ThemeDefinition = {
   id: SIGNAL_THEME_ID,
   label: SIGNAL_THEME_LABEL,
   appearance: "light",
+  sidebarArtwork: true,
   colors: {
     ...createManagedThemeColors("light", "#fff5f2", "#ff3300", { exactSeeds: true }),
     ...themeActionColors("#ff3300"),
@@ -1525,6 +1526,7 @@ export const VOLT_THEME: ThemeDefinition = {
   id: VOLT_THEME_ID,
   label: VOLT_THEME_LABEL,
   appearance: "light",
+  sidebarArtwork: true,
   colors: {
     ...createManagedThemeColors("light", "#f4faf3", "#5ee000", { exactSeeds: true }),
     ...themeActionColors("#5ee000"),
@@ -1542,6 +1544,7 @@ export const ION_THEME: ThemeDefinition = {
   id: ION_THEME_ID,
   label: ION_THEME_LABEL,
   appearance: "light",
+  sidebarArtwork: true,
   colors: {
     ...createManagedThemeColors("light", "#f2f9fb", "#0891b2", { exactSeeds: true }),
     ...themeActionColors("#0891b2"),
