@@ -132,6 +132,25 @@ export function resourceMonitorExecutableName(platform: typeof BuildPlatform.Typ
   return platform === "win" ? "t3-resource-monitor.exe" : "t3-resource-monitor";
 }
 
+export const LOCAL_DOMAIN_LISTENER_BINARY_NAME = "t3-local-domain-listener";
+
+export function resolveLocalDomainListenerSwiftTargets(
+  arch: typeof BuildArch.Type,
+): ReadonlyArray<{ readonly arch: "arm64" | "x64"; readonly triple: string }> {
+  if (arch === "universal") {
+    return [
+      { arch: "arm64", triple: "arm64-apple-macosx11.0" },
+      { arch: "x64", triple: "x86_64-apple-macosx11.0" },
+    ];
+  }
+  return [
+    {
+      arch,
+      triple: arch === "arm64" ? "arm64-apple-macosx11.0" : "x86_64-apple-macosx11.0",
+    },
+  ];
+}
+
 const PLATFORM_CONFIG: Record<typeof BuildPlatform.Type, PlatformConfig> = {
   mac: {
     cliFlag: "--mac",
@@ -916,6 +935,10 @@ export const DESKTOP_EXTRA_RESOURCES = [
     to: "resource-monitor",
   },
 ] as const;
+export const LOCAL_DOMAIN_LISTENER_EXTRA_RESOURCE = {
+  from: "apps/desktop/prod-resources/local-domain-listener",
+  to: "local-domain-listener",
+} as const;
 
 export interface MacPasskeySigningConfiguration {
   readonly appId: string;
@@ -1817,6 +1840,64 @@ export const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* 
   }
 });
 
+export const stageLocalDomainListener = Effect.fn("stageLocalDomainListener")(function* (input: {
+  readonly repoRoot: string;
+  readonly stageResourcesDir: string;
+  readonly arch: typeof BuildArch.Type;
+  readonly verbose: boolean;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const sourcePath = path.join(
+    input.repoRoot,
+    "native/local-domain-listener/LocalDomainListener.swift",
+  );
+  const destinationDirectory = path.join(input.stageResourcesDir, "local-domain-listener");
+  const destinationPath = path.join(destinationDirectory, LOCAL_DOMAIN_LISTENER_BINARY_NAME);
+  const targets = resolveLocalDomainListenerSwiftTargets(input.arch);
+  const builtBinaries: string[] = [];
+
+  yield* fs.remove(destinationDirectory, { recursive: true, force: true }).pipe(Effect.ignore);
+  yield* fs.makeDirectory(destinationDirectory, { recursive: true });
+
+  for (const target of targets) {
+    const binaryPath = path.join(
+      destinationDirectory,
+      `.${LOCAL_DOMAIN_LISTENER_BINARY_NAME}-${target.arch}`,
+    );
+    yield* runCommand(
+      ChildProcess.make("xcrun", [
+        "--sdk",
+        "macosx",
+        "swiftc",
+        "-O",
+        "-target",
+        target.triple,
+        sourcePath,
+        "-o",
+        binaryPath,
+      ]),
+      {
+        label: `swiftc local domain listener (${target.arch})`,
+        verbose: input.verbose,
+      },
+    );
+    builtBinaries.push(binaryPath);
+  }
+
+  if (builtBinaries.length === 1) {
+    yield* fs.copyFile(builtBinaries[0]!, destinationPath);
+  } else {
+    yield* runCommand(
+      ChildProcess.make("lipo", ["-create", ...builtBinaries, "-output", destinationPath]),
+      { label: "lipo local domain listener universal binary", verbose: input.verbose },
+    );
+  }
+
+  yield* Effect.forEach(builtBinaries, (binaryPath) => fs.remove(binaryPath, { force: true }));
+  yield* fs.chmod(destinationPath, 0o755);
+});
+
 function generateMacIconSet(
   sourcePng: string,
   targetIcns: string,
@@ -2152,6 +2233,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // hand-packed server.asar sidecar (see WINDOWS_SERVER_ASAR_RESOURCE).
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
+      ...(platform === "mac" ? [LOCAL_DOMAIN_LISTENER_EXTRA_RESOURCE] : []),
       ...(platform === "win" ? WINDOWS_SERVER_EXTRA_RESOURCES : []),
       ...(platform === "win" && wslRuntimeBundled ? WSL_RUNTIME_EXTRA_RESOURCES : []),
     ],
@@ -3095,6 +3177,14 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     arch: options.arch,
     verbose: options.verbose,
   });
+  if (options.platform === "mac") {
+    yield* stageLocalDomainListener({
+      repoRoot,
+      stageResourcesDir,
+      arch: options.arch,
+      verbose: options.verbose,
+    });
+  }
 
   yield* assertPlatformBuildResources(
     options.platform,

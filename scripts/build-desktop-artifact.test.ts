@@ -25,6 +25,8 @@ import {
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
+  LOCAL_DOMAIN_LISTENER_BINARY_NAME,
+  LOCAL_DOMAIN_LISTENER_EXTRA_RESOURCE,
   MAC_FILE_EXCLUSIONS,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
@@ -47,6 +49,7 @@ import {
   resolveDesktopUpdateChannel,
   resolveDesktopWebAssetBrand,
   resolveResourceMonitorRustTargets,
+  resolveLocalDomainListenerSwiftTargets,
   resolveWindowsServerAsarIgnoreGlobs,
   resourceMonitorExecutableName,
   resolveGitHubPublishConfig,
@@ -1470,6 +1473,15 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ]);
     assert.equal(resourceMonitorExecutableName("mac"), "t3-resource-monitor");
     assert.equal(resourceMonitorExecutableName("win"), "t3-resource-monitor.exe");
+    assert.equal(LOCAL_DOMAIN_LISTENER_BINARY_NAME, "t3-local-domain-listener");
+    assert.deepStrictEqual(LOCAL_DOMAIN_LISTENER_EXTRA_RESOURCE, {
+      from: "apps/desktop/prod-resources/local-domain-listener",
+      to: "local-domain-listener",
+    });
+    assert.deepStrictEqual(resolveLocalDomainListenerSwiftTargets("universal"), [
+      { arch: "arm64", triple: "arm64-apple-macosx11.0" },
+      { arch: "x64", triple: "x86_64-apple-macosx11.0" },
+    ]);
   });
 
   it("packages the WSL server and production dependencies as one compressed runtime", () => {
