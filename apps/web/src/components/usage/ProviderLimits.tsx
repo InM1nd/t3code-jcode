@@ -12,10 +12,20 @@ const PROVIDER_LABEL: Record<ProviderLimit["provider"], string> = {
 
 const ALL_PROVIDERS = Object.keys(PROVIDER_LABEL) as ProviderLimit["provider"][];
 
-/** Compact drops seconds, year, and the "UTC" suffix: "Resets 08-31 00:02" instead of the full timestamp. */
+/** Compact drops seconds and year but keeps UTC explicit: "Resets 08-31 00:02 UTC". */
 function formatResetsAt(resetsAt: string, compact: boolean): string {
   const normalized = resetsAt.replace("T", " ").replace(".000Z", " UTC");
-  return compact ? normalized.slice(5, 16) : normalized;
+  return compact ? `${normalized.slice(5, 16)} UTC` : normalized;
+}
+
+function fallbackLimitMessage(
+  provider: ProviderLimit["provider"],
+  status: NonNullable<ProviderLimit["status"]>,
+): string {
+  if (status === "auth-required")
+    return `Sign in to ${PROVIDER_LABEL[provider]} to view usage limits.`;
+  if (status === "unsupported") return `${PROVIDER_LABEL[provider]} does not expose usage limits.`;
+  return `${PROVIDER_LABEL[provider]} usage limits could not be refreshed.`;
 }
 
 export function ProviderLimits({
@@ -69,33 +79,51 @@ export function ProviderLimits({
                 <span className="truncate text-xs text-muted-foreground">{environment.label}</span>
               ) : null}
             </div>
-            {limit === null ? (
-              <p className="text-xs text-muted-foreground">No limit data</p>
-            ) : (
-              <div className={cn("flex flex-col", compact ? "gap-1" : "gap-2")}>
-                {limit.windows.map((window) => (
-                  <div key={window.label} className="flex flex-col gap-1">
-                    <div className="flex items-baseline justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">{window.label}</span>
-                      <span className="font-medium text-foreground tabular-nums">
-                        {window.usedPercent}%
-                      </span>
+            {(() => {
+              const status =
+                limit?.status ??
+                (limit !== null && limit.windows.length > 0 ? "ok" : "temporary-error");
+              const message =
+                limit === null
+                  ? "No limit report was returned by this environment."
+                  : status === "ok"
+                    ? null
+                    : (limit.message ?? fallbackLimitMessage(provider, status));
+              const lastUpdatedAt =
+                limit?.lastUpdatedAt ?? (status === "ok" ? environment.summary?.readAt : null);
+
+              return (
+                <div className={cn("flex flex-col", compact ? "gap-1" : "gap-2")}>
+                  {message ? <p className="text-xs text-muted-foreground">{message}</p> : null}
+                  {limit?.windows.map((window) => (
+                    <div key={window.label} className="flex flex-col gap-1">
+                      <div className="flex items-baseline justify-between gap-2 text-xs">
+                        <span className="text-muted-foreground">{window.label}</span>
+                        <span className="font-medium text-foreground tabular-nums">
+                          {window.usedPercent}%
+                        </span>
+                      </div>
+                      <div className="h-1 overflow-hidden bg-muted">
+                        <div
+                          className="h-full bg-foreground"
+                          style={{ width: `${Math.min(100, Math.max(0, window.usedPercent))}%` }}
+                        />
+                      </div>
+                      {window.resetsAt === null ? null : (
+                        <span className="text-[11px] text-muted-foreground">
+                          Resets {formatResetsAt(window.resetsAt, compact)}
+                        </span>
+                      )}
                     </div>
-                    <div className="h-1 overflow-hidden bg-muted">
-                      <div
-                        className="h-full bg-foreground"
-                        style={{ width: `${Math.min(100, Math.max(0, window.usedPercent))}%` }}
-                      />
-                    </div>
-                    {window.resetsAt === null ? null : (
-                      <span className="text-[11px] text-muted-foreground">
-                        Resets {formatResetsAt(window.resetsAt, compact)}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                  {lastUpdatedAt ? (
+                    <span className="text-[11px] text-muted-foreground">
+                      Updated {formatResetsAt(lastUpdatedAt, compact)}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })()}
           </article>
         ))}
       </div>

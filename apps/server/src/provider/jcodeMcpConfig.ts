@@ -24,6 +24,32 @@ type McpConfigFile = {
   servers?: Record<string, unknown>;
 };
 
+function isServerMap(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseMcpConfig(existingRaw: string | null | undefined): McpConfigFile {
+  if (!existingRaw || existingRaw.trim().length === 0) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(existingRaw);
+  } catch {
+    throw new Error("Existing .jcode/mcp.json is invalid JSON; it was left unchanged.");
+  }
+  if (!isServerMap(parsed)) {
+    throw new Error("Existing .jcode/mcp.json must contain a JSON object; it was left unchanged.");
+  }
+  if (
+    ("mcpServers" in parsed &&
+      parsed.mcpServers !== undefined &&
+      !isServerMap(parsed.mcpServers)) ||
+    ("servers" in parsed && parsed.servers !== undefined && !isServerMap(parsed.servers))
+  ) {
+    throw new Error("Existing .jcode/mcp.json has an invalid server list; it was left unchanged.");
+  }
+  return parsed;
+}
+
 export function jcodeMcpAuthFilePath(secretsDir: string, threadId: ThreadId): string {
   return NodePath.join(secretsDir, "jcode-mcp", `${threadId}.authorization`);
 }
@@ -48,10 +74,10 @@ export function buildJcodeMcpServerEntry(input: {
 function readServers(parsed: McpConfigFile): Record<string, unknown> {
   const fromCanonical = parsed.mcpServers;
   const fromLegacy = parsed.servers;
-  if (fromCanonical && typeof fromCanonical === "object" && !Array.isArray(fromCanonical)) {
+  if (fromCanonical) {
     return { ...fromCanonical };
   }
-  if (fromLegacy && typeof fromLegacy === "object" && !Array.isArray(fromLegacy)) {
+  if (fromLegacy) {
     return { ...fromLegacy };
   }
   return {};
@@ -62,14 +88,7 @@ export function mergeJcodeMcpConfigJson(
   existingRaw: string | null | undefined,
   server: JcodeMcpServerEntry,
 ): string {
-  let parsed: McpConfigFile = {};
-  if (existingRaw && existingRaw.trim().length > 0) {
-    try {
-      parsed = JSON.parse(existingRaw) as McpConfigFile;
-    } catch {
-      parsed = {};
-    }
-  }
+  const parsed = parseMcpConfig(existingRaw);
 
   const servers = readServers(parsed);
   servers[JCODE_MCP_SERVER_NAME] = {

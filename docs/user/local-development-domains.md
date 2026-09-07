@@ -8,15 +8,18 @@ across restarts.
 
 1. Open **Ports** from the sidebar footer to see every local dev server T3 Code has detected.
 2. Next to a server, type a name (or keep the suggested one) and select **Publish local domain**.
-3. The first publish on a machine asks for administrator permission once, to add the mapping to
-   `/etc/hosts`. Approve it to continue.
+3. The first publish on a machine asks for administrator permission to install the managed
+   `tandem` resolver. Approve it to continue. This makes any `*.tandem` name resolve to the local
+   proxy; only names published in Ports are routed to a development server.
 
 The server is now reachable at `http://<name>.tandem`, including from a browser. Select **Open** to
 launch it or **Copy** to grab the URL. WebSocket connections (Vite's HMR, for example) work the same
 way as the plain port URL did.
 
 Selecting **Publish local domain** again with a different name moves the domain; selecting
-**Unpublish** removes it and cleans up the `/etc/hosts` entry.
+**Unpublish** removes it and cleans up its `/etc/hosts` entry. Unpublishing the last local domain
+also removes T3 Code's resolver entry. The resolver and routes are restored from the saved local
+domain state after a T3 restart.
 
 ## Limitations
 

@@ -90,7 +90,7 @@ describe("ProviderLimits", () => {
     expect(markup).toContain("Codex");
     expect(markup).toContain("Cursor");
     expect(markup).toContain("OpenCode");
-    expect(markup).toContain("No limit data");
+    expect(markup).toContain("No limit report was returned by this environment.");
   });
 
   it("drops the section title in compact mode", () => {
@@ -143,8 +143,44 @@ describe("ProviderLimits", () => {
       />,
     );
 
-    expect(markup).toContain("Resets 08-31 00:02");
+    expect(markup).toContain("Resets 08-31 00:02 UTC");
     expect(markup).not.toContain("00:02:54");
-    expect(markup).not.toContain("UTC");
+  });
+
+  it("explains unavailable providers and shows the last successful update", () => {
+    const markup = renderToStaticMarkup(
+      <ProviderLimits
+        environments={[
+          {
+            environmentId: "local" as never,
+            label: "MacBook",
+            isPending: false,
+            error: null,
+            summary: {
+              readAt: "2026-09-01T10:05:00.000Z",
+              limits: [
+                {
+                  provider: "claude",
+                  status: "auth-required",
+                  windows: [],
+                  lastUpdatedAt: null,
+                  message: "Sign in to Claude Code to view usage limits.",
+                },
+                {
+                  provider: "codex",
+                  status: "ok",
+                  windows: [{ label: "5h", usedPercent: 42, resetsAt: null }],
+                  lastUpdatedAt: "2026-09-01T10:00:00.000Z",
+                  message: null,
+                },
+              ],
+            } as never,
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Sign in to Claude Code to view usage limits.");
+    expect(markup).toContain("Updated 2026-09-01 10:00:00 UTC");
   });
 });

@@ -1,7 +1,7 @@
 import type { ProjectBoardItem } from "@t3tools/contracts";
 
 export function isTandemDelegation(item: ProjectBoardItem): boolean {
-  return item.status === "ready" && item.archivedAt === null;
+  return item.status === "ready" && (item.archivedAt === null || item.archivedAt === undefined);
 }
 
 /**

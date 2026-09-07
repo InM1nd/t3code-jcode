@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   createLocalDomainProxy,
+  localDomainOwnerConflict,
+  localDomainOwnerId,
+  managedHostsOwner,
   normalizeLocalDomain,
   portListenError,
   replaceManagedHostsBlock,
@@ -59,6 +62,57 @@ describe("local domains", () => {
     expect(replaceManagedHostsBlock(previous, [{ domain: "shop.tandem", port: 3000 }])).toBe(
       "127.0.0.1 localhost\n\n# BEGIN T3 Code local domains\n127.0.0.1 shop.tandem\n# END T3 Code local domains\n",
     );
+  });
+
+  it("marks the owning environment and can migrate an unowned block", () => {
+    const owner = localDomainOwnerId("/tmp/t3-a");
+    const claimed = replaceManagedHostsBlock(
+      "127.0.0.1 localhost\n",
+      [{ domain: "shop.tandem", port: 3000 }],
+      owner,
+    );
+
+    expect(managedHostsOwner(claimed)).toBe(owner);
+    expect(claimed).toContain("# OWNER T3 Code local domains: ");
+    expect(
+      replaceManagedHostsBlock(claimed, [{ domain: "api.tandem", port: 4000 }], owner),
+    ).toContain("127.0.0.1 api.tandem");
+  });
+
+  it("rejects a different owner but allows a legacy or matching block", () => {
+    const owner = localDomainOwnerId("/tmp/t3-a");
+    const otherOwner = localDomainOwnerId("/tmp/t3-b");
+    const claimed = replaceManagedHostsBlock(
+      "127.0.0.1 localhost\n",
+      [{ domain: "shop.tandem", port: 3000 }],
+      owner,
+    );
+
+    expect(localDomainOwnerConflict(claimed, owner)).toBeNull();
+    expect(localDomainOwnerConflict(claimed, otherOwner)?.reason).toBe("ownerConflict");
+    expect(
+      localDomainOwnerConflict(
+        "# BEGIN T3 Code local domains\n127.0.0.1 shop.tandem\n# END T3 Code local domains\n",
+        otherOwner,
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps ownership across restart and releases it when the last domain is removed", () => {
+    const owner = localDomainOwnerId("/tmp/t3-a");
+    const otherOwner = localDomainOwnerId("/tmp/t3-b");
+    const claimed = replaceManagedHostsBlock(
+      "127.0.0.1 localhost\n",
+      [{ domain: "shop.tandem", port: 3000 }],
+      owner,
+    );
+
+    expect(localDomainOwnerConflict(claimed, owner)).toBeNull();
+    expect(localDomainOwnerConflict(claimed, otherOwner)?.reason).toBe("ownerConflict");
+
+    const released = replaceManagedHostsBlock(claimed, [], owner);
+    expect(released).not.toContain("T3 Code local domains");
+    expect(localDomainOwnerConflict(released, otherOwner)).toBeNull();
   });
 
   it("routes an explicit Host header to loopback and preserves its forwarding header", async () => {

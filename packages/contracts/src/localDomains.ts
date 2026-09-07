@@ -37,9 +37,11 @@ export class LocalDomainError extends Schema.TaggedErrorClass<LocalDomainError>(
     reason: Schema.Literals([
       "unsupportedPlatform",
       "invalidDomain",
+      "ownerConflict",
       "portUnavailable",
       "authorizationDenied",
       "hostsUpdateFailed",
+      "resolverUpdateFailed",
     ]),
     message: Schema.String,
   },

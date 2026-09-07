@@ -64,6 +64,20 @@ describe("jcodeMcpConfig", () => {
     expect(parsed.mcpServers[JCODE_MCP_SERVER_NAME]).toBeDefined();
   });
 
+  it("rejects malformed or invalid config without replacing it", () => {
+    const server = buildJcodeMcpServerEntry({
+      nodeExecutable: "node",
+      serverEntryPath: "bin.ts",
+      endpoint: "http://localhost/mcp",
+      authFilePath: "/auth",
+    });
+
+    expect(() => mergeJcodeMcpConfigJson("{broken", server)).toThrow("left unchanged");
+    expect(() => mergeJcodeMcpConfigJson(JSON.stringify({ mcpServers: [] }), server)).toThrow(
+      "invalid server list",
+    );
+  });
+
   it("writes auth + mcp.json under cwd/secrets", () => {
     const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "jcode-mcp-config-"));
     const cwd = NodePath.join(root, "project");
@@ -88,5 +102,27 @@ describe("jcodeMcpConfig", () => {
     expect(config.mcpServers[JCODE_MCP_SERVER_NAME]?.env.T3_MCP_AUTH_FILE).toBe(
       installed.authFilePath,
     );
+  });
+
+  it("leaves an invalid existing config byte-for-byte untouched", () => {
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "jcode-mcp-config-"));
+    const cwd = NodePath.join(root, "project");
+    const configPath = NodePath.join(cwd, ".jcode", "mcp.json");
+    const original = "{not valid JSON";
+    NodeFS.mkdirSync(NodePath.dirname(configPath), { recursive: true });
+    NodeFS.writeFileSync(configPath, original);
+
+    expect(() =>
+      installJcodeMcpBridgeFiles({
+        cwd,
+        secretsDir: NodePath.join(root, "secrets"),
+        threadId: ThreadId.make("thread-board-2"),
+        endpoint: "http://127.0.0.1:9/mcp",
+        authorizationHeader: "Bearer test-token",
+        nodeExecutable: "/bin/node",
+        serverEntryPath: "/opt/t3/bin.mjs",
+      }),
+    ).toThrow("left unchanged");
+    expect(NodeFS.readFileSync(configPath, "utf8")).toBe(original);
   });
 });
