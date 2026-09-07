@@ -22,6 +22,11 @@ import * as ServerConfig from "./config.ts";
 
 const STATE_FILE = "local-domains.json";
 
+export function resolveLocalDomainPublicPort(environment: NodeJS.ProcessEnv = process.env): number {
+  const value = Number(environment.T3CODE_LOCAL_DOMAIN_PUBLIC_PORT);
+  return Number.isInteger(value) && value > 0 && value <= 65_535 ? value : LOCAL_DOMAIN_PROXY_PORT;
+}
+
 const LocalDomainState = Schema.Struct({
   version: Schema.Literals([1, 2]),
   domains: Schema.Array(
@@ -212,7 +217,7 @@ export class LocalDomains extends Context.Service<
       const snapshot = (): LocalDomainList => ({
         domains,
         supported: true,
-        proxyPort: LOCAL_DOMAIN_PROXY_PORT,
+        proxyPort: resolveLocalDomainPublicPort(),
         proxyError,
       });
       const ensureProxy = Effect.fn("LocalDomains.ensureProxy")(function* () {
