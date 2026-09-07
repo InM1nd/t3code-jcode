@@ -18,6 +18,7 @@ import * as DesktopWindow from "../window/DesktopWindow.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopLifecycle from "./DesktopLifecycle.ts";
+import * as DesktopLocalDomainListener from "./DesktopLocalDomainListener.ts";
 import * as DesktopLinuxUrlHandler from "./DesktopLinuxUrlHandler.ts";
 import * as DesktopObservability from "./DesktopObservability.ts";
 import * as DesktopPreReadyPlatform from "./DesktopPreReadyPlatform.ts";
@@ -142,6 +143,7 @@ const fatalStartupCause = <E>(stage: string, cause: Cause.Cause<E>) =>
 const bootstrap = Effect.gen(function* () {
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const primaryBackend = yield* pool.primary;
+  const localDomainListener = yield* DesktopLocalDomainListener.DesktopLocalDomainListener;
   const state = yield* DesktopState.DesktopState;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
@@ -208,6 +210,7 @@ const bootstrap = Effect.gen(function* () {
     if (settings.wslOnly === true && settings.wslBackendEnabled === true) {
       yield* desktopWindow.showConnectingSplash;
     }
+    yield* localDomainListener.start;
     yield* primaryBackend.start;
     yield* logBootstrapInfo("bootstrap backend start requested");
     // Bring up the WSL backend if the user previously enabled it. The

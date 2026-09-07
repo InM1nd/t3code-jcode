@@ -16,6 +16,7 @@ import serverPackageJson from "../../../server/package.json" with { type: "json"
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopLocalDomainListener from "../app/DesktopLocalDomainListener.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
@@ -85,6 +86,7 @@ const DESKTOP_BACKEND_ENV_NAMES = [
   "T3CODE_DESKTOP_HTTPS_ENDPOINTS",
   "T3CODE_TAILSCALE_SERVE",
   "T3CODE_TAILSCALE_SERVE_PORT",
+  "T3CODE_LOCAL_DOMAIN_PUBLIC_PORT",
 ] as const;
 
 // Sensitive env vars that the WSL backend needs but Windows process.env won't
@@ -208,6 +210,7 @@ const readPersistedBackendObservabilitySettings = Effect.gen(function* () {
 interface SharedBootstrapInput {
   readonly bootstrapToken: string;
   readonly observabilitySettings: BackendObservabilitySettings;
+  readonly localDomainPublicPort: number;
 }
 
 interface WslPreflightSuccess {
@@ -507,6 +510,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       env: {
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
+        T3CODE_LOCAL_DOMAIN_PUBLIC_PORT: String(input.localDomainPublicPort),
       },
       // Primary wants process.env (PATH, dev-runner's T3CODE_HOME, etc.).
       extendEnv: true,
@@ -744,6 +748,9 @@ export const make = Effect.gen(function* () {
   const wslEnvironment = yield* DesktopWslEnvironment.DesktopWslEnvironment;
   const wslServerTree = yield* DesktopWslServerTree.DesktopWslServerTree;
   const settings = yield* DesktopAppSettings.DesktopAppSettings;
+  const localDomainListener = yield* Effect.serviceOption(
+    DesktopLocalDomainListener.DesktopLocalDomainListener,
+  );
   const crypto = yield* Crypto.Crypto;
   // SynchronizedRef (not a plain Ref) so the read-generate-write is atomic.
   // crypto.randomBytes is a yield point, and resolvePrimary + resolveWsl can
@@ -777,7 +784,15 @@ export const make = Effect.gen(function* () {
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
     );
-    return { bootstrapToken, observabilitySettings } satisfies SharedBootstrapInput;
+    const localDomainPublicPort = yield* Option.match(localDomainListener, {
+      onNone: () => Effect.succeed(7777),
+      onSome: (listener) => listener.publicPort,
+    });
+    return {
+      bootstrapToken,
+      observabilitySettings,
+      localDomainPublicPort,
+    } satisfies SharedBootstrapInput;
   });
 
   const buildWslPrimaryConfig = Effect.gen(function* () {

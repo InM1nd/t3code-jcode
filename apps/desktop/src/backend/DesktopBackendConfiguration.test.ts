@@ -243,6 +243,7 @@ describe("DesktopBackendConfiguration", () => {
         assert.isUndefined(first.env.T3CODE_PORT);
         assert.isUndefined(first.env.T3CODE_MODE);
         assert.isUndefined(first.env.T3CODE_DESKTOP_LAN_HOST);
+        assert.equal(first.env.T3CODE_LOCAL_DOMAIN_PUBLIC_PORT, "7777");
 
         assert.equal(first.bootstrap.mode, "desktop");
         assert.equal(first.bootstrap.noBrowser, true);

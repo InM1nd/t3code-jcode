@@ -9,6 +9,7 @@ import {
   migratePersistedLocalDomain,
   normalizeLocalDomain,
   portListenError,
+  resolveLocalDomainPublicPort,
 } from "./localDomains.ts";
 
 const servers: NodeHttp.Server[] = [];
@@ -33,6 +34,12 @@ afterEach(async () => {
 });
 
 describe("local domains", () => {
+  it("uses the desktop listener port only when it is valid", () => {
+    expect(resolveLocalDomainPublicPort({ T3CODE_LOCAL_DOMAIN_PUBLIC_PORT: "80" })).toBe(80);
+    expect(resolveLocalDomainPublicPort({ T3CODE_LOCAL_DOMAIN_PUBLIC_PORT: "0" })).toBe(
+      LOCAL_DOMAIN_PROXY_PORT,
+    );
+  });
   it("normalizes one-label names to .localhost and migrates old persisted names", () => {
     expect(normalizeLocalDomain("Shop")).toBe("shop.localhost");
     expect(normalizeLocalDomain("shop.localhost")).toBe("shop.localhost");
