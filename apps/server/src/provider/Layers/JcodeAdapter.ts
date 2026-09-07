@@ -651,14 +651,7 @@ export function makeJcodeAdapter(jcodeSettings: JcodeSettings, options?: JcodeAd
                   }`,
                   cause,
                 }),
-            }).pipe(
-              Effect.tapError((error) =>
-                Effect.logWarning("jcode MCP stdio bridge install failed; continuing without it", {
-                  detail: error.detail,
-                }),
-              ),
-              Effect.ignore,
-            );
+            });
           }
 
           const jcodeProvider = resolveJcodeAcpProvider(jcodeModelSelection);

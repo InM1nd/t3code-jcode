@@ -1,5 +1,9 @@
-import type { DiscoveredLocalServer, EnvironmentId } from "@t3tools/contracts";
-import { useState } from "react";
+import {
+  LOCAL_DOMAIN_PROXY_PORT,
+  type DiscoveredLocalServer,
+  type EnvironmentId,
+} from "@t3tools/contracts";
+import { useEffect, useState } from "react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { localDomainsEnvironment } from "~/localDomainsState";
@@ -25,16 +29,15 @@ export function LocalDomainsPortControls({
   const unpublish = useAtomCommand(localDomainsEnvironment.unpublish, { reportFailure: true });
   const domain = localDomains.data?.domains.find((binding) => binding.port === server.port);
   const [domainDraft, setDomainDraft] = useState(domain?.domain ?? `local-${server.port}`);
-  if (localDomains.data?.supported === false) {
-    return (
-      <span className="text-muted-foreground">
-        Local development domains are available on macOS only.
-      </span>
-    );
-  }
+  useEffect(() => {
+    setDomainDraft(domain?.domain ?? `local-${server.port}`);
+  }, [domain?.domain, server.port]);
+  if (localDomains.data?.supported === false) return null;
   if (localDomains.error) return <span className="text-destructive">{localDomains.error}</span>;
   if (localDomains.data?.supported !== true) return null;
-  const localUrl = domain ? `http://${domain.domain}` : "";
+  const localUrl = domain
+    ? `http://${domain.domain}:${localDomains.data.proxyPort ?? LOCAL_DOMAIN_PROXY_PORT}`
+    : "";
   return (
     <div className="flex w-full items-center gap-2 border-t border-border/40 pt-2">
       <Input

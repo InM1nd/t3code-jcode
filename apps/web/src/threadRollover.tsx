@@ -1,6 +1,11 @@
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { AtomCommand, AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
-import type { ProjectBoardItem, ThreadId } from "@t3tools/contracts";
+import type {
+  OrchestrationLatestTurn,
+  ProjectBoardItem,
+  ThreadId,
+  TurnId,
+} from "@t3tools/contracts";
 import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 import { ListTodoIcon } from "lucide-react";
 
@@ -9,6 +14,10 @@ import { ITEM_ICON_CLASS } from "./components/CommandPalette.logic";
 import { toastManager } from "./components/ui/toast";
 import type { useNewThreadHandler } from "./hooks/useHandleNewThread";
 import { newMessageId } from "./lib/utils";
+import { appAtomRegistry } from "./rpc/atomRegistry";
+import { readProject } from "./state/entities";
+import { environmentProjects } from "./state/projects";
+import { environmentThreadDetails } from "./state/threads";
 import type { threadEnvironment } from "./state/threads";
 import type { Project, Thread } from "./types";
 
@@ -23,10 +32,9 @@ import type { Project, Thread } from "./types";
  */
 
 /**
- * Cards the outgoing thread is accountable for: open cards it created, falling
- * back to whatever the board says is in flight. The fallback matters because a
- * thread that never touched the board still has work worth handing off, and
- * pointing at the in-progress cards beats pointing at nothing.
+ * Cards the outgoing thread is accountable for: only open cards it created.
+ * Another thread's in-progress card is not context the outgoing thread can
+ * safely summarize.
  */
 export function selectRolloverCards(
   items: ReadonlyArray<ProjectBoardItem>,
@@ -35,12 +43,132 @@ export function selectRolloverCards(
   const open = items.filter(
     (item) => !item.archivedAt && item.status !== "completed" && item.status !== "cancelled",
   );
-  const owned = open.filter((item) => item.sourceThreadId === threadId);
-  return owned.length > 0 ? owned : open.filter((item) => item.status === "inProgress");
+  return open.filter((item) => item.sourceThreadId === threadId);
 }
 
 function cardLines(cards: ReadonlyArray<ProjectBoardItem>): string[] {
   return cards.map((card) => `- [${card.id}] ${card.title}`);
+}
+
+export type RolloverObservation = {
+  readonly latestTurn: OrchestrationLatestTurn | null;
+  readonly boardItems: ReadonlyArray<ProjectBoardItem>;
+};
+
+type RolloverObserver = (listener: (observation: RolloverObservation) => void) => () => void;
+
+export type RolloverWaitResult =
+  | { readonly status: "completed"; readonly boardItems: ReadonlyArray<ProjectBoardItem> }
+  | { readonly status: "interrupted" | "error" };
+
+function hasFreshHandoff(
+  item: ProjectBoardItem,
+  threadId: ThreadId,
+  previousHandoffIds: ReadonlyMap<ProjectBoardItem["id"], string | null>,
+): boolean {
+  const handoff = item.latestHandoff;
+  return (
+    handoff !== undefined &&
+    handoff !== null &&
+    handoff.sourceThreadId === threadId &&
+    handoff.id !== (previousHandoffIds.get(item.id) ?? null)
+  );
+}
+
+function hasRelevantFreshHandoffs(input: {
+  readonly items: ReadonlyArray<ProjectBoardItem>;
+  readonly cards: ReadonlyArray<ProjectBoardItem>;
+  readonly threadId: ThreadId;
+  readonly previousHandoffIds: ReadonlyMap<ProjectBoardItem["id"], string | null>;
+}): boolean {
+  if (input.cards.length > 0) {
+    return input.cards.every((card) => {
+      const current = input.items.find((item) => item.id === card.id);
+      return (
+        current !== undefined && hasFreshHandoff(current, input.threadId, input.previousHandoffIds)
+      );
+    });
+  }
+
+  return selectRolloverCards(input.items, input.threadId).some((card) =>
+    hasFreshHandoff(card, input.threadId, input.previousHandoffIds),
+  );
+}
+
+export function waitForRolloverReady(input: {
+  readonly threadId: ThreadId;
+  readonly previousTurnId: TurnId | null;
+  readonly cards: ReadonlyArray<ProjectBoardItem>;
+  readonly initialItems: ReadonlyArray<ProjectBoardItem>;
+  readonly observe: RolloverObserver;
+}): Promise<RolloverWaitResult> {
+  const previousHandoffIds = new Map(
+    input.initialItems.map((item) => [item.id, item.latestHandoff?.id ?? null] as const),
+  );
+
+  return new Promise((resolve) => {
+    let unsubscribe: (() => void) | null = null;
+    let finished = false;
+    const finish = (result: RolloverWaitResult) => {
+      if (finished) return;
+      finished = true;
+      unsubscribe?.();
+      resolve(result);
+    };
+
+    unsubscribe = input.observe((observation) => {
+      const turn = observation.latestTurn;
+      if (
+        turn === null ||
+        turn.turnId === input.previousTurnId ||
+        turn.state === "running" ||
+        turn.completedAt === null
+      ) {
+        return;
+      }
+      if (turn.state !== "completed") {
+        finish({ status: turn.state });
+        return;
+      }
+      if (
+        hasRelevantFreshHandoffs({
+          items: observation.boardItems,
+          cards: input.cards,
+          threadId: input.threadId,
+          previousHandoffIds,
+        })
+      ) {
+        finish({ status: "completed", boardItems: observation.boardItems });
+      }
+    });
+    if (finished) unsubscribe();
+  });
+}
+
+function observeRolloverState(
+  input: {
+    readonly environmentId: Thread["environmentId"];
+    readonly projectId: Project["id"];
+    readonly threadId: ThreadId;
+  },
+  listener: (observation: RolloverObservation) => void,
+): () => void {
+  const projectRef = scopeProjectRef(input.environmentId, input.projectId);
+  const threadRef = scopeThreadRef(input.environmentId, input.threadId);
+  const projectAtom = environmentProjects.projectAtom(projectRef);
+  const latestTurnAtom = environmentThreadDetails.latestTurnAtom(threadRef);
+  const read = (): RolloverObservation => ({
+    latestTurn: appAtomRegistry.get(latestTurnAtom),
+    boardItems: appAtomRegistry.get(projectAtom)?.boardItems ?? [],
+  });
+  const notify = () => listener(read());
+  const unsubscribeTurn = appAtomRegistry.subscribe(latestTurnAtom, notify);
+  const unsubscribeProject = appAtomRegistry.subscribe(projectAtom, notify);
+  notify();
+  return () => {
+    unsubscribeTurn();
+    unsubscribeProject();
+  };
 }
 
 /**
@@ -136,9 +264,7 @@ export function buildRolloverCommandItem(input: {
       );
       const boardItems = project?.boardItems ?? [];
       const cards = selectRolloverCards(boardItems, activeThread.id);
-      // The outgoing thread writes the handoff: it is the only agent that
-      // still has the context. The successor reads the card fresh rather than
-      // carrying an inlined copy, so it cannot race this turn.
+      const projectRef = scopeProjectRef(activeThread.environmentId, activeThread.projectId);
       const handoffResult = await startThreadTurn({
         environmentId: activeThread.environmentId,
         input: {
@@ -162,15 +288,43 @@ export function buildRolloverCommandItem(input: {
         });
         return;
       }
+      const rolloverResult = await waitForRolloverReady({
+        threadId: activeThread.id,
+        previousTurnId: activeThread.latestTurn?.turnId ?? null,
+        cards,
+        initialItems: boardItems,
+        observe: (listener) =>
+          observeRolloverState(
+            {
+              environmentId: activeThread.environmentId,
+              projectId: activeThread.projectId,
+              threadId: activeThread.id,
+            },
+            listener,
+          ),
+      });
+      if (rolloverResult.status !== "completed") {
+        toastManager.add({
+          type: "error",
+          title:
+            rolloverResult.status === "interrupted"
+              ? "Handoff cancelled"
+              : "Could not complete handoff",
+          description: "No successor thread was created; retry rollover from this thread.",
+        });
+        return;
+      }
+      const freshItems = readProject(projectRef)?.boardItems ?? rolloverResult.boardItems;
+      const freshCards = selectRolloverCards(freshItems, activeThread.id);
       // Same branch and worktree: passing an existing worktreePath is what
       // stops the draft from provisioning a second worktree on send.
-      await handleNewThread(scopeProjectRef(activeThread.environmentId, activeThread.projectId), {
+      await handleNewThread(projectRef, {
         branch: activeThread.branch,
         worktreePath: activeThread.worktreePath,
         envMode: activeThread.worktreePath ? "worktree" : "local",
         seedPrompt: buildRolloverSeedPrompt({
-          items: boardItems,
-          cards,
+          items: freshItems,
+          cards: freshCards,
           previousTitle: activeThread.title,
         }),
       });

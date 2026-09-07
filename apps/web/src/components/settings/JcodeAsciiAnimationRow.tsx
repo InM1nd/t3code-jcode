@@ -8,6 +8,8 @@ import { searchableSetting } from "./settingsSearch";
 const LABELS = {
   blob: "Ambient blob",
   logo: "Tandem mark",
+  static: "Static blob",
+  off: "Off",
 } as const;
 
 /** Fork-owned control for the empty-chat ASCII canvas. */
@@ -18,7 +20,7 @@ export function JcodeAsciiAnimationRow() {
   return (
     <SettingsRow
       {...searchableSetting("empty-chat-animation")}
-      description="Choose the animated ASCII artwork shown in empty chats."
+      description="Choose the ASCII artwork shown in empty chats."
       resetAction={
         animation !== DEFAULT_CLIENT_SETTINGS.jcodeAsciiAnimation ? (
           <SettingResetButton
@@ -33,7 +35,7 @@ export function JcodeAsciiAnimationRow() {
         <Select
           value={animation}
           onValueChange={(value) => {
-            if (value === "blob" || value === "logo") {
+            if (value === "blob" || value === "logo" || value === "static" || value === "off") {
               updateSettings({ jcodeAsciiAnimation: value });
             }
           }}

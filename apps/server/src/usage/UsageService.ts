@@ -15,6 +15,8 @@ import * as NodeOS from "node:os";
 
 import {
   USAGE_CONTRACT_VERSION,
+  type ProviderLimit,
+  type ProviderLimitProvider,
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
@@ -140,6 +142,7 @@ export const make = Effect.gen(function* () {
   let rates: RateTable = new Map();
   let ratesFetchedAtMs: number | null = null;
   let ratesStatus: UsageSummary["pricing"]["status"] = "unavailable";
+  const previousProviderLimits = new Map<ProviderLimitProvider, ProviderLimit>();
 
   /**
    * Loads the LiteLLM rate table, preferring a fresh copy and falling back to
@@ -539,12 +542,16 @@ export const make = Effect.gen(function* () {
       environment: hostEnvironment,
       homeDirectory: NodeOS.homedir(),
       platform: hostPlatform,
+      previousLimits: previousProviderLimits,
     }).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
       Effect.provideService(HttpClient.HttpClient, httpClient),
       Effect.catchCause(() => Effect.succeed([])),
     );
+    for (const limit of limits) {
+      if (limit.status === "ok") previousProviderLimits.set(limit.provider, limit);
+    }
     const readAt = yield* DateTime.now;
     const finishedAtMs = yield* Clock.currentTimeMillis;
 

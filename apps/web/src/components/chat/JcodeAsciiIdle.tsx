@@ -18,6 +18,10 @@ const MAX_COLS = 64;
 const MAX_ROWS = 28;
 const PERF_KEY = "t3.debugJcodeAscii";
 
+export function shouldLoopJcodeAscii(animation: string, reducedMotion: boolean): boolean {
+  return !reducedMotion && (animation === "blob" || animation === "logo");
+}
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -104,6 +108,8 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
     if (!wrap) return;
 
     const reduced = prefersReducedMotion();
+    if (animation === "off") return;
+    const shouldLoop = shouldLoopJcodeAscii(animation, reduced);
     const showPerf = typeof window !== "undefined" && window.localStorage.getItem(PERF_KEY) === "1";
 
     let tm: Textmodifier | null = null;
@@ -163,14 +169,14 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
         }
       });
 
-      if (reduced) {
+      if (!shouldLoop) {
         tm.noLoop();
         tm.redraw();
       }
     };
 
     const onVisibility = () => {
-      if (!tm || reduced || disposed) return;
+      if (!tm || !shouldLoop || disposed) return;
       if (document.hidden) tm.noLoop();
       else tm.loop();
     };
@@ -178,7 +184,7 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
 
     const themeObserver = new MutationObserver(() => {
       theme = readJcodeAsciiThemeColors();
-      if (reduced && tm) tm.redraw();
+      if (!shouldLoop && tm) tm.redraw();
     });
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -214,7 +220,7 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
       tm?.destroy();
       tm = null;
     };
-  }, []);
+  }, [animation]);
 
   return (
     <div

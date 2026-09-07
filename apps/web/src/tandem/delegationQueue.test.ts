@@ -19,6 +19,8 @@ const item = (overrides: Partial<ProjectBoardItem> = {}): ProjectBoardItem => ({
 describe("Tandem delegation queue", () => {
   it("treats only visible ready cards as prepared delegations", () => {
     expect(isTandemDelegation(item())).toBe(true);
+    const { archivedAt: _archivedAt, ...legacyItem } = item();
+    expect(isTandemDelegation(legacyItem)).toBe(true);
     expect(isTandemDelegation(item({ status: "backlog" }))).toBe(false);
     expect(isTandemDelegation(item({ archivedAt: "2026-08-29T11:00:00Z" }))).toBe(false);
   });

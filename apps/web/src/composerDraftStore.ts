@@ -1666,8 +1666,10 @@ function normalizePersistedDraftThreads(
           ? candidateDraftThread.runtimeMode
           : DEFAULT_RUNTIME_MODE,
         interactionMode:
+          candidateDraftThread.interactionMode === "build" ||
           candidateDraftThread.interactionMode === "plan" ||
-          candidateDraftThread.interactionMode === "default"
+          candidateDraftThread.interactionMode === "debug" ||
+          candidateDraftThread.interactionMode === "swarm"
             ? candidateDraftThread.interactionMode
             : DEFAULT_INTERACTION_MODE,
         branch: typeof branch === "string" ? branch : null,
@@ -1807,9 +1809,14 @@ function normalizePersistedDraftsByThreadId(
       ? draftCandidate.runtimeMode
       : null;
     const interactionMode =
-      draftCandidate.interactionMode === "plan" || draftCandidate.interactionMode === "default"
+      draftCandidate.interactionMode === "build" ||
+      draftCandidate.interactionMode === "plan" ||
+      draftCandidate.interactionMode === "debug" ||
+      draftCandidate.interactionMode === "swarm"
         ? draftCandidate.interactionMode
-        : null;
+        : draftCandidate.interactionMode === "default"
+          ? "build"
+          : null;
     const prompt = ensureInlineTerminalContextPlaceholders(
       promptCandidate,
       terminalContexts.length,
@@ -3062,7 +3069,12 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             return;
           }
           const nextInteractionMode =
-            interactionMode === "plan" || interactionMode === "default" ? interactionMode : null;
+            interactionMode === "build" ||
+            interactionMode === "plan" ||
+            interactionMode === "debug" ||
+            interactionMode === "swarm"
+              ? interactionMode
+              : null;
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey];
             if (!existing && nextInteractionMode === null) {

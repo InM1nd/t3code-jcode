@@ -1,9 +1,14 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentId, ProjectBoardItem, ProjectId } from "@t3tools/contracts";
 import { LoaderCircleIcon, PlayIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "../components/ui/button";
+import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { markBoardItemAwaitingTurnLink } from "../lib/boardTurnLinkPending";
 import { useProjects } from "../state/entities";
@@ -16,6 +21,17 @@ type PreparedDelegation = {
   readonly environmentId: EnvironmentId;
   readonly item: ProjectBoardItem;
 };
+
+type PreparedDraft = {
+  readonly draftId: string;
+  readonly threadId: NonNullable<ProjectBoardItem["sourceThreadId"]>;
+};
+
+const preparedDraftsByItem = new Map<string, PreparedDraft>();
+
+function preparedDraftKey(delegation: PreparedDelegation): string {
+  return `${delegation.environmentId}:${delegation.projectId}:${delegation.item.id}`;
+}
 
 export function TandemDelegationQueue() {
   const projects = useProjects();
@@ -38,16 +54,17 @@ export function TandemDelegationQueue() {
     if (launchingId) return;
     setLaunchingId(delegation.item.id);
     try {
-      const created = await handleNewThread(
-        scopeProjectRef(delegation.environmentId, delegation.projectId),
-        {
+      const key = preparedDraftKey(delegation);
+      const created =
+        preparedDraftsByItem.get(key) ??
+        (await handleNewThread(scopeProjectRef(delegation.environmentId, delegation.projectId), {
           envMode: "worktree",
           startFromOrigin: false,
           seedPrompt: buildTandemDelegationPrompt(delegation.item),
-        },
-      );
+        }));
       if (!created) return;
-      await upsertBoardItem({
+      preparedDraftsByItem.set(key, created);
+      const result = await upsertBoardItem({
         environmentId: delegation.environmentId,
         input: {
           projectId: delegation.projectId,
@@ -59,6 +76,23 @@ export function TandemDelegationQueue() {
           sourceThreadId: created.threadId,
         },
       });
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not prepare task",
+              description:
+                error instanceof Error
+                  ? error.message
+                  : "An error occurred while updating the board.",
+            }),
+          );
+        }
+        return;
+      }
+      preparedDraftsByItem.delete(key);
       markBoardItemAwaitingTurnLink(created.threadId, delegation.item.id);
     } finally {
       setLaunchingId(null);

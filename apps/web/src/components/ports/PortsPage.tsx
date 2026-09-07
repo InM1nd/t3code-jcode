@@ -19,6 +19,7 @@ import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadc
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { LocalDomainsPortControls } from "./LocalDomainsPortControls";
+import { PublishedDomainsSection } from "./PublishedDomainsSection";
 
 function PortOwnerCell({
   server,
@@ -111,9 +112,9 @@ export function PortsPage() {
 
   const topbarContent = (
     <div className="flex w-full min-w-0 items-center gap-3">
-      <WorkspaceBreadcrumb ariaLabel="Ports breadcrumb" className="min-w-0">
+      <WorkspaceBreadcrumb ariaLabel="Dev servers breadcrumb" className="min-w-0">
         <WorkspaceBreadcrumbItem current>
-          <h1>Ports</h1>
+          <h1>Dev servers</h1>
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
       {environments.length > 1 ? (
@@ -146,29 +147,37 @@ export function PortsPage() {
       <WorkspacePageHeader electron={isElectron}>{topbarContent}</WorkspacePageHeader>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <WorkspacePageContainer width="wide">
-          {sortedServers.length === 0 || environmentId === null ? (
-            <Empty>
-              <EmptyMedia variant="icon">
-                <RadioTowerIcon className="size-4.5 text-muted-foreground" />
-              </EmptyMedia>
-              <EmptyTitle>No local dev servers</EmptyTitle>
-              <EmptyDescription>
-                Run a dev script in a thread's terminal. Detected servers show up here
-                automatically.
-              </EmptyDescription>
-            </Empty>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-border/70 bg-background">
-              {sortedServers.map((server) => (
-                <PortRow
-                  key={`${server.host}:${server.port}`}
-                  server={server}
-                  environmentId={environmentId}
-                  threadRefs={threadRefs}
-                />
-              ))}
-            </div>
-          )}
+          <div className="flex flex-col gap-6">
+            {sortedServers.length === 0 || environmentId === null ? (
+              <Empty>
+                <EmptyMedia variant="icon">
+                  <RadioTowerIcon className="size-4.5 text-muted-foreground" />
+                </EmptyMedia>
+                <EmptyTitle>No local dev servers</EmptyTitle>
+                <EmptyDescription>
+                  Run a dev script in a thread's terminal. Detected servers show up here
+                  automatically.
+                </EmptyDescription>
+              </Empty>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-background">
+                {sortedServers.map((server) => (
+                  <PortRow
+                    key={`${server.host}:${server.port}`}
+                    server={server}
+                    environmentId={environmentId}
+                    threadRefs={threadRefs}
+                  />
+                ))}
+              </div>
+            )}
+            {environmentId ? (
+              <PublishedDomainsSection
+                environmentId={environmentId}
+                activePorts={servers.map((server) => server.port)}
+              />
+            ) : null}
+          </div>
         </WorkspacePageContainer>
       </div>
     </SidebarInset>

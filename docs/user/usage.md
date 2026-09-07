@@ -12,6 +12,9 @@ Use **Past 24h** for an hourly chart covering the exact rolling 24-hour period. 
 **30 days**, and **90 days** ranges use daily resolution. Cost and token toggles update both the
 headline and chart, and refreshing rescans every connected environment.
 
+Provider limit cards show when sign-in is required, a provider does not expose limits, or a refresh
+failed. Successful readings include their last update time; reset times are shown in UTC.
+
 When a provider reports usage for an individual turn, hover the token label below its final answer
 to see that turn’s input, cached-input, output, and reasoning breakdown. No label is shown when the
 provider does not report per-turn usage.

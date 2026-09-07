@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { ProjectBoardItem, ThreadId } from "@t3tools/contracts";
+import type {
+  OrchestrationLatestTurn,
+  ProjectBoardHandoff,
+  ProjectBoardItem,
+  ThreadId,
+  TurnId,
+} from "@t3tools/contracts";
 
 import {
   buildHandoffRequestPrompt,
   buildRolloverSeedPrompt,
   selectRolloverCards,
+  waitForRolloverReady,
 } from "./threadRollover";
 
 const THREAD = "thread-a" as ThreadId;
@@ -21,6 +28,30 @@ function item(
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...partial,
+  };
+}
+
+function handoff(id: string, sourceThreadId = THREAD): ProjectBoardHandoff {
+  return {
+    id: id as ProjectBoardHandoff["id"],
+    sourceThreadId,
+    summary: "Saved context",
+    decisions: [],
+    nextStep: "Continue the work",
+    createdAt: "2026-01-02T00:00:00.000Z",
+  };
+}
+
+function terminalTurn(
+  state: Extract<OrchestrationLatestTurn["state"], "completed" | "interrupted" | "error">,
+): OrchestrationLatestTurn {
+  return {
+    turnId: "turn-2" as TurnId,
+    state,
+    requestedAt: "2026-01-02T00:00:00.000Z",
+    startedAt: "2026-01-02T00:00:01.000Z",
+    completedAt: "2026-01-02T00:00:02.000Z",
+    assistantMessageId: null,
   };
 }
 
@@ -80,7 +111,7 @@ describe("selectRolloverCards", () => {
     expect(cards.map((card) => card.id)).toEqual(["d"]);
   });
 
-  it("falls back to in-progress cards when the thread owns none", () => {
+  it("does not hand off unrelated in-progress cards when the thread owns none", () => {
     const cards = selectRolloverCards(
       [
         item({ id: "a" as ProjectBoardItem["id"], title: "Someone else's", status: "inProgress" }),
@@ -88,7 +119,7 @@ describe("selectRolloverCards", () => {
       ],
       THREAD,
     );
-    expect(cards.map((card) => card.id)).toEqual(["a"]);
+    expect(cards).toEqual([]);
   });
 });
 
@@ -128,7 +159,124 @@ describe("buildRolloverSeedPrompt", () => {
 
   it("falls back to orientation when no card is in flight", () => {
     const prompt = buildRolloverSeedPrompt({ items, cards: [], previousTitle: "Auth work" });
-    expect(prompt).toContain("board_digest");
+    expect(prompt).toContain("Project board digest");
     expect(prompt).not.toContain("board_get_brief");
+  });
+});
+
+describe("waitForRolloverReady", () => {
+  it("waits for a new persisted handoff after the outgoing turn completes", async () => {
+    const oldCard = item({
+      id: "a" as ProjectBoardItem["id"],
+      title: "Auth refresh",
+      status: "inProgress",
+      sourceThreadId: THREAD,
+      latestHandoff: handoff("old"),
+    });
+    let emit:
+      | ((observation: {
+          readonly latestTurn: OrchestrationLatestTurn | null;
+          readonly boardItems: ReadonlyArray<ProjectBoardItem>;
+        }) => void)
+      | undefined;
+    const wait = waitForRolloverReady({
+      threadId: THREAD,
+      previousTurnId: null,
+      cards: [oldCard],
+      initialItems: [oldCard],
+      observe: (listener) => {
+        emit = listener;
+        listener({ latestTurn: null, boardItems: [oldCard] });
+        return () => {
+          emit = undefined;
+        };
+      },
+    });
+
+    let settled = false;
+    void wait.then(() => {
+      settled = true;
+    });
+    const freshCard = { ...oldCard, latestHandoff: handoff("new") };
+    emit?.({ latestTurn: null, boardItems: [freshCard] });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    emit?.({ latestTurn: terminalTurn("completed"), boardItems: [oldCard] });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    emit?.({ latestTurn: terminalTurn("completed"), boardItems: [freshCard] });
+    await expect(wait).resolves.toEqual({ status: "completed", boardItems: [freshCard] });
+  });
+
+  it.each(["interrupted", "error"] as const)(
+    "returns a recoverable result when the outgoing turn is %s",
+    async (state) => {
+      const wait = waitForRolloverReady({
+        threadId: THREAD,
+        previousTurnId: null,
+        cards: [],
+        initialItems: [],
+        observe: (listener) => {
+          listener({ latestTurn: terminalTurn(state), boardItems: [] });
+          return () => undefined;
+        },
+      });
+
+      await expect(wait).resolves.toEqual({ status: state });
+    },
+  );
+
+  it("requires a fresh handoff on a card owned by the outgoing thread", async () => {
+    const unrelatedCard = item({
+      id: "other" as ProjectBoardItem["id"],
+      title: "Other work",
+      status: "inProgress",
+      sourceThreadId: OTHER_THREAD,
+    });
+    let emit:
+      | ((observation: {
+          readonly latestTurn: OrchestrationLatestTurn | null;
+          readonly boardItems: ReadonlyArray<ProjectBoardItem>;
+        }) => void)
+      | undefined;
+    const wait = waitForRolloverReady({
+      threadId: THREAD,
+      previousTurnId: null,
+      cards: [],
+      initialItems: [unrelatedCard],
+      observe: (listener) => {
+        emit = listener;
+        listener({ latestTurn: null, boardItems: [unrelatedCard] });
+        return () => {
+          emit = undefined;
+        };
+      },
+    });
+
+    let settled = false;
+    void wait.then(() => {
+      settled = true;
+    });
+    emit?.({ latestTurn: terminalTurn("completed"), boardItems: [unrelatedCard] });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    const ownedCard = item({
+      id: "owned" as ProjectBoardItem["id"],
+      title: "Current work",
+      status: "inProgress",
+      sourceThreadId: THREAD,
+      latestHandoff: handoff("new"),
+    });
+    emit?.({
+      latestTurn: terminalTurn("completed"),
+      boardItems: [unrelatedCard, ownedCard],
+    });
+    await expect(wait).resolves.toEqual({
+      status: "completed",
+      boardItems: [unrelatedCard, ownedCard],
+    });
   });
 });

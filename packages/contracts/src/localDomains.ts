@@ -6,6 +6,9 @@ export const LOCAL_DOMAINS_WS_METHODS = {
   unpublish: "localDomains.unpublish",
 } as const;
 
+// ponytail: portless .localhost needs a proven platform-specific privileged listener; add it only after a separately verified desktop implementation.
+export const LOCAL_DOMAIN_PROXY_PORT = 7777;
+
 export const LocalDomainBinding = Schema.Struct({
   domain: Schema.String,
   port: Schema.Int,
@@ -15,6 +18,8 @@ export type LocalDomainBinding = typeof LocalDomainBinding.Type;
 export const LocalDomainList = Schema.Struct({
   domains: Schema.Array(LocalDomainBinding),
   supported: Schema.Boolean,
+  /** Optional so clients can still read older local-domain responses. */
+  proxyPort: Schema.optional(Schema.Int),
   proxyError: Schema.NullOr(Schema.String),
 });
 export type LocalDomainList = typeof LocalDomainList.Type;
@@ -38,8 +43,7 @@ export class LocalDomainError extends Schema.TaggedErrorClass<LocalDomainError>(
       "unsupportedPlatform",
       "invalidDomain",
       "portUnavailable",
-      "authorizationDenied",
-      "hostsUpdateFailed",
+      "stateUpdateFailed",
     ]),
     message: Schema.String,
   },

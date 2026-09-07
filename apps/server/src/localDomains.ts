@@ -1,15 +1,14 @@
-// @effect-diagnostics nodeBuiltinImport:off - HTTP upgrade forwarding and the macOS authorization prompt require Node's low-level server and child-process APIs.
-import * as NodeChildProcess from "node:child_process";
+// @effect-diagnostics nodeBuiltinImport:off - HTTP upgrade forwarding requires Node's low-level server APIs.
 import * as NodeHttp from "node:http";
 
 import {
   type LocalDomainBinding,
   LocalDomainError,
   type LocalDomainList,
+  LOCAL_DOMAIN_PROXY_PORT,
   PublishLocalDomainInput,
   UnpublishLocalDomainInput,
 } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -21,15 +20,10 @@ import * as Semaphore from "effect/Semaphore";
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 import * as ServerConfig from "./config.ts";
 
-const HOSTS_PATH = "/etc/hosts";
-const PROXY_PORT = 80;
-const HOSTS_BEGIN = "# BEGIN T3 Code local domains";
-const HOSTS_END = "# END T3 Code local domains";
 const STATE_FILE = "local-domains.json";
-const HOSTS_STAGING_FILE = "local-domains.hosts";
 
 const LocalDomainState = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literals([1, 2]),
   domains: Schema.Array(
     Schema.Struct({
       domain: Schema.String,
@@ -42,29 +36,20 @@ const decodeState = Schema.decodeUnknownEffect(Schema.fromJsonString(LocalDomain
 export function normalizeLocalDomain(value: string): string | null {
   const normalized = value.trim().toLowerCase();
   if (normalized.length === 0) return null;
-  const domain = normalized.endsWith(".tandem") ? normalized : `${normalized}.tandem`;
-  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.tandem$/.test(domain) ? domain : null;
+  const domain = normalized.endsWith(".localhost") ? normalized : `${normalized}.localhost`;
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.localhost$/.test(domain) ? domain : null;
 }
 
 export function suggestedLocalDomain(port: number): string {
-  return `local-${port}.tandem`;
+  return `local-${port}.localhost`;
 }
 
-/** Replaces only T3 Code's fenced /etc/hosts block. */
-export function replaceManagedHostsBlock(
-  hosts: string,
-  domains: ReadonlyArray<LocalDomainBinding>,
-): string {
-  const before = hosts.replace(
-    /\n?# BEGIN T3 Code local domains\n[\s\S]*?# END T3 Code local domains\n?/g,
-    "",
-  );
-  if (domains.length === 0) return before;
-  const body = domains
-    .toSorted((left, right) => left.domain.localeCompare(right.domain))
-    .map(({ domain }) => `127.0.0.1 ${domain}`)
-    .join("\n");
-  return `${before.replace(/\n*$/, "\n")}\n${HOSTS_BEGIN}\n${body}\n${HOSTS_END}\n`;
+/** Explicitly migrates v1 persisted `.tandem` bindings to `.localhost`. */
+export function migratePersistedLocalDomain(value: string): string | null {
+  const normalized = value.trim().toLowerCase();
+  return normalized.endsWith(".tandem")
+    ? normalizeLocalDomain(`${normalized.slice(0, -".tandem".length)}.localhost`)
+    : normalizeLocalDomain(normalized);
 }
 
 function domainFromHost(host: string | undefined): string | null {
@@ -156,8 +141,8 @@ export function portListenError(port: number, cause: NodeJS.ErrnoException): Loc
   }
   if (cause.code === "EACCES") {
     return new LocalDomainError({
-      reason: "authorizationDenied",
-      message: `Port ${port} requires administrator privileges to bind. Local development domains need T3 Code to run with elevated permissions.`,
+      reason: "portUnavailable",
+      message: `Port ${port} is unavailable. Stop the service using it and try again.`,
     });
   }
   return new LocalDomainError({
@@ -189,47 +174,6 @@ const close = (server: NodeHttp.Server) =>
     server.close(() => resume(Effect.void));
   });
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\\"'\\\"'")}'`;
-}
-
-function runAuthorizedHostsCopy(stagedHostsPath: string): Effect.Effect<void, LocalDomainError> {
-  const command = `/bin/cp ${shellQuote(stagedHostsPath)} ${HOSTS_PATH}`;
-  const script = `do shell script "${command.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}" with administrator privileges`;
-  return Effect.callback((resume) => {
-    const child = NodeChildProcess.spawn("/usr/bin/osascript", ["-e", script], {
-      stdio: ["ignore", "ignore", "pipe"],
-    });
-    let stderr = "";
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.once("error", () =>
-      resume(
-        Effect.fail(
-          new LocalDomainError({
-            reason: "hostsUpdateFailed",
-            message: "Unable to request permission to update /etc/hosts.",
-          }),
-        ),
-      ),
-    );
-    child.once("exit", (code) =>
-      resume(
-        code === 0
-          ? Effect.void
-          : Effect.fail(
-              new LocalDomainError({
-                reason: "authorizationDenied",
-                message: stderr.trim() || "Permission to update /etc/hosts was denied.",
-              }),
-            ),
-      ),
-    );
-    return Effect.sync(() => child.kill());
-  });
-}
-
 export class LocalDomains extends Context.Service<
   LocalDomains,
   {
@@ -248,36 +192,33 @@ export class LocalDomains extends Context.Service<
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const config = yield* ServerConfig.ServerConfig;
-      const platform = yield* HostProcessPlatform;
       const statePath = path.join(config.stateDir, STATE_FILE);
-      const stagingPath = path.join(config.stateDir, HOSTS_STAGING_FILE);
       const loaded = yield* fileSystem.readFileString(statePath).pipe(
         Effect.flatMap(decodeState),
-        Effect.catchCause(() => Effect.succeed({ version: 1 as const, domains: [] })),
+        Effect.catchCause(() => Effect.succeed({ version: 2 as const, domains: [] })),
       );
-      let domains = loaded.domains.map(({ domain, port }) => ({ domain, port }));
+      let domains = loaded.domains.flatMap(({ domain, port }) => {
+        const migrated = migratePersistedLocalDomain(domain);
+        return migrated ? [{ domain: migrated, port }] : [];
+      });
       let proxy: NodeHttp.Server | null = null;
       let proxyError: string | null = null;
       const mutex = yield* Semaphore.make(1);
-      yield* Effect.addFinalizer(() => (proxy === null ? Effect.void : close(proxy)));
+      yield* Effect.addFinalizer(() =>
+        Effect.gen(function* () {
+          if (proxy !== null) yield* close(proxy);
+        }),
+      );
       const snapshot = (): LocalDomainList => ({
         domains,
-        supported: platform === "darwin",
+        supported: true,
+        proxyPort: LOCAL_DOMAIN_PROXY_PORT,
         proxyError,
       });
-      const ensureSupported = () =>
-        platform === "darwin"
-          ? Effect.void
-          : Effect.fail(
-              new LocalDomainError({
-                reason: "unsupportedPlatform",
-                message: "Local development domains are available on macOS only.",
-              }),
-            );
       const ensureProxy = Effect.fn("LocalDomains.ensureProxy")(function* () {
         if (proxy !== null) return;
         const candidate = createLocalDomainProxy(() => domains);
-        proxy = yield* listen(candidate, PROXY_PORT).pipe(
+        proxy = yield* listen(candidate, LOCAL_DOMAIN_PROXY_PORT).pipe(
           Effect.tapError((error) =>
             Effect.sync(() => {
               proxyError = error.message;
@@ -286,7 +227,7 @@ export class LocalDomains extends Context.Service<
         );
         proxyError = null;
       });
-      if (platform === "darwin" && domains.length > 0) {
+      if (domains.length > 0)
         yield* ensureProxy().pipe(
           Effect.catch((error) =>
             Effect.sync(() => {
@@ -294,84 +235,47 @@ export class LocalDomains extends Context.Service<
             }),
           ),
         );
-      }
       const persist = (next: ReadonlyArray<LocalDomainBinding>) =>
         writeFileStringAtomically({
           filePath: statePath,
-          contents: `${JSON.stringify({ version: 1, domains: next }, null, 2)}\n`,
+          contents: `${JSON.stringify({ version: 2, domains: next }, null, 2)}\n`,
         }).pipe(
           Effect.provideService(FileSystem.FileSystem, fileSystem),
           Effect.provideService(Path.Path, path),
           Effect.mapError(
             () =>
               new LocalDomainError({
-                reason: "hostsUpdateFailed",
+                reason: "stateUpdateFailed",
                 message: "Could not save local domains.",
               }),
           ),
         );
-      const updateHosts = (next: ReadonlyArray<LocalDomainBinding>) =>
-        Effect.gen(function* () {
-          const hosts = yield* fileSystem.readFileString(HOSTS_PATH).pipe(
-            Effect.mapError(
-              () =>
-                new LocalDomainError({
-                  reason: "hostsUpdateFailed",
-                  message: "Could not read /etc/hosts.",
-                }),
-            ),
-          );
-          yield* writeFileStringAtomically({
-            filePath: stagingPath,
-            contents: replaceManagedHostsBlock(hosts, next),
-          }).pipe(
-            Effect.provideService(FileSystem.FileSystem, fileSystem),
-            Effect.provideService(Path.Path, path),
-            Effect.mapError(
-              () =>
-                new LocalDomainError({
-                  reason: "hostsUpdateFailed",
-                  message: "Could not prepare /etc/hosts update.",
-                }),
-            ),
-          );
-          yield* runAuthorizedHostsCopy(stagingPath);
-        });
+      if (loaded.version === 1) yield* persist(domains);
       const publish = (input: PublishLocalDomainInput) =>
         Semaphore.withPermits(
           mutex,
           1,
         )(
           Effect.gen(function* () {
-            yield* ensureSupported();
-            if (
-              !Number.isInteger(input.port) ||
-              input.port < 1 ||
-              input.port > 65_535 ||
-              input.port === 80
-            ) {
+            if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65_535) {
               return yield* new LocalDomainError({
                 reason: "invalidDomain",
-                message: "Choose a local port other than 80.",
+                message: "Choose a local port between 1 and 65535.",
               });
             }
             const domain = normalizeLocalDomain(input.domain ?? suggestedLocalDomain(input.port));
             if (!domain) {
               return yield* new LocalDomainError({
                 reason: "invalidDomain",
-                message: "Use a name such as shop or shop.tandem.",
+                message: "Use a name such as shop or shop.localhost.",
               });
             }
-            yield* ensureProxy();
-            const previous = domains;
             const next = [
-              ...previous.filter((binding) => binding.domain !== domain),
+              ...domains.filter((binding) => binding.domain !== domain),
               { domain, port: input.port },
             ];
+            yield* ensureProxy();
             yield* persist(next);
-            yield* updateHosts(next).pipe(
-              Effect.tapError(() => persist(previous).pipe(Effect.ignore)),
-            );
             domains = next;
             return snapshot();
           }),
@@ -382,20 +286,21 @@ export class LocalDomains extends Context.Service<
           1,
         )(
           Effect.gen(function* () {
-            yield* ensureSupported();
             const domain = normalizeLocalDomain(input.domain);
             if (!domain)
               return yield* new LocalDomainError({
                 reason: "invalidDomain",
                 message: "Invalid local domain.",
               });
-            const previous = domains;
-            const next = previous.filter((binding) => binding.domain !== domain);
+            if (!domains.some((binding) => binding.domain === domain)) return snapshot();
+            const next = domains.filter((binding) => binding.domain !== domain);
             yield* persist(next);
-            yield* updateHosts(next).pipe(
-              Effect.tapError(() => persist(previous).pipe(Effect.ignore)),
-            );
             domains = next;
+            if (next.length === 0 && proxy !== null) {
+              const currentProxy = proxy;
+              yield* close(currentProxy);
+              proxy = null;
+            }
             return snapshot();
           }),
         );
