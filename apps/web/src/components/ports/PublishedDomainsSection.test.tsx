@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from "vite-plus/test";
 const environmentId = EnvironmentId.make("local");
 const mocks = vi.hoisted(() => ({
   domains: {
-    domains: [{ domain: "shop.tandem", port: 5173 }],
+    domains: [{ domain: "shop.localhost", port: 5173 }],
     supported: true,
+    proxyPort: 7777,
     proxyError: null,
   } as LocalDomainList,
 }));
@@ -27,7 +28,7 @@ describe("PublishedDomainsSection", () => {
       <PublishedDomainsSection environmentId={environmentId} activePorts={[]} />,
     );
     expect(html).toContain("Published domains");
-    expect(html).toContain("shop.tandem");
+    expect(html).toContain("shop.localhost");
     expect(html).toContain("Copy URL");
     expect(html).toContain("Unpublish");
   });

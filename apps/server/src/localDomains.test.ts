@@ -1,16 +1,14 @@
 // @effect-diagnostics nodeBuiltinImport:off - This integration test verifies Node's HTTP upgrade bridge used by Vite HMR.
 import * as NodeHttp from "node:http";
 
+import { LOCAL_DOMAIN_PROXY_PORT } from "@t3tools/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   createLocalDomainProxy,
-  localDomainOwnerConflict,
-  localDomainOwnerId,
-  managedHostsOwner,
+  migratePersistedLocalDomain,
   normalizeLocalDomain,
   portListenError,
-  replaceManagedHostsBlock,
 } from "./localDomains.ts";
 
 const servers: NodeHttp.Server[] = [];
@@ -35,99 +33,44 @@ afterEach(async () => {
 });
 
 describe("local domains", () => {
-  it("normalizes only one-label .tandem names", () => {
-    expect(normalizeLocalDomain("Shop")).toBe("shop.tandem");
-    expect(normalizeLocalDomain("shop.tandem")).toBe("shop.tandem");
+  it("normalizes one-label names to .localhost and migrates old persisted names", () => {
+    expect(normalizeLocalDomain("Shop")).toBe("shop.localhost");
+    expect(normalizeLocalDomain("shop.localhost")).toBe("shop.localhost");
     expect(normalizeLocalDomain("shop.example")).toBeNull();
-    expect(normalizeLocalDomain("shop.other.tandem")).toBeNull();
+    expect(normalizeLocalDomain("shop.other.localhost")).toBeNull();
+    expect(normalizeLocalDomain("shop.tandem")).toBeNull();
+    expect(migratePersistedLocalDomain("Shop.tandem")).toBe("shop.localhost");
   });
 
-  it("tells a port already held by another process apart from a denied privileged bind", () => {
-    const inUse = portListenError(80, Object.assign(new Error(), { code: "EADDRINUSE" }));
+  it("uses a nonprivileged proxy port and reports occupied ports uniformly", () => {
+    expect(LOCAL_DOMAIN_PROXY_PORT).toBe(7777);
+
+    const inUse = portListenError(
+      LOCAL_DOMAIN_PROXY_PORT,
+      Object.assign(new Error(), { code: "EADDRINUSE" }),
+    );
     expect(inUse.reason).toBe("portUnavailable");
     expect(inUse.message).toContain("already in use");
 
-    const denied = portListenError(80, Object.assign(new Error(), { code: "EACCES" }));
-    expect(denied.reason).toBe("authorizationDenied");
-    expect(denied.message).toContain("administrator privileges");
-
-    const other = portListenError(80, Object.assign(new Error(), { code: "EMFILE" }));
-    expect(other.reason).toBe("portUnavailable");
-    expect(other.message).toBe("Port 80 is unavailable. Stop the service using it and try again.");
-  });
-
-  it("changes only the fenced hosts block", () => {
-    const previous =
-      "127.0.0.1 localhost\n# BEGIN T3 Code local domains\n127.0.0.1 old.tandem\n# END T3 Code local domains\n";
-    expect(replaceManagedHostsBlock(previous, [{ domain: "shop.tandem", port: 3000 }])).toBe(
-      "127.0.0.1 localhost\n\n# BEGIN T3 Code local domains\n127.0.0.1 shop.tandem\n# END T3 Code local domains\n",
+    const denied = portListenError(
+      LOCAL_DOMAIN_PROXY_PORT,
+      Object.assign(new Error(), { code: "EACCES" }),
     );
+    expect(denied.reason).toBe("portUnavailable");
+    expect(denied.message).not.toContain("administrator");
   });
 
-  it("marks the owning environment and can migrate an unowned block", () => {
-    const owner = localDomainOwnerId("/tmp/t3-a");
-    const claimed = replaceManagedHostsBlock(
-      "127.0.0.1 localhost\n",
-      [{ domain: "shop.tandem", port: 3000 }],
-      owner,
-    );
-
-    expect(managedHostsOwner(claimed)).toBe(owner);
-    expect(claimed).toContain("# OWNER T3 Code local domains: ");
-    expect(
-      replaceManagedHostsBlock(claimed, [{ domain: "api.tandem", port: 4000 }], owner),
-    ).toContain("127.0.0.1 api.tandem");
-  });
-
-  it("rejects a different owner but allows a legacy or matching block", () => {
-    const owner = localDomainOwnerId("/tmp/t3-a");
-    const otherOwner = localDomainOwnerId("/tmp/t3-b");
-    const claimed = replaceManagedHostsBlock(
-      "127.0.0.1 localhost\n",
-      [{ domain: "shop.tandem", port: 3000 }],
-      owner,
-    );
-
-    expect(localDomainOwnerConflict(claimed, owner)).toBeNull();
-    const conflict = localDomainOwnerConflict(claimed, otherOwner);
-    expect(conflict?.reason).toBe("ownerConflict");
-    expect(conflict?.message).toContain("/etc/resolver/tandem");
-    expect(
-      localDomainOwnerConflict(
-        "# BEGIN T3 Code local domains\n127.0.0.1 shop.tandem\n# END T3 Code local domains\n",
-        otherOwner,
-      ),
-    ).toBeNull();
-  });
-
-  it("keeps ownership across restart and releases it when the last domain is removed", () => {
-    const owner = localDomainOwnerId("/tmp/t3-a");
-    const otherOwner = localDomainOwnerId("/tmp/t3-b");
-    const claimed = replaceManagedHostsBlock(
-      "127.0.0.1 localhost\n",
-      [{ domain: "shop.tandem", port: 3000 }],
-      owner,
-    );
-
-    expect(localDomainOwnerConflict(claimed, owner)).toBeNull();
-    expect(localDomainOwnerConflict(claimed, otherOwner)?.reason).toBe("ownerConflict");
-
-    const released = replaceManagedHostsBlock(claimed, [], owner);
-    expect(released).not.toContain("T3 Code local domains");
-    expect(localDomainOwnerConflict(released, otherOwner)).toBeNull();
-  });
-
-  it("routes an explicit Host header to loopback and preserves its forwarding header", async () => {
+  it("routes an explicit localhost Host header to loopback and preserves its forwarding header", async () => {
     const upstream = NodeHttp.createServer((request, response) => {
       response.end(request.headers["x-forwarded-host"]);
     });
     const upstreamPort = await listen(upstream);
-    const proxy = createLocalDomainProxy(() => [{ domain: "shop.tandem", port: upstreamPort }]);
+    const proxy = createLocalDomainProxy(() => [{ domain: "shop.localhost", port: upstreamPort }]);
     const proxyPort = await listen(proxy);
 
     const body = await new Promise<string>((resolve, reject) => {
       const request = NodeHttp.request(
-        { host: "127.0.0.1", port: proxyPort, headers: { host: "shop.tandem" } },
+        { host: "127.0.0.1", port: proxyPort, headers: { host: "shop.localhost:7777" } },
         (response) => {
           let text = "";
           response.on("data", (chunk: Buffer) => {
@@ -139,7 +82,7 @@ describe("local domains", () => {
       request.once("error", reject);
       request.end();
     });
-    expect(body).toBe("shop.tandem");
+    expect(body).toBe("shop.localhost:7777");
   });
 
   it("forwards websocket upgrades for Vite HMR", async () => {
@@ -150,7 +93,7 @@ describe("local domains", () => {
       ),
     );
     const upstreamPort = await listen(upstream);
-    const proxy = createLocalDomainProxy(() => [{ domain: "shop.tandem", port: upstreamPort }]);
+    const proxy = createLocalDomainProxy(() => [{ domain: "shop.localhost", port: upstreamPort }]);
     const proxyPort = await listen(proxy);
 
     const statusCode = await new Promise<number>((resolve, reject) => {
@@ -158,7 +101,7 @@ describe("local domains", () => {
         host: "127.0.0.1",
         port: proxyPort,
         path: "/@vite/client",
-        headers: { host: "shop.tandem", connection: "Upgrade", upgrade: "websocket" },
+        headers: { host: "shop.localhost:7777", connection: "Upgrade", upgrade: "websocket" },
       });
       request.once("upgrade", (response, socket) => {
         socket.destroy();

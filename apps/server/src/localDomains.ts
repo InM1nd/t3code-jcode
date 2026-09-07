@@ -1,16 +1,14 @@
-// @effect-diagnostics nodeBuiltinImport:off - HTTP upgrade forwarding and the macOS authorization prompt require Node's low-level server and child-process APIs.
-import * as NodeChildProcess from "node:child_process";
-import * as NodeCrypto from "node:crypto";
+// @effect-diagnostics nodeBuiltinImport:off - HTTP upgrade forwarding requires Node's low-level server APIs.
 import * as NodeHttp from "node:http";
 
 import {
   type LocalDomainBinding,
   LocalDomainError,
   type LocalDomainList,
+  LOCAL_DOMAIN_PROXY_PORT,
   PublishLocalDomainInput,
   UnpublishLocalDomainInput,
 } from "@t3tools/contracts";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -21,27 +19,11 @@ import * as Semaphore from "effect/Semaphore";
 
 import { writeFileStringAtomically } from "./atomicWrite.ts";
 import * as ServerConfig from "./config.ts";
-import {
-  TANDEM_RESOLVER_PATH,
-  TANDEM_RESOLVER_PORT,
-  createTandemDnsServer,
-  planResolverRemoval,
-  planResolverSetup,
-} from "./localDomainsResolver.ts";
 
-const HOSTS_PATH = "/etc/hosts";
-const PROXY_PORT = 80;
-const HOSTS_BEGIN = "# BEGIN T3 Code local domains";
-const HOSTS_END = "# END T3 Code local domains";
-const HOSTS_OWNER_PREFIX = "# OWNER T3 Code local domains: ";
-const OWNER_CONFLICT_MESSAGE =
-  "Unpublish domains in the owning environment. If it no longer exists, remove T3 Code's managed entries from /etc/hosts and /etc/resolver/tandem, then retry.";
 const STATE_FILE = "local-domains.json";
-const HOSTS_STAGING_FILE = "local-domains.hosts";
-const RESOLVER_STAGING_FILE = "tandem.resolver";
 
 const LocalDomainState = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literals([1, 2]),
   domains: Schema.Array(
     Schema.Struct({
       domain: Schema.String,
@@ -54,52 +36,20 @@ const decodeState = Schema.decodeUnknownEffect(Schema.fromJsonString(LocalDomain
 export function normalizeLocalDomain(value: string): string | null {
   const normalized = value.trim().toLowerCase();
   if (normalized.length === 0) return null;
-  const domain = normalized.endsWith(".tandem") ? normalized : `${normalized}.tandem`;
-  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.tandem$/.test(domain) ? domain : null;
+  const domain = normalized.endsWith(".localhost") ? normalized : `${normalized}.localhost`;
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.localhost$/.test(domain) ? domain : null;
 }
 
 export function suggestedLocalDomain(port: number): string {
-  return `local-${port}.tandem`;
+  return `local-${port}.localhost`;
 }
 
-/** Stable per-environment identity used to make the shared hosts block auditable. */
-export function localDomainOwnerId(stateDir: string): string {
-  return NodeCrypto.createHash("sha256").update(stateDir, "utf8").digest("hex");
-}
-
-export function managedHostsOwner(hosts: string): string | null {
-  const block = hosts.match(
-    /# BEGIN T3 Code local domains\n([\s\S]*?)# END T3 Code local domains/,
-  )?.[1];
-  return block?.match(/^# OWNER T3 Code local domains: ([A-Za-z0-9_-]+)$/m)?.[1] ?? null;
-}
-
-export function localDomainOwnerConflict(hosts: string, ownerId: string): LocalDomainError | null {
-  const existingOwner = managedHostsOwner(hosts);
-  if (existingOwner === null || existingOwner === ownerId) return null;
-  return new LocalDomainError({
-    reason: "ownerConflict",
-    message: OWNER_CONFLICT_MESSAGE,
-  });
-}
-
-/** Replaces only T3 Code's fenced /etc/hosts block. */
-export function replaceManagedHostsBlock(
-  hosts: string,
-  domains: ReadonlyArray<LocalDomainBinding>,
-  ownerId?: string,
-): string {
-  const before = hosts.replace(
-    /\n?# BEGIN T3 Code local domains\n[\s\S]*?# END T3 Code local domains\n?/g,
-    "",
-  );
-  if (domains.length === 0) return before;
-  const body = domains
-    .toSorted((left, right) => left.domain.localeCompare(right.domain))
-    .map(({ domain }) => `127.0.0.1 ${domain}`)
-    .join("\n");
-  const ownerLine = ownerId ? `${HOSTS_OWNER_PREFIX}${ownerId}\n` : "";
-  return `${before.replace(/\n*$/, "\n")}\n${HOSTS_BEGIN}\n${ownerLine}${body}\n${HOSTS_END}\n`;
+/** Explicitly migrates v1 persisted `.tandem` bindings to `.localhost`. */
+export function migratePersistedLocalDomain(value: string): string | null {
+  const normalized = value.trim().toLowerCase();
+  return normalized.endsWith(".tandem")
+    ? normalizeLocalDomain(`${normalized.slice(0, -".tandem".length)}.localhost`)
+    : normalizeLocalDomain(normalized);
 }
 
 function domainFromHost(host: string | undefined): string | null {
@@ -191,8 +141,8 @@ export function portListenError(port: number, cause: NodeJS.ErrnoException): Loc
   }
   if (cause.code === "EACCES") {
     return new LocalDomainError({
-      reason: "authorizationDenied",
-      message: `Port ${port} requires administrator privileges to bind. Local development domains need T3 Code to run with elevated permissions.`,
+      reason: "portUnavailable",
+      message: `Port ${port} is unavailable. Stop the service using it and try again.`,
     });
   }
   return new LocalDomainError({
@@ -224,103 +174,6 @@ const close = (server: NodeHttp.Server) =>
     server.close(() => resume(Effect.void));
   });
 
-const listenResolver = (server: ReturnType<typeof createTandemDnsServer>) =>
-  Effect.callback<ReturnType<typeof createTandemDnsServer>, LocalDomainError>((resume) => {
-    const onError = (cause: NodeJS.ErrnoException) => {
-      server.off("listening", onListening);
-      resume(Effect.fail(portListenError(TANDEM_RESOLVER_PORT, cause)));
-    };
-    const onListening = () => {
-      server.off("error", onError);
-      resume(Effect.succeed(server));
-    };
-    server.once("error", onError);
-    server.once("listening", onListening);
-    server.bind(TANDEM_RESOLVER_PORT, "127.0.0.1");
-    return Effect.sync(() => {
-      server.close();
-    });
-  });
-
-const closeResolver = (server: ReturnType<typeof createTandemDnsServer>) =>
-  Effect.callback<void>((resume) => {
-    server.close(() => resume(Effect.void));
-  });
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\\"'\\\"'")}'`;
-}
-
-function runAuthorizedCommand(
-  command: string,
-  spawnFailureReason: "hostsUpdateFailed" | "resolverUpdateFailed",
-  spawnFailureMessage: string,
-  deniedMessage: string,
-): Effect.Effect<void, LocalDomainError> {
-  const script = `do shell script "${command.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}" with administrator privileges`;
-  return Effect.callback((resume) => {
-    const child = NodeChildProcess.spawn("/usr/bin/osascript", ["-e", script], {
-      stdio: ["ignore", "ignore", "pipe"],
-    });
-    let stderr = "";
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.once("error", () =>
-      resume(
-        Effect.fail(
-          new LocalDomainError({
-            reason: spawnFailureReason,
-            message: spawnFailureMessage,
-          }),
-        ),
-      ),
-    );
-    child.once("exit", (code) =>
-      resume(
-        code === 0
-          ? Effect.void
-          : Effect.fail(
-              new LocalDomainError({
-                reason: "authorizationDenied",
-                message: stderr.trim() || deniedMessage,
-              }),
-            ),
-      ),
-    );
-    return Effect.sync(() => child.kill());
-  });
-}
-
-function runAuthorizedHostsCopy(stagedHostsPath: string): Effect.Effect<void, LocalDomainError> {
-  return runAuthorizedCommand(
-    `/bin/cp ${shellQuote(stagedHostsPath)} ${HOSTS_PATH}`,
-    "hostsUpdateFailed",
-    "Unable to request permission to update /etc/hosts.",
-    "Permission to update /etc/hosts was denied.",
-  );
-}
-
-function runAuthorizedResolverCopy(
-  stagedResolverPath: string,
-): Effect.Effect<void, LocalDomainError> {
-  return runAuthorizedCommand(
-    `/bin/mkdir -p /etc/resolver && /bin/cp ${shellQuote(stagedResolverPath)} ${TANDEM_RESOLVER_PATH}`,
-    "resolverUpdateFailed",
-    "Unable to request permission to update the macOS tandem resolver.",
-    "Permission to update the macOS tandem resolver was denied.",
-  );
-}
-
-function runAuthorizedResolverRemove(): Effect.Effect<void, LocalDomainError> {
-  return runAuthorizedCommand(
-    `/bin/rm -f ${TANDEM_RESOLVER_PATH}`,
-    "resolverUpdateFailed",
-    "Unable to request permission to remove the macOS tandem resolver.",
-    "Permission to remove the macOS tandem resolver was denied.",
-  );
-}
-
 export class LocalDomains extends Context.Service<
   LocalDomains,
   {
@@ -339,131 +192,33 @@ export class LocalDomains extends Context.Service<
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const config = yield* ServerConfig.ServerConfig;
-      const platform = yield* HostProcessPlatform;
       const statePath = path.join(config.stateDir, STATE_FILE);
-      const stagingPath = path.join(config.stateDir, HOSTS_STAGING_FILE);
-      const resolverStagingPath = path.join(config.stateDir, RESOLVER_STAGING_FILE);
-      const ownerId = localDomainOwnerId(config.stateDir);
-      const readHosts = () =>
-        fileSystem.readFileString(HOSTS_PATH).pipe(
-          Effect.mapError(
-            () =>
-              new LocalDomainError({
-                reason: "hostsUpdateFailed",
-                message: "Could not read /etc/hosts.",
-              }),
-          ),
-        );
       const loaded = yield* fileSystem.readFileString(statePath).pipe(
         Effect.flatMap(decodeState),
-        Effect.catchCause(() => Effect.succeed({ version: 1 as const, domains: [] })),
+        Effect.catchCause(() => Effect.succeed({ version: 2 as const, domains: [] })),
       );
-      let domains = loaded.domains.map(({ domain, port }) => ({ domain, port }));
+      let domains = loaded.domains.flatMap(({ domain, port }) => {
+        const migrated = migratePersistedLocalDomain(domain);
+        return migrated ? [{ domain: migrated, port }] : [];
+      });
       let proxy: NodeHttp.Server | null = null;
-      let resolver: ReturnType<typeof createTandemDnsServer> | null = null;
       let proxyError: string | null = null;
       const mutex = yield* Semaphore.make(1);
       yield* Effect.addFinalizer(() =>
         Effect.gen(function* () {
           if (proxy !== null) yield* close(proxy);
-          if (resolver !== null) yield* closeResolver(resolver);
         }),
       );
       const snapshot = (): LocalDomainList => ({
         domains,
-        supported: platform === "darwin",
+        supported: true,
+        proxyPort: LOCAL_DOMAIN_PROXY_PORT,
         proxyError,
-      });
-      const ensureSupported = () =>
-        platform === "darwin"
-          ? Effect.void
-          : Effect.fail(
-              new LocalDomainError({
-                reason: "unsupportedPlatform",
-                message: "Local development domains are available on macOS only.",
-              }),
-            );
-      const readResolver = () =>
-        fileSystem.readFileString(TANDEM_RESOLVER_PATH).pipe(
-          Effect.catchTag("PlatformError", (error) =>
-            error.reason._tag === "NotFound" ? Effect.succeed(null) : Effect.fail(error),
-          ),
-          Effect.mapError(
-            () =>
-              new LocalDomainError({
-                reason: "resolverUpdateFailed",
-                message: "Could not read the macOS tandem resolver.",
-              }),
-          ),
-        );
-      const ensureResolver = Effect.fn("LocalDomains.ensureResolver")(function* () {
-        if (resolver !== null) return;
-        // The bound UDP socket is the inter-process ownership gate; claim the config afterward.
-        const candidate = createTandemDnsServer();
-        resolver = yield* listenResolver(candidate).pipe(
-          Effect.tapError((error) =>
-            Effect.sync(() => {
-              proxyError = error.message;
-            }),
-          ),
-        );
-        yield* Effect.gen(function* () {
-          const current = yield* readResolver();
-          const plan = planResolverSetup(current, ownerId);
-          if (plan.action === "conflict")
-            return yield* new LocalDomainError({
-              reason: "ownerConflict",
-              message: OWNER_CONFLICT_MESSAGE,
-            });
-          if (plan.action === "write") {
-            yield* writeFileStringAtomically({
-              filePath: resolverStagingPath,
-              contents: plan.contents,
-            }).pipe(
-              Effect.provideService(FileSystem.FileSystem, fileSystem),
-              Effect.provideService(Path.Path, path),
-              Effect.mapError(
-                () =>
-                  new LocalDomainError({
-                    reason: "resolverUpdateFailed",
-                    message: "Could not prepare the macOS tandem resolver.",
-                  }),
-              ),
-            );
-            yield* runAuthorizedResolverCopy(resolverStagingPath);
-          }
-        }).pipe(
-          Effect.tapError((error) =>
-            Effect.gen(function* () {
-              proxyError = error.message;
-              resolver = null;
-              yield* closeResolver(candidate);
-            }),
-          ),
-        );
-      });
-      const removeResolver = Effect.fn("LocalDomains.removeResolver")(function* () {
-        const current = yield* readResolver();
-        const plan = planResolverRemoval(current, ownerId);
-        if (plan === "conflict")
-          return yield* new LocalDomainError({
-            reason: "ownerConflict",
-            message: OWNER_CONFLICT_MESSAGE,
-          });
-        if (plan === "remove") yield* runAuthorizedResolverRemove();
-        if (resolver !== null) {
-          const currentResolver = resolver;
-          yield* closeResolver(currentResolver);
-          resolver = null;
-        }
       });
       const ensureProxy = Effect.fn("LocalDomains.ensureProxy")(function* () {
         if (proxy !== null) return;
-        const hosts = yield* readHosts();
-        const ownerConflict = localDomainOwnerConflict(hosts, ownerId);
-        if (ownerConflict) return yield* ownerConflict;
         const candidate = createLocalDomainProxy(() => domains);
-        proxy = yield* listen(candidate, PROXY_PORT).pipe(
+        proxy = yield* listen(candidate, LOCAL_DOMAIN_PROXY_PORT).pipe(
           Effect.tapError((error) =>
             Effect.sync(() => {
               proxyError = error.message;
@@ -472,90 +227,55 @@ export class LocalDomains extends Context.Service<
         );
         proxyError = null;
       });
-      if (platform === "darwin" && domains.length > 0) {
-        yield* Effect.gen(function* () {
-          yield* ensureResolver();
-          yield* ensureProxy();
-        }).pipe(
+      if (domains.length > 0)
+        yield* ensureProxy().pipe(
           Effect.catch((error) =>
             Effect.sync(() => {
               proxyError = error.message;
             }),
           ),
         );
-      }
       const persist = (next: ReadonlyArray<LocalDomainBinding>) =>
         writeFileStringAtomically({
           filePath: statePath,
-          contents: `${JSON.stringify({ version: 1, domains: next }, null, 2)}\n`,
+          contents: `${JSON.stringify({ version: 2, domains: next }, null, 2)}\n`,
         }).pipe(
           Effect.provideService(FileSystem.FileSystem, fileSystem),
           Effect.provideService(Path.Path, path),
           Effect.mapError(
             () =>
               new LocalDomainError({
-                reason: "hostsUpdateFailed",
+                reason: "stateUpdateFailed",
                 message: "Could not save local domains.",
               }),
           ),
         );
-      const updateHosts = (next: ReadonlyArray<LocalDomainBinding>) =>
-        Effect.gen(function* () {
-          const hosts = yield* readHosts();
-          const ownerConflict = localDomainOwnerConflict(hosts, ownerId);
-          if (ownerConflict) return yield* ownerConflict;
-          yield* writeFileStringAtomically({
-            filePath: stagingPath,
-            contents: replaceManagedHostsBlock(hosts, next, ownerId),
-          }).pipe(
-            Effect.provideService(FileSystem.FileSystem, fileSystem),
-            Effect.provideService(Path.Path, path),
-            Effect.mapError(
-              () =>
-                new LocalDomainError({
-                  reason: "hostsUpdateFailed",
-                  message: "Could not prepare /etc/hosts update.",
-                }),
-            ),
-          );
-          yield* runAuthorizedHostsCopy(stagingPath);
-        });
+      if (loaded.version === 1) yield* persist(domains);
       const publish = (input: PublishLocalDomainInput) =>
         Semaphore.withPermits(
           mutex,
           1,
         )(
           Effect.gen(function* () {
-            yield* ensureSupported();
-            if (
-              !Number.isInteger(input.port) ||
-              input.port < 1 ||
-              input.port > 65_535 ||
-              input.port === 80
-            ) {
+            if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65_535) {
               return yield* new LocalDomainError({
                 reason: "invalidDomain",
-                message: "Choose a local port other than 80.",
+                message: "Choose a local port between 1 and 65535.",
               });
             }
             const domain = normalizeLocalDomain(input.domain ?? suggestedLocalDomain(input.port));
             if (!domain) {
               return yield* new LocalDomainError({
                 reason: "invalidDomain",
-                message: "Use a name such as shop or shop.tandem.",
+                message: "Use a name such as shop or shop.localhost.",
               });
             }
-            const previous = domains;
             const next = [
-              ...previous.filter((binding) => binding.domain !== domain),
+              ...domains.filter((binding) => binding.domain !== domain),
               { domain, port: input.port },
             ];
-            yield* ensureResolver();
             yield* ensureProxy();
             yield* persist(next);
-            yield* updateHosts(next).pipe(
-              Effect.tapError(() => persist(previous).pipe(Effect.ignore)),
-            );
             domains = next;
             return snapshot();
           }),
@@ -566,7 +286,6 @@ export class LocalDomains extends Context.Service<
           1,
         )(
           Effect.gen(function* () {
-            yield* ensureSupported();
             const domain = normalizeLocalDomain(input.domain);
             if (!domain)
               return yield* new LocalDomainError({
@@ -574,17 +293,8 @@ export class LocalDomains extends Context.Service<
                 message: "Invalid local domain.",
               });
             if (!domains.some((binding) => binding.domain === domain)) return snapshot();
-            const previous = domains;
-            const next = previous.filter((binding) => binding.domain !== domain);
+            const next = domains.filter((binding) => binding.domain !== domain);
             yield* persist(next);
-            yield* updateHosts(next).pipe(
-              Effect.tapError(() => persist(previous).pipe(Effect.ignore)),
-            );
-            if (next.length === 0) {
-              yield* removeResolver().pipe(
-                Effect.tapError(() => persist(previous).pipe(Effect.ignore)),
-              );
-            }
             domains = next;
             if (next.length === 0 && proxy !== null) {
               const currentProxy = proxy;

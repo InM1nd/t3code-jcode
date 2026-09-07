@@ -40,13 +40,14 @@ describe("LocalDomainsPortControls", () => {
     );
     expect(html).toContain("local-5173");
     expect(html).toContain("Publish local domain");
-    expect(html).not.toContain("Open local-5173.tandem");
+    expect(html).not.toContain("Open local-5173.localhost");
   });
 
   it("renders a clean URL for a published domain", () => {
     mocks.domains = {
-      domains: [{ domain: "shop.tandem", port: 5173 }],
+      domains: [{ domain: "shop.localhost", port: 5173 }],
       supported: true,
+      proxyPort: 7777,
       proxyError: null,
     };
     const html = renderToStaticMarkup(
@@ -62,15 +63,16 @@ describe("LocalDomainsPortControls", () => {
         }}
       />,
     );
-    expect(html).toContain("Open shop.tandem");
-    expect(html).toContain("Copy shop.tandem");
+    expect(html).toContain("Open shop.localhost");
+    expect(html).toContain("Copy shop.localhost");
     expect(html).toContain("Unpublish");
   });
 
   it("uses the published domain when the query resolves after the first render", () => {
     mocks.domains = {
-      domains: [{ domain: "shop.tandem", port: 5173 }],
+      domains: [{ domain: "shop.localhost", port: 5173 }],
       supported: true,
+      proxyPort: 7777,
       proxyError: null,
     };
     const html = renderToStaticMarkup(
@@ -86,6 +88,6 @@ describe("LocalDomainsPortControls", () => {
         }}
       />,
     );
-    expect(html).toContain('value="shop.tandem"');
+    expect(html).toContain('value="shop.localhost"');
   });
 });

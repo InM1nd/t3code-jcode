@@ -1,35 +1,33 @@
 # Local development domains
 
-Local dev servers are easy to lose track of by port number alone. On macOS, T3 Code can give one a
-memorable `.tandem` name instead — `shop.tandem` rather than `localhost:5173` — that keeps working
-across restarts.
+Local dev servers are easy to lose track of by port number alone. T3 Code can give one a memorable
+`.localhost` name instead — `shop.localhost:7777` rather than `localhost:5173` — that keeps working
+across restarts and needs no administrator permission.
 
 ## Publishing a domain
 
 1. Open **Ports** from the sidebar footer to see every local dev server T3 Code has detected.
 2. Next to a server, type a name (or keep the suggested one) and select **Publish local domain**.
-3. The first publish on a machine asks for administrator permission to install the managed
-   `tandem` resolver. Approve it to continue. This makes any `*.tandem` name resolve to the local
-   proxy; only names published in Ports are routed to a development server.
+3. T3 Code starts a local proxy on port 7777. Every `*.localhost` name resolves to your own machine
+   without a hosts-file entry or custom DNS; only names published in Ports are routed to a development
+   server.
 
-The server is now reachable at `http://<name>.tandem`, including from a browser. Select **Open** to
+The server is now reachable at `http://<name>.localhost:7777`, including from a browser. Select **Open** to
 launch it or **Copy** to grab the URL. WebSocket connections (Vite's HMR, for example) work the same
 way as the plain port URL did.
 
 Selecting **Publish local domain** again with a different name moves the domain; selecting
-**Unpublish** removes it and cleans up its `/etc/hosts` entry. Unpublishing the last local domain
-also removes T3 Code's resolver entry. The resolver and routes are restored from the saved local
-domain state after a T3 restart.
+**Unpublish** removes it. The routes are restored from the saved local domain state after a T3 restart.
+No system files are changed.
 
-If the owning environment is gone, remove both T3 Code-managed entries (`/etc/hosts` and
-`/etc/resolver/tandem`) when prompted, then publish from the remaining environment.
+Saved `.tandem` bindings are migrated to the same single-label `.localhost` name when T3 Code starts.
+Update bookmarks and OAuth callbacks to include `:7777`.
+Older T3 Code versions may have created clearly marked entries in `/etc/hosts` or
+`/etc/resolver/tandem`; this version leaves them untouched. Remove only those T3 Code-managed
+entries after confirming that no other tool still uses them.
 
 ## Limitations
 
-- macOS only, for now.
-- Only one T3 Code environment on a machine can hold the local domain proxy at a time — it listens
-  on port 80. If another environment (or another app) already has it, publishing fails with a
-  message saying so; unpublishing everything in that other environment, or closing it, frees the
-  port for the next attempt.
-- Names are one label under `.tandem` (`shop`, not `shop.staging`) to keep the `/etc/hosts` block
-  T3 Code manages easy to read and safe to regenerate.
+- One T3 Code environment on a machine can hold the local domain proxy at a time — it listens on port 7777. If another app has that port, publishing reports the conflict instead of changing system
+  networking.
+- Names are one label under `.localhost` (`shop`, not `shop.staging`).
