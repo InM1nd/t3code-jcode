@@ -21,6 +21,9 @@ Selecting **Publish local domain** again with a different name moves the domain;
 also removes T3 Code's resolver entry. The resolver and routes are restored from the saved local
 domain state after a T3 restart.
 
+If the owning environment is gone, remove both T3 Code-managed entries (`/etc/hosts` and
+`/etc/resolver/tandem`) when prompted, then publish from the remaining environment.
+
 ## Limitations
 
 - macOS only, for now.

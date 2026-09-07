@@ -35,7 +35,7 @@ const HOSTS_BEGIN = "# BEGIN T3 Code local domains";
 const HOSTS_END = "# END T3 Code local domains";
 const HOSTS_OWNER_PREFIX = "# OWNER T3 Code local domains: ";
 const OWNER_CONFLICT_MESSAGE =
-  "Unpublish domains in the owning environment. If it no longer exists, remove the T3 Code local-domains block from /etc/hosts, then retry.";
+  "Unpublish domains in the owning environment. If it no longer exists, remove T3 Code's managed entries from /etc/hosts and /etc/resolver/tandem, then retry.";
 const STATE_FILE = "local-domains.json";
 const HOSTS_STAGING_FILE = "local-domains.hosts";
 const RESOLVER_STAGING_FILE = "tandem.resolver";
@@ -398,36 +398,46 @@ export class LocalDomains extends Context.Service<
         );
       const ensureResolver = Effect.fn("LocalDomains.ensureResolver")(function* () {
         if (resolver !== null) return;
-        const current = yield* readResolver();
-        const plan = planResolverSetup(current, ownerId);
-        if (plan.action === "conflict")
-          return yield* new LocalDomainError({
-            reason: "ownerConflict",
-            message:
-              "Another T3 Code environment owns /etc/resolver/tandem. Remove its local domains before retrying.",
-          });
-        if (plan.action === "write") {
-          yield* writeFileStringAtomically({
-            filePath: resolverStagingPath,
-            contents: plan.contents,
-          }).pipe(
-            Effect.provideService(FileSystem.FileSystem, fileSystem),
-            Effect.provideService(Path.Path, path),
-            Effect.mapError(
-              () =>
-                new LocalDomainError({
-                  reason: "resolverUpdateFailed",
-                  message: "Could not prepare the macOS tandem resolver.",
-                }),
-            ),
-          );
-          yield* runAuthorizedResolverCopy(resolverStagingPath);
-        }
+        // The bound UDP socket is the inter-process ownership gate; claim the config afterward.
         const candidate = createTandemDnsServer();
         resolver = yield* listenResolver(candidate).pipe(
           Effect.tapError((error) =>
             Effect.sync(() => {
               proxyError = error.message;
+            }),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const current = yield* readResolver();
+          const plan = planResolverSetup(current, ownerId);
+          if (plan.action === "conflict")
+            return yield* new LocalDomainError({
+              reason: "ownerConflict",
+              message: OWNER_CONFLICT_MESSAGE,
+            });
+          if (plan.action === "write") {
+            yield* writeFileStringAtomically({
+              filePath: resolverStagingPath,
+              contents: plan.contents,
+            }).pipe(
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+              Effect.mapError(
+                () =>
+                  new LocalDomainError({
+                    reason: "resolverUpdateFailed",
+                    message: "Could not prepare the macOS tandem resolver.",
+                  }),
+              ),
+            );
+            yield* runAuthorizedResolverCopy(resolverStagingPath);
+          }
+        }).pipe(
+          Effect.tapError((error) =>
+            Effect.gen(function* () {
+              proxyError = error.message;
+              resolver = null;
+              yield* closeResolver(candidate);
             }),
           ),
         );
@@ -438,8 +448,7 @@ export class LocalDomains extends Context.Service<
         if (plan === "conflict")
           return yield* new LocalDomainError({
             reason: "ownerConflict",
-            message:
-              "Another T3 Code environment owns /etc/resolver/tandem. Remove its local domains before retrying.",
+            message: OWNER_CONFLICT_MESSAGE,
           });
         if (plan === "remove") yield* runAuthorizedResolverRemove();
         if (resolver !== null) {
@@ -565,7 +574,6 @@ export class LocalDomains extends Context.Service<
                 message: "Invalid local domain.",
               });
             if (!domains.some((binding) => binding.domain === domain)) return snapshot();
-            yield* ensureProxy();
             const previous = domains;
             const next = previous.filter((binding) => binding.domain !== domain);
             yield* persist(next);

@@ -89,7 +89,9 @@ describe("local domains", () => {
     );
 
     expect(localDomainOwnerConflict(claimed, owner)).toBeNull();
-    expect(localDomainOwnerConflict(claimed, otherOwner)?.reason).toBe("ownerConflict");
+    const conflict = localDomainOwnerConflict(claimed, otherOwner);
+    expect(conflict?.reason).toBe("ownerConflict");
+    expect(conflict?.message).toContain("/etc/resolver/tandem");
     expect(
       localDomainOwnerConflict(
         "# BEGIN T3 Code local domains\n127.0.0.1 shop.tandem\n# END T3 Code local domains\n",
