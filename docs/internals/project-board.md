@@ -8,4 +8,4 @@ The board is fork state. It is not an orchestration command stream.
 
 The same service backs the `board_*` MCP tools, so Jcode, Claude, and Codex see one board. A write publishes to every subscriber, which is how a second client updates without a reload.
 
-Turn-start injection of the digest waits for the shared prompt hook in the turn-prompt slice. Until then, agents get the digest from `board_digest`, and the command palette can insert it into the composer.
+When the board has active cards, the turn-start prompt includes the digest. `board_digest` and the command palette can still insert it into the composer.

@@ -8,4 +8,4 @@ A card has a title, a status, and an optional area. Status moves from backlog to
 
 **Start** puts that card's brief into the composer so the next message is about that card only.
 
-Agents in a thread can read and update the same board. A handoff on a card records what finished, what was decided, and the next step. Recent handoffs show under Activity on the board.
+When the board has active cards, each turn starts with a short digest of them. Agents in a thread can also read and update the same board. A handoff on a card records what finished, what was decided, and the next step. Recent handoffs show under Activity on the board.

@@ -1,4 +1,10 @@
-import type { DiscoveredLocalServer, ThreadId } from "@t3tools/contracts";
+import type {
+  DiscoveredLocalServer,
+  ProjectBoardItem,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
+import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
@@ -15,6 +21,28 @@ export function registerTurnPortScan(scan: PortScan): void {
 
 export function turnPortScan(): PortScan {
   return registeredPortScan ?? (() => Effect.succeed([]));
+}
+
+let registeredBoardItems:
+  | ((projectId: ProjectId) => Effect.Effect<ReadonlyArray<ProjectBoardItem>>)
+  | null = null;
+
+/** BoardService registers this so a turn can read cards without depending on that layer. */
+export function registerTurnBoardItems(
+  read: (projectId: ProjectId) => Effect.Effect<ReadonlyArray<ProjectBoardItem>>,
+): void {
+  registeredBoardItems = read;
+}
+
+export function turnBoardItems(
+  projectId: ProjectId,
+): Effect.Effect<ReadonlyArray<ProjectBoardItem>> {
+  const read = registeredBoardItems;
+  if (!read) return Effect.succeed([]);
+  return read(projectId).pipe(
+    Effect.timeout(Duration.seconds(2)),
+    Effect.catchCause(() => Effect.succeed([])),
+  );
 }
 
 export interface OtherThreadPortOwner {
@@ -84,15 +112,15 @@ function prependBlock(input: string, block: string | null): string {
 }
 
 /**
- * Prefixes the text a provider receives. A port scan that fails or times out
- * leaves the turn unchanged. The project-board digest joins this prefix once
- * that service is on the branch.
+ * Prefixes the text a provider receives. A port scan or board read that fails
+ * or times out leaves the rest of the turn unchanged.
  */
 export function applyTurnContext(input: {
   readonly text: string;
   readonly threadId: ThreadId;
   readonly worktreePath: string | null;
   readonly branch: string | null;
+  readonly boardItems?: ReadonlyArray<ProjectBoardItem>;
   readonly portDiscovery: Pick<PortScanner.PortDiscovery["Service"], "scan">;
   readonly getThreadTitle: (threadId: ThreadId) => Effect.Effect<string | null>;
 }): Effect.Effect<string> {
@@ -103,6 +131,10 @@ export function applyTurnContext(input: {
           formatWorkspaceScopePromptBlock({ cwd: input.worktreePath, branch: input.branch }),
         )
       : input.text;
+    const activeBoardItems = (input.boardItems ?? []).filter((item) => !item.archivedAt);
+    if (activeBoardItems.length > 0) {
+      text = prependBlock(text, formatProjectBoardDigest(input.boardItems ?? []));
+    }
     if (!text.trim()) return text;
 
     const discovered = yield* input.portDiscovery.scan().pipe(

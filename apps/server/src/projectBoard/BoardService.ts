@@ -33,6 +33,7 @@ import {
 } from "@t3tools/shared/projectBoard";
 
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
+import { registerTurnBoardItems } from "../orchestration-v2/turnContextPrompt.ts";
 
 const itemJson = Schema.fromJsonString(ProjectBoardItem);
 const decodeItem = Schema.decodeUnknownEffect(itemJson);
@@ -304,6 +305,13 @@ const make = Effect.gen(function* () {
       );
       yield* publish(projectId);
     });
+
+  registerTurnBoardItems((projectId) =>
+    list(projectId).pipe(
+      Effect.map((snapshot) => snapshot.items),
+      Effect.orElseSucceed(() => []),
+    ),
+  );
 
   return {
     list,

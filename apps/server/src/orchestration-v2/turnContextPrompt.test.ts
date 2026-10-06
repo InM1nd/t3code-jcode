@@ -1,5 +1,10 @@
 import { assert, it } from "@effect/vitest";
-import { ThreadId, type DiscoveredLocalServer } from "@t3tools/contracts";
+import {
+  ProjectBoardItemId,
+  ThreadId,
+  type DiscoveredLocalServer,
+  type ProjectBoardItem,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { describe, expect } from "vite-plus/test";
 
@@ -47,10 +52,21 @@ describe("turnContextPrompt", () => {
         threadId: thread("current"),
         worktreePath: "/repo/.t3/worktrees/feature",
         branch: "feature",
+        boardItems: [
+          {
+            id: ProjectBoardItemId.make("card-1"),
+            title: "Ship the prompt",
+            status: "inProgress",
+            source: "user",
+            createdAt: "2026-10-06T00:00:00.000Z",
+            updatedAt: "2026-10-06T00:00:00.000Z",
+          } as ProjectBoardItem,
+        ],
         portDiscovery: { scan: () => Effect.succeed([server(5173, "other")]) },
         getThreadTitle: () => Effect.succeed("Shop"),
       });
       assert.isTrue(prefixed.startsWith("<t3_active_ports>"));
+      assert.include(prefixed, "Ship the prompt");
       assert.include(prefixed, 'thread "Shop"');
       assert.isTrue(prefixed.endsWith("ship it"));
 

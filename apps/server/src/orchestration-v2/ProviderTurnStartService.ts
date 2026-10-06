@@ -48,7 +48,7 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import { makeProviderFailure } from "./ProviderFailure.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
-import { applyTurnContext, turnPortScan } from "./turnContextPrompt.ts";
+import { applyTurnContext, turnBoardItems, turnPortScan } from "./turnContextPrompt.ts";
 import {
   isRestartNoteContinuation,
   pendingRestartCancelledBackgroundWork,
@@ -945,6 +945,7 @@ export const layer: Layer.Layer<
       const routableSubagents = projection.subagents.filter((subagent) =>
         RunExecutionService.canRouteRelatedSubagent(subagent.status),
       );
+      const boardItems = yield* turnBoardItems(projection.thread.projectId);
       const userText = yield* applyTurnContext({
         text: projectComposerContextForProvider({
           text: message.text,
@@ -953,6 +954,7 @@ export const layer: Layer.Layer<
         threadId: projection.thread.id,
         worktreePath: projection.thread.worktreePath,
         branch: projection.thread.branch,
+        boardItems,
         portDiscovery: { scan: turnPortScan() },
         getThreadTitle: (threadId) =>
           projectionStore.getThreadShell(threadId).pipe(
