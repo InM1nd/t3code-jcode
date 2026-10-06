@@ -48,7 +48,12 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import { makeProviderFailure } from "./ProviderFailure.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
-import { applyTurnContext, turnBoardItems, turnPortScan } from "./turnContextPrompt.ts";
+import {
+  TurnContextPrompts,
+  applyTurnContext,
+  turnBoardItems,
+  turnPortScan,
+} from "./turnContextPrompt.ts";
 import {
   isRestartNoteContinuation,
   pendingRestartCancelledBackgroundWork,
@@ -111,6 +116,7 @@ export const layer: Layer.Layer<
     const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;
     const runExecution = yield* RunExecutionService.RunExecutionServiceV2;
     const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;
+    const turnContextPrompts = yield* TurnContextPrompts;
 
     // These callbacks outlive startup while a run drains background work. Build
     // them outside start's scope so they cannot retain its full thread history.
@@ -945,23 +951,28 @@ export const layer: Layer.Layer<
       const routableSubagents = projection.subagents.filter((subagent) =>
         RunExecutionService.canRouteRelatedSubagent(subagent.status),
       );
-      const boardItems = yield* turnBoardItems(projection.thread.projectId);
-      const userText = yield* applyTurnContext({
-        text: projectComposerContextForProvider({
-          text: message.text,
-          records: message.context?.records ?? [],
-        }),
-        threadId: projection.thread.id,
-        worktreePath: projection.thread.worktreePath,
-        branch: projection.thread.branch,
-        boardItems,
-        portDiscovery: { scan: turnPortScan() },
-        getThreadTitle: (threadId) =>
-          projectionStore.getThreadShell(threadId).pipe(
-            Effect.map((shell) => shell?.title ?? null),
-            Effect.orElseSucceed(() => null),
-          ),
+      const composerText = projectComposerContextForProvider({
+        text: message.text,
+        records: message.context?.records ?? [],
       });
+      const boardItems = turnContextPrompts
+        ? yield* turnBoardItems(projection.thread.projectId)
+        : [];
+      const userText = turnContextPrompts
+        ? yield* applyTurnContext({
+            text: composerText,
+            threadId: projection.thread.id,
+            worktreePath: projection.thread.worktreePath,
+            branch: projection.thread.branch,
+            boardItems,
+            portDiscovery: { scan: turnPortScan() },
+            getThreadTitle: (threadId) =>
+              projectionStore.getThreadShell(threadId).pipe(
+                Effect.map((shell) => shell?.title ?? null),
+                Effect.orElseSucceed(() => null),
+              ),
+          })
+        : composerText;
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.
       const noteContinuation = isRestartNoteContinuation(

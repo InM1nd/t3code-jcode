@@ -5,10 +5,20 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
+import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
 import type * as PortScanner from "../preview/PortScanner.ts";
+
+/**
+ * Production turns include the worktree, port, and board prefix. The default
+ * stays off so recorded provider sessions keep the user's exact text.
+ */
+export const TurnContextPrompts = Context.Reference<boolean>(
+  "t3/orchestration-v2/TurnContextPrompts",
+  { defaultValue: () => false },
+);
 
 type PortScan = PortScanner.PortDiscovery["Service"]["scan"];
 
@@ -82,7 +92,7 @@ export function formatWorkspaceScopePromptBlock(input: {
   ].join("\n");
 }
 
-export function formatActivePortsPromptBlock(
+function formatActivePortsPromptBlock(
   entries: ReadonlyArray<{
     readonly port: number;
     readonly processName: string | null;

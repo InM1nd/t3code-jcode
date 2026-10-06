@@ -33,7 +33,7 @@ export function normalizeWorkspaceScopePath(path: string): string {
   return unified;
 }
 
-export function isAbsoluteWorkspaceScopePath(path: string): boolean {
+function isAbsoluteWorkspaceScopePath(path: string): boolean {
   const normalized = normalizeWorkspaceScopePath(path);
   return normalized.startsWith("/") || /^[A-Za-z]:\//u.test(normalized);
 }
