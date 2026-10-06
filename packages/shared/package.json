@@ -410,6 +410,10 @@
     "./workspaceScope": {
       "types": "./src/workspaceScope.ts",
       "import": "./src/workspaceScope.ts"
+    },
+    "./workMode": {
+      "types": "./src/workMode.ts",
+      "import": "./src/workMode.ts"
     }
   },
   "scripts": {

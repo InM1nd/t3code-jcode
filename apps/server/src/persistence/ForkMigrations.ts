@@ -175,6 +175,16 @@ const addProjectBoardItemsColumn = Effect.gen(function* () {
   }
 });
 
+const addThreadWorkModes = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS fork_thread_work_modes (
+      thread_id TEXT PRIMARY KEY NOT NULL,
+      mode TEXT NOT NULL
+    )
+  `;
+});
+
 const run = Migrator.make({});
 
 export const runForkMigrations = Effect.fn("runForkMigrations")(function* () {
@@ -183,6 +193,7 @@ export const runForkMigrations = Effect.fn("runForkMigrations")(function* () {
       "1_RepairDivergentUpstreamMigrations": repairDivergentUpstreamMigrations,
       "2_ProjectionProjectsBoardItemsColumn": addProjectBoardItemsColumn,
       "3_BoardItems": copyBoardItems,
+      "4_ThreadWorkModes": addThreadWorkModes,
     }),
     table: FORK_MIGRATIONS_TABLE,
   });

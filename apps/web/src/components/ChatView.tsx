@@ -66,6 +66,7 @@ import {
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ThreadId,
+  type WorkMode,
   type ThreadLinkedPullRequest,
   type RunId,
   type RuntimeRequestId,
@@ -138,6 +139,7 @@ import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 import { truncate } from "@t3tools/shared/String";
 import { resolveThreadReferenceCopyTarget } from "@t3tools/shared/threadReference";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
+import { displayedWorkMode, nativeInteractionMode } from "@t3tools/shared/workMode";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
 import { Atom } from "effect/reactivity";
@@ -391,6 +393,7 @@ import { useEnvironmentDisconnectDelay } from "../hooks/useEnvironmentDisconnect
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { useEnvironmentQuery } from "../state/query";
+import { setThreadWorkMode as setThreadWorkModeCommand, threadWorkMode } from "../state/workMode";
 import {
   environmentServerConfigsAtom,
   primaryServerAvailableEditorsAtom,
@@ -1574,6 +1577,7 @@ export default function ChatView(props: ChatViewProps) {
   const setThreadInteractionMode = useAtomCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
+  const saveThreadWorkMode = useAtomCommand(setThreadWorkModeCommand, { reportFailure: false });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const resumeThreadQueue = useAtomCommand(threadEnvironment.resumeThreadQueue, {
     reportFailure: false,
@@ -3210,6 +3214,31 @@ export default function ChatView(props: ChatViewProps) {
     interactionMode:
       composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE,
   });
+  const workModeAtom = useMemo(
+    () =>
+      activeThread
+        ? threadWorkMode({
+            environmentId,
+            input: { threadId: activeThread.id },
+          })
+        : null,
+    [activeThread, environmentId],
+  );
+  const workModeQuery = useEnvironmentQuery(workModeAtom);
+  const [pickedWorkMode, setPickedWorkMode] = useState<{
+    readonly threadId: ThreadId;
+    readonly mode: WorkMode;
+  } | null>(null);
+  const pickedMode =
+    pickedWorkMode !== null && pickedWorkMode.threadId === activeThread?.id
+      ? pickedWorkMode.mode
+      : null;
+  const workMode = displayedWorkMode({
+    stored: pickedMode ?? workModeQuery.data?.mode ?? null,
+    interactionMode,
+  });
+  const workModeForTurnRef = useRef(workMode);
+  workModeForTurnRef.current = workMode;
   const conversationProviderStatus =
     providerStatuses.find((status) => status.instanceId === activeRuntime?.providerInstanceId) ??
     activeProviderStatus;
@@ -5226,10 +5255,27 @@ export default function ChatView(props: ChatViewProps) {
       setDraftThreadContext,
     ],
   );
-  const toggleInteractionMode = useCallback(() => {
-    if (!interactionModeEnabled) return;
-    handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
-  }, [handleInteractionModeChange, interactionMode, interactionModeEnabled]);
+  const handleWorkModeChange = useCallback(
+    (mode: WorkMode) => {
+      if (!interactionModeEnabled && mode !== "build") return;
+      const threadIdForMode = activeThread?.id;
+      if (threadIdForMode) {
+        setPickedWorkMode({ threadId: threadIdForMode, mode });
+        void saveThreadWorkMode({
+          environmentId,
+          input: { threadId: threadIdForMode, mode },
+        });
+      }
+      handleInteractionModeChange(nativeInteractionMode(mode));
+    },
+    [
+      activeThread?.id,
+      environmentId,
+      handleInteractionModeChange,
+      interactionModeEnabled,
+      saveThreadWorkMode,
+    ],
+  );
   const openProviderSetup = useCallback(
     (instanceId: ProviderInstanceId) => {
       void navigate({
@@ -6024,6 +6070,16 @@ export default function ChatView(props: ChatViewProps) {
       runtimeMode: RuntimeMode;
       interactionMode: ProviderInteractionMode;
     }): Promise<AtomCommandResult<void, unknown>> => {
+      const modeResult = mapAtomCommandResult(
+        await saveThreadWorkMode({
+          environmentId,
+          input: { threadId: input.threadId, mode: workModeForTurnRef.current },
+        }),
+        () => undefined,
+      );
+      if (modeResult._tag === "Failure") {
+        return modeResult;
+      }
       if (!serverThread) {
         return AsyncResult.success(undefined);
       }
@@ -6085,6 +6141,7 @@ export default function ChatView(props: ChatViewProps) {
     [
       environmentId,
       serverThread,
+      saveThreadWorkMode,
       setThreadInteractionMode,
       setThreadRuntimeMode,
       updateThreadMetadata,
@@ -8880,7 +8937,7 @@ export default function ChatView(props: ChatViewProps) {
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
     if (standaloneSlashCommand && multipleModelSelections === null) {
-      handleInteractionModeChange(standaloneSlashCommand);
+      handleWorkModeChange(standaloneSlashCommand === "default" ? "build" : standaloneSlashCommand);
       promptRef.current = "";
       clearComposerDraftContent(composerDraftTarget);
       composerRef.current?.resetCursorState();
@@ -11389,9 +11446,9 @@ export default function ChatView(props: ChatViewProps) {
                               onProviderModelSelect={onProviderModelSelect}
                               onOpenProviderSetup={openProviderSetup}
                               getModelDisabledReason={getModelDisabledReason}
-                              toggleInteractionMode={toggleInteractionMode}
+                              workMode={workMode}
+                              onWorkModeChange={handleWorkModeChange}
                               handleRuntimeModeChange={handleRuntimeModeChange}
-                              handleInteractionModeChange={handleInteractionModeChange}
                               focusComposer={focusComposer}
                               scheduleComposerFocus={scheduleComposerFocus}
                               setThreadError={setThreadError}

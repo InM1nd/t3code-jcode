@@ -48,12 +48,15 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import { makeProviderFailure } from "./ProviderFailure.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import { workModeInstruction } from "@t3tools/shared/workMode";
+
 import {
   TurnContextPrompts,
   applyTurnContext,
   turnBoardItems,
   turnPortScan,
 } from "./turnContextPrompt.ts";
+import { turnWorkMode } from "../workMode/WorkModeService.ts";
 import {
   isRestartNoteContinuation,
   pendingRestartCancelledBackgroundWork,
@@ -955,12 +958,20 @@ export const layer: Layer.Layer<
         text: message.text,
         records: message.context?.records ?? [],
       });
+      const storedWorkMode = turnContextPrompts ? yield* turnWorkMode(projection.thread.id) : null;
+      const workModeText = workModeInstruction(storedWorkMode);
+      const promptedText =
+        workModeText === null
+          ? composerText
+          : composerText.trim().length === 0
+            ? workModeText
+            : `${workModeText}\n\n${composerText}`;
       const boardItems = turnContextPrompts
         ? yield* turnBoardItems(projection.thread.projectId)
         : [];
       const userText = turnContextPrompts
         ? yield* applyTurnContext({
-            text: composerText,
+            text: promptedText,
             threadId: projection.thread.id,
             worktreePath: projection.thread.worktreePath,
             branch: projection.thread.branch,

@@ -1,6 +1,7 @@
 import {
   type DeviceListInput,
   BOARD_WS_METHODS,
+  WORK_MODE_WS_METHODS,
   AuthAccessReadScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
@@ -218,6 +219,9 @@ export const RPC_REQUIRED_SCOPES = {
   [BOARD_WS_METHODS.boardArchive]: AuthOrchestrationOperateScope,
   [BOARD_WS_METHODS.boardRestore]: AuthOrchestrationOperateScope,
   [BOARD_WS_METHODS.boardDelete]: AuthOrchestrationOperateScope,
+  [WORK_MODE_WS_METHODS.get]: AuthOrchestrationReadScope,
+  [WORK_MODE_WS_METHODS.subscribe]: AuthOrchestrationReadScope,
+  [WORK_MODE_WS_METHODS.set]: AuthOrchestrationOperateScope,
   [LOCAL_DOMAINS_WS_METHODS.list]: AuthOrchestrationReadScope,
   [LOCAL_DOMAINS_WS_METHODS.publish]: AuthOrchestrationOperateScope,
   [LOCAL_DOMAINS_WS_METHODS.unpublish]: AuthOrchestrationOperateScope,

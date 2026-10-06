@@ -811,6 +811,9 @@ describe("parseStandaloneComposerSlashCommand", () => {
 
   it("parses standalone /default command", () => {
     expect(parseStandaloneComposerSlashCommand("/default")).toBe("default");
+    expect(parseStandaloneComposerSlashCommand("/build")).toBe("build");
+    expect(parseStandaloneComposerSlashCommand("/debug")).toBe("debug");
+    expect(parseStandaloneComposerSlashCommand("/swarm")).toBe("swarm");
   });
 
   it("ignores slash commands with extra message text", () => {

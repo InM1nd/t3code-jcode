@@ -36,3 +36,5 @@ Antigravity can still send native approval requests in **Full access**. It only 
 approvals for actions that support them.
 
 See the [provider guides](./install.md#providers) for setup and provider-specific limits.
+
+A work mode is a different choice. It says whether the chat is building, planning, debugging, or splitting a task into roles. See [Work modes](./work-modes.md).
