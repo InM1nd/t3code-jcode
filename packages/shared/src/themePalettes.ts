@@ -1,3 +1,7 @@
+import { TANDEM_THEME_IDS } from "./tandemThemeIds.ts";
+
+export { TANDEM_THEME_IDS } from "./tandemThemeIds.ts";
+
 export const BUILT_IN_THEME_IDS = ["t3-chat", "grove", "ocean", "ember", "iris"] as const;
 
 /** The standard T3 Code palette, kept separate from the optional built-in theme library. */
@@ -26,6 +30,7 @@ export const RESERVED_THEME_IDS: ReadonlySet<string> = new Set([
   "t3-ocean",
   "t3-ember",
   "t3-iris",
+  ...TANDEM_THEME_IDS,
 ]);
 
 /**
