@@ -64,6 +64,7 @@ it.layer(memory)("ForkMigrations healthy ledger", (it) => {
         [1, "RepairDivergentUpstreamMigrations"],
         [2, "ProjectionProjectsBoardItemsColumn"],
         [3, "BoardItems"],
+        [4, "ThreadWorkModes"],
       ]);
       assert.deepStrictEqual(yield* runForkMigrations(), []);
 
@@ -191,6 +192,7 @@ it.layer(memory)("ForkMigrations divergent ledger", (it) => {
         [1, "RepairDivergentUpstreamMigrations"],
         [2, "ProjectionProjectsBoardItemsColumn"],
         [3, "BoardItems"],
+        [4, "ThreadWorkModes"],
       ]);
 
       const projects = yield* sql<{ readonly name: string }>`

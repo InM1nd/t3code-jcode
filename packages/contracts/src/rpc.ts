@@ -11,6 +11,7 @@ import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import { LocalDomainsRpcGroup } from "./localDomainsRpc.ts";
+import { WorkModeRpcGroup } from "./workModeRpc.ts";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
   BoardArchiveRpc,
@@ -1939,4 +1940,5 @@ export const WsRpcGroup = RpcGroup.make(
   BoardDeleteRpc,
 )
   .merge(LocalDomainsRpcGroup)
+  .merge(WorkModeRpcGroup)
   .middleware(RpcScopeAuthorization);

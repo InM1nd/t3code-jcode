@@ -122,6 +122,8 @@ import * as IdAllocator from "./orchestration-v2/IdAllocator.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as BoardService from "./projectBoard/BoardService.ts";
 import { makeBoardRpcHandlers } from "./projectBoard/boardRpcHandlers.ts";
+import * as WorkModeService from "./workMode/WorkModeService.ts";
+import { makeWorkModeRpcHandlers } from "./workMode/workModeRpcHandlers.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import {
   archivedShellStreamItemFromThreadShell,
@@ -1221,6 +1223,7 @@ const layerWsRpc = (
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const board = yield* BoardService.BoardService;
+      const workModes = yield* WorkModeService.WorkModeService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
@@ -3795,6 +3798,7 @@ const layerWsRpc = (
             { "rpc.aggregate": "server" },
           ),
         ...makeBoardRpcHandlers(board),
+        ...makeWorkModeRpcHandlers(workModes),
       });
       return handlers;
     }),
@@ -3806,6 +3810,7 @@ export const layer = Layer.unwrap(
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
     const board = yield* BoardService.BoardService;
+    const workModes = yield* WorkModeService.WorkModeService;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3862,6 +3867,7 @@ export const layer = Layer.unwrap(
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
               Layer.provide(Layer.succeed(BoardService.BoardService, board)),
+              Layer.provide(Layer.succeed(WorkModeService.WorkModeService, workModes)),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(

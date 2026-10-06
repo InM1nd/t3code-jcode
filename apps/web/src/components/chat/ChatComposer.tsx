@@ -29,6 +29,7 @@ import type {
   ProviderApprovalDecision,
   ThreadContextRecord,
   ProviderInteractionMode,
+  WorkMode,
   ResolvedKeybindingsConfig,
   RuntimeMode,
   RuntimeRequestId,
@@ -261,6 +262,8 @@ import {
 } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import { WorkModeControl } from "./WorkModeControl";
+import { workModeFromSlashCommand } from "@t3tools/shared/workMode";
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
@@ -1074,10 +1077,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import {
   FileIcon,
-  BotIcon,
   CircleAlertIcon,
   PaperclipIcon,
-  PencilRulerIcon,
   PlayIcon,
   ShieldIcon,
   XIcon,
@@ -1231,12 +1232,12 @@ const supervisedRuntimeModeOption = {
 };
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   showInteractionModeToggle: boolean;
-  interactionMode: ProviderInteractionMode;
+  workMode: WorkMode;
   runtimeMode: RuntimeMode;
   runtimeModeOptions: ReadonlyArray<RuntimeModeOption>;
   size?: "sm" | "xs";
   hidden?: boolean;
-  onToggleInteractionMode: () => void;
+  onWorkModeChange: (mode: WorkMode) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   const size = props.size ?? "sm";
@@ -1246,47 +1247,13 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
     props.runtimeModeOptions.find((option) => option.mode === props.runtimeMode) ??
     supervisedRuntimeModeOption;
   const RuntimeModeIcon = runtimeModeOption.icon;
-  const interactionModeTooltip =
-    props.interactionMode === "plan"
-      ? "Plan mode — click to return to normal build mode"
-      : "Default mode — click to enter plan mode";
-
-  const interactionModeToggle = props.showInteractionModeToggle ? (
-    <>
-      <ComposerControlSeparator size={size} />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <ComposerControl
-              size={size}
-              className="shrink-0 whitespace-nowrap"
-              aria-pressed={props.interactionMode === "plan"}
-              type="button"
-              onClick={props.onToggleInteractionMode}
-              aria-label={interactionModeTooltip}
-            />
-          }
-        >
-          {props.interactionMode === "plan" ? (
-            <ComposerControlIcon
-              icon={PencilRulerIcon}
-              size={size}
-              className="text-current opacity-100"
-            />
-          ) : (
-            <ComposerControlIcon
-              icon={BotIcon}
-              size={size}
-              opticalSize={size === "xs" ? "default" : "large"}
-            />
-          )}
-          <span data-composer-control-label className="sr-only sm:not-sr-only">
-            {props.interactionMode === "plan" ? "Plan" : "Build"}
-          </span>
-        </TooltipTrigger>
-        <TooltipPopup side="top">{interactionModeTooltip}</TooltipPopup>
-      </Tooltip>
-    </>
+  const workModeControl = props.showInteractionModeToggle ? (
+    <WorkModeControl
+      workMode={props.workMode}
+      size={size}
+      hidden={props.hidden}
+      onWorkModeChange={props.onWorkModeChange}
+    />
   ) : null;
 
   return (
@@ -1341,7 +1308,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
         <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
       </Tooltip>
 
-      {interactionModeToggle}
+      {workModeControl}
     </>
   );
 });
@@ -1666,9 +1633,9 @@ export interface ChatComposerProps {
   ) => void;
   onOpenProviderSetup: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
-  toggleInteractionMode: () => void;
+  workMode: WorkMode;
+  onWorkModeChange: (mode: WorkMode) => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
-  handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -1772,9 +1739,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onProviderModelSelect,
     onOpenProviderSetup,
     getModelDisabledReason,
-    toggleInteractionMode,
+    workMode,
+    onWorkModeChange,
     handleRuntimeModeChange,
-    handleInteractionModeChange,
     focusComposer,
     scheduleComposerFocus,
     setThreadError,
@@ -2647,11 +2614,32 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         ...(planModeUiEnabled
           ? ([
               {
+                id: "slash:build",
+                type: "slash-command",
+                command: "build",
+                label: "/build",
+                description: "Switch this thread to Build",
+              },
+              {
                 id: "slash:plan",
                 type: "slash-command",
                 command: "plan",
                 label: "/plan",
                 description: "Switch this thread into plan mode",
+              },
+              {
+                id: "slash:debug",
+                type: "slash-command",
+                command: "debug",
+                label: "/debug",
+                description: "Switch this thread to Debug",
+              },
+              {
+                id: "slash:swarm",
+                type: "slash-command",
+                command: "swarm",
+                label: "/swarm",
+                description: "Switch this thread to Swarm Lite",
               },
               {
                 id: "slash:default",
@@ -3948,8 +3936,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           }
           return;
         }
-        if (!planModeUiEnabled) return;
-        void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
+        const selectedWorkMode = workModeFromSlashCommand(item.command);
+        if (!planModeUiEnabled || selectedWorkMode === null) return;
+        onWorkModeChange(selectedWorkMode);
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
         });
@@ -4066,7 +4055,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       addComposerDraftThreadContexts,
       applyPromptReplacement,
       composerDraftTarget,
-      handleInteractionModeChange,
+      onWorkModeChange,
       planModeUiEnabled,
       onUsageLimitsCommand,
       resolveActiveComposerTrigger,
@@ -4385,7 +4374,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     });
     if (key === "Tab" && event.shiftKey && submissionIntent === null) {
       if (!planModeUiEnabled) return false;
-      toggleInteractionMode();
+      onWorkModeChange(workMode === "plan" ? "build" : "plan");
       return true;
     }
     const { trigger } = resolveActiveComposerTrigger();
@@ -5366,12 +5355,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       content: (
         <ComposerFooterModeControls
           showInteractionModeToggle={planModeUiEnabled}
-          interactionMode={interactionMode}
+          workMode={workMode}
           runtimeMode={compatibleRuntimeMode}
           runtimeModeOptions={compatibleRuntimeModeOptions}
           size={composerControlsCollapsed ? "xs" : "sm"}
           hidden={composerControlsHidden || restingHiddenBlockCount > 0}
-          onToggleInteractionMode={toggleInteractionMode}
+          onWorkModeChange={onWorkModeChange}
           onRuntimeModeChange={handleRuntimeModeChange}
         />
       ),
@@ -5528,7 +5517,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           )}
         >
           <CompactComposerControlsMenu
-            interactionMode={interactionMode}
+            workMode={workMode}
             runtimeMode={compatibleRuntimeMode}
             runtimeModeOptions={compatibleRuntimeModeOptions}
             size={composerControlsCollapsed ? "xs" : "sm"}
@@ -5537,7 +5526,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             traitsMenuContent={
               hiddenRestingBlockIds.includes("traits") ? providerTraitsMenuContent : undefined
             }
-            onToggleInteractionMode={toggleInteractionMode}
+            onWorkModeChange={onWorkModeChange}
             onRuntimeModeChange={handleRuntimeModeChange}
           />
         </div>
