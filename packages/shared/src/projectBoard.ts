@@ -8,9 +8,9 @@ import type {
 
 export const PROJECT_BOARD_LINKED_TURN_LIMIT = 20;
 export const PROJECT_BOARD_DIGEST_ITEM_LIMIT = 20;
-export const PROJECT_BOARD_HANDOFF_HISTORY_LIMIT = 10;
-export const PROJECT_BOARD_EXTERNAL_REF_LIMIT = 10;
-export const PROJECT_BOARD_RELATED_ITEM_LIMIT = 20;
+const PROJECT_BOARD_HANDOFF_HISTORY_LIMIT = 10;
+const PROJECT_BOARD_EXTERNAL_REF_LIMIT = 10;
+const PROJECT_BOARD_RELATED_ITEM_LIMIT = 20;
 
 export function mergeProjectBoardLinkedTurnIds(input: {
   existing: ReadonlyArray<TurnId> | undefined;
