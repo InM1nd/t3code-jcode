@@ -1,16 +1,21 @@
-import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { createServer } from "node:http";
-import { connect } from "node:net";
-import { mkdtemp, rm } from "node:fs/promises";
-import { once } from "node:events";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import test from "node:test";
+import * as NodeAssert from "node:assert/strict";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeHttp from "node:http";
+import * as NodeNet from "node:net";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeEvents from "node:events";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeURL from "node:url";
+import * as NodeTest from "node:test";
 
-const sourcePath = join(dirname(fileURLToPath(import.meta.url)), "LocalDomainListener.swift");
+const sourcePath = NodePath.join(
+  NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
+  "LocalDomainListener.swift",
+);
 const TEST_TIMEOUT_MS = 10_000;
+// oxlint-disable-next-line t3code/no-global-process-runtime -- This sidecar test only compiles on macOS.
+const skipUnlessDarwin = process.platform !== "darwin";
 
 const listen = (server) =>
   new Promise((resolve, reject) => {
@@ -19,7 +24,7 @@ const listen = (server) =>
   });
 
 const freePort = async () => {
-  const server = createServer();
+  const server = NodeHttp.createServer();
   const port = await listen(server);
   await new Promise((resolve) => server.close(resolve));
   return port;
@@ -50,7 +55,7 @@ const waitForReady = (child) =>
 
 const run = (command, args) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit" });
+    const child = NodeChildProcess.spawn(command, args, { stdio: "inherit" });
     child.once("error", reject);
     child.once("exit", (code) =>
       code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`)),
@@ -59,7 +64,7 @@ const run = (command, args) =>
 
 const requestAfterWriteEnd = (port) =>
   new Promise((resolve, reject) => {
-    const client = connect({ host: "127.0.0.1", port });
+    const client = NodeNet.connect({ host: "127.0.0.1", port });
     let response = "";
     client.setEncoding("utf8");
     client.once("error", reject);
@@ -70,20 +75,22 @@ const requestAfterWriteEnd = (port) =>
     client.end("GET / HTTP/1.1\r\nHost: shop.localhost\r\nConnection: close\r\n\r\n");
   });
 
-test(
+NodeTest.test(
   "forwards loopback HTTP and stops on SIGTERM",
-  { skip: process.platform !== "darwin", timeout: TEST_TIMEOUT_MS },
+  { skip: skipUnlessDarwin, timeout: TEST_TIMEOUT_MS },
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), "t3-local-domain-listener-"));
-    const binaryPath = join(directory, "local-domain-listener");
-    const upstream = createServer((_request, response) => response.end("forwarded"));
+    const directory = await NodeFSP.mkdtemp(
+      NodePath.join(NodeOS.tmpdir(), "t3-local-domain-listener-"),
+    );
+    const binaryPath = NodePath.join(directory, "local-domain-listener");
+    const upstream = NodeHttp.createServer((_request, response) => response.end("forwarded"));
     const upstreamPort = await listen(upstream);
     const listenerPort = await freePort();
     let listener;
 
     try {
       await run("xcrun", ["--sdk", "macosx", "swiftc", sourcePath, "-o", binaryPath]);
-      listener = spawn(binaryPath, [
+      listener = NodeChildProcess.spawn(binaryPath, [
         "--listen-port",
         String(listenerPort),
         "--target-port",
@@ -92,30 +99,32 @@ test(
       await waitForReady(listener);
 
       const response = await fetch(`http://127.0.0.1:${listenerPort}`);
-      assert.equal(await response.text(), "forwarded");
+      NodeAssert.equal(await response.text(), "forwarded");
 
       listener.kill("SIGTERM");
-      const [code, signal] = await once(listener, "exit");
-      assert.equal(code, 0);
-      assert.equal(signal, null);
+      const [code, signal] = await NodeEvents.once(listener, "exit");
+      NodeAssert.equal(code, 0);
+      NodeAssert.equal(signal, null);
     } finally {
       if (listener?.exitCode === null) {
         listener.kill("SIGTERM");
-        await once(listener, "exit");
+        await NodeEvents.once(listener, "exit");
       }
       await new Promise((resolve) => upstream.close(resolve));
-      await rm(directory, { recursive: true, force: true });
+      await NodeFSP.rm(directory, { recursive: true, force: true });
     }
   },
 );
 
-test(
+NodeTest.test(
   "keeps the reverse stream open after the client ends its request",
-  { skip: process.platform !== "darwin", timeout: TEST_TIMEOUT_MS },
+  { skip: skipUnlessDarwin, timeout: TEST_TIMEOUT_MS },
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), "t3-local-domain-listener-"));
-    const binaryPath = join(directory, "local-domain-listener");
-    const upstream = createServer((_request, response) =>
+    const directory = await NodeFSP.mkdtemp(
+      NodePath.join(NodeOS.tmpdir(), "t3-local-domain-listener-"),
+    );
+    const binaryPath = NodePath.join(directory, "local-domain-listener");
+    const upstream = NodeHttp.createServer((_request, response) =>
       response.end("forwarded after write end"),
     );
     const upstreamPort = await listen(upstream);
@@ -124,7 +133,7 @@ test(
 
     try {
       await run("xcrun", ["--sdk", "macosx", "swiftc", sourcePath, "-o", binaryPath]);
-      listener = spawn(binaryPath, [
+      listener = NodeChildProcess.spawn(binaryPath, [
         "--listen-port",
         String(listenerPort),
         "--target-port",
@@ -133,14 +142,14 @@ test(
       await waitForReady(listener);
 
       const response = await requestAfterWriteEnd(listenerPort);
-      assert.match(response, /forwarded after write end/);
+      NodeAssert.match(response, /forwarded after write end/);
     } finally {
       if (listener?.exitCode === null) {
         listener.kill("SIGTERM");
-        await once(listener, "exit");
+        await NodeEvents.once(listener, "exit");
       }
       await new Promise((resolve) => upstream.close(resolve));
-      await rm(directory, { recursive: true, force: true });
+      await NodeFSP.rm(directory, { recursive: true, force: true });
     }
   },
 );

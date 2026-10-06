@@ -1,5 +1,4 @@
-// @effect-diagnostics nodeBuiltinImport:off - the packaged macOS sidecar needs Node's child process API.
-import { spawn, type ChildProcess } from "node:child_process";
+import * as NodeChildProcess from "node:child_process";
 
 import { LOCAL_DOMAIN_PROXY_PORT } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -29,17 +28,17 @@ export class DesktopLocalDomainListener extends Context.Service<
 >()("@t3tools/desktop/app/DesktopLocalDomainListener") {}
 
 const waitForReady = (binaryPath: string) =>
-  Effect.callback<ChildProcess | null>((resume) => {
-    let child: ChildProcess | undefined;
+  Effect.callback<NodeChildProcess.ChildProcess | null>((resume) => {
+    let child: NodeChildProcess.ChildProcess | undefined;
     let settled = false;
-    const finish = (result: ChildProcess | null) => {
+    const finish = (result: NodeChildProcess.ChildProcess | null) => {
       if (settled) return;
       settled = true;
       resume(Effect.succeed(result));
     };
 
     try {
-      child = spawn(
+      child = NodeChildProcess.spawn(
         binaryPath,
         ["--listen-port", "80", "--target-port", String(LOCAL_DOMAIN_PROXY_PORT)],
         {
@@ -75,7 +74,7 @@ export const layer = Layer.effect(
       "local-domain-listener",
       LOCAL_DOMAIN_LISTENER_BINARY_NAME,
     );
-    let child: ChildProcess | undefined;
+    let child: NodeChildProcess.ChildProcess | undefined;
     let ready = false;
 
     const start = Effect.gen(function* () {

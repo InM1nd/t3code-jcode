@@ -42,7 +42,7 @@ export function LocalDomainsPortControls({
     <div className="flex w-full items-center gap-2 border-t border-border/40 pt-2">
       <Input
         aria-label={`Local domain for port ${server.port}`}
-        className="max-w-64 font-mono"
+        className="max-w-64"
         value={domainDraft}
         onChange={(event) => setDomainDraft(event.target.value)}
       />
