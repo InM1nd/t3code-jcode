@@ -8,6 +8,7 @@ import {
   AuthRelayWriteScope,
   AuthReviewWriteScope,
   AuthTerminalOperateScope,
+  LOCAL_DOMAINS_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   type AuthEnvironmentScope,
   EnvironmentAuthorizationError,
@@ -217,6 +218,9 @@ export const RPC_REQUIRED_SCOPES = {
   [BOARD_WS_METHODS.boardArchive]: AuthOrchestrationOperateScope,
   [BOARD_WS_METHODS.boardRestore]: AuthOrchestrationOperateScope,
   [BOARD_WS_METHODS.boardDelete]: AuthOrchestrationOperateScope,
+  [LOCAL_DOMAINS_WS_METHODS.list]: AuthOrchestrationReadScope,
+  [LOCAL_DOMAINS_WS_METHODS.publish]: AuthOrchestrationOperateScope,
+  [LOCAL_DOMAINS_WS_METHODS.unpublish]: AuthOrchestrationOperateScope,
 } as const satisfies Readonly<Record<WsRpcMethod, AuthEnvironmentScope>>;
 
 export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope {

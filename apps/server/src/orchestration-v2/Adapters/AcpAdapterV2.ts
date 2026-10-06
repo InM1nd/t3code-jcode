@@ -151,6 +151,10 @@ export interface AcpAdapterV2RuntimeInput {
   readonly onTermination: NonNullable<AcpSessionRuntime.AcpSessionRuntimeOptions["onTermination"]>;
   readonly onOutgoingResponseFailure?: AcpSessionRuntime.AcpSessionRuntimeOptions["onOutgoingResponseFailure"];
   readonly onOutgoingResponse?: AcpSessionRuntime.AcpSessionRuntimeOptions["onOutgoingResponse"];
+  /** App thread this process belongs to, when the session already has one. */
+  readonly threadId?: ThreadId | null;
+  /** Model the session opened with. Spawn-time flavors (Jcode) read it here. */
+  readonly launchModelSelection?: ModelSelection;
 }
 
 export type AcpAdapterV2NativeLogging = Pick<
@@ -2082,6 +2086,8 @@ export function makeAcpAdapterV2(
               : { processEnvironment: mcpContext.processEnvironment }),
             ...(resumeSessionId === undefined ? {} : { resumeSessionId }),
             interruptPromptOnCancel: flavor.interruptPromptOnCancel ?? false,
+            threadId,
+            launchModelSelection: input.modelSelection,
             clientCapabilities: {
               fs: {
                 readTextFile: flavor.clientFileSystem !== undefined,
