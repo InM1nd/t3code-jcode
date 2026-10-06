@@ -21,6 +21,7 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import { TandemDraftWorkspacePicker } from "../tandem/TandemDraftWorkspacePicker";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -627,6 +628,9 @@ export const BranchToolbar = memo(function BranchToolbar({
             onEnvModeChange={onEnvModeChange}
           />
         ) : null}
+        {draftId && panelSection !== "branch" ? (
+          <TandemDraftWorkspacePicker draftId={draftId} />
+        ) : null}
         {panelSection !== "workspace" ? (
           <BranchToolbarBranchSelector
             displayMode="panel"
@@ -723,6 +727,8 @@ export const BranchToolbar = memo(function BranchToolbar({
           ) : null}
         </div>
       ) : null}
+
+      {draftId ? <TandemDraftWorkspacePicker draftId={draftId} /> : null}
 
       {composerControlsHostRef ? (
         // The host takes whatever the workspace and branch controls leave

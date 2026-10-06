@@ -5,6 +5,7 @@
 - [Install T3 Code](./user/install.md)
 - [Messages and context](./user/composer.md)
 - [Working with threads](./user/thread-sidebar.md)
+- [Continuing a chat](./user/thread-handoff.md)
 - [Permission modes](./user/permission-modes.md)
 - [Work modes](./user/work-modes.md)
 - [Terminal history](./user/terminal.md)
