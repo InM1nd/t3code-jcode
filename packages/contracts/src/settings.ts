@@ -21,6 +21,7 @@ import {
   ProviderOptionSelections,
 } from "./model.ts";
 import { ModelSelection } from "./modelSelection.ts";
+import { DEFAULT_JCODE_ASCII_ANIMATION, JcodeAsciiAnimation } from "./jcodeAsciiAnimation.ts";
 import { ProjectScript } from "./project.ts";
 import { DEFAULT_RUNTIME_MODE, RuntimeMode } from "./providerPolicy.ts";
 import { BrowserProfile, BrowserProfileId, DEFAULT_BROWSER_PROFILE_ID } from "./browserProfile.ts";
@@ -499,6 +500,9 @@ export const ClientSettingsSchema = Schema.Struct({
   snapShotFlash: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   snapShotAnimations: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  jcodeAsciiAnimation: JcodeAsciiAnimation.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_JCODE_ASCII_ANIMATION)),
+  ),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -751,6 +755,54 @@ export const GrokSettings = makeProviderSettingsSchema(
   },
 );
 export type GrokSettings = typeof GrokSettings.Type;
+
+export const JcodeSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("jcode").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description: "Path to the jcode CLI binary.",
+        providerSettingsForm: { placeholder: "jcode", clearWhenEmpty: "omit" },
+      }),
+    ),
+    model: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Model",
+        description: "Optional jcode model passed at spawn (for example claude-opus-5).",
+        providerSettingsForm: { placeholder: "claude-opus-5", clearWhenEmpty: "omit" },
+      }),
+    ),
+    providerProfile: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Provider profile",
+        description: "Optional jcode --provider-profile from ~/.jcode/config.toml.",
+        providerSettingsForm: { placeholder: "my-gateway", clearWhenEmpty: "omit" },
+      }),
+    ),
+    jcodeProvider: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Jcode provider",
+        description: "Optional jcode -p provider (claude, openai, or another configured backend).",
+        providerSettingsForm: { placeholder: "auto", clearWhenEmpty: "omit" },
+      }),
+    ),
+    customModels: Schema.Array(CustomModelSetting).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  {
+    order: ["binaryPath", "model", "jcodeProvider", "providerProfile"],
+  },
+);
+export type JcodeSettings = typeof JcodeSettings.Type;
 
 /**
  * Antigravity ACP auth methods. Personal and Enterprise open a Google sign-in
@@ -1409,6 +1461,7 @@ export const ServerSettings = Schema.Struct({
     claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    jcode: JcodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     pi: PiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     antigravity: AntigravitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -1580,6 +1633,15 @@ const GrokSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(CustomModelSetting)),
 });
 
+const JcodeSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  model: Schema.optionalKey(TrimmedString),
+  providerProfile: Schema.optionalKey(TrimmedString),
+  jcodeProvider: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(CustomModelSetting)),
+});
+
 const AntigravitySettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   authMethod: Schema.optionalKey(AntigravityAuthMethod),
@@ -1720,6 +1782,7 @@ export const ServerSettingsPatch = Schema.Struct({
       claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
       cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
+      jcode: Schema.optionalKey(JcodeSettingsPatch),
       pi: Schema.optionalKey(PiSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       antigravity: Schema.optionalKey(AntigravitySettingsPatch),
@@ -1837,5 +1900,6 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotFlash: Schema.optionalKey(Schema.Boolean),
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
   wordWrap: Schema.optionalKey(Schema.Boolean),
+  jcodeAsciiAnimation: Schema.optionalKey(JcodeAsciiAnimation),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

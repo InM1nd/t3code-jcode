@@ -6,6 +6,7 @@ import { useState } from "react";
 import { resolveOfficialAcpRegistryIconUrl } from "@t3tools/contracts";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 import { AppText as Text } from "./AppText";
+import { JcodeProviderMark } from "./JcodeProviderMark";
 
 type ProviderIconProps = {
   readonly provider: string | null | undefined;
@@ -90,6 +91,10 @@ export function ProviderIcon(props: ProviderIconProps) {
         />
       </Svg>
     );
+  }
+
+  if (props.provider === "jcode") {
+    return <JcodeProviderMark color={mono} size={size} />;
   }
 
   if (props.provider === "grok") {

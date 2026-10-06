@@ -280,6 +280,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["long lines code blocks tables diffs file previews"],
   },
   {
+    id: "empty-chat-animation",
+    title: "Empty chat animation",
+    to: "/settings/appearance",
+    searchTerms: ["ascii jcode blob logo idle"],
+  },
+  {
     id: "composer-context",
     title: "Composer context",
     to: "/settings/appearance",

@@ -60,6 +60,7 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
+    "textmode.js": "^0.17.1",
     "unbash": "^5.0.0",
     "zustand": "^5.0.11"
   },

@@ -398,6 +398,10 @@
     "./codexAuthHandoff": {
       "types": "./src/codexAuthHandoff.ts",
       "import": "./src/codexAuthHandoff.ts"
+    },
+    "./jcodeInnerProvider": {
+      "types": "./src/jcodeInnerProvider.ts",
+      "import": "./src/jcodeInnerProvider.ts"
     }
   },
   "scripts": {
