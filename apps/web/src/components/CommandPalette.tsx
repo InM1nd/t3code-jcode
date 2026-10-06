@@ -90,7 +90,7 @@ import { useTheme } from "../hooks/useTheme";
 import { useCustomThemes } from "../hooks/useCustomThemes";
 import { useEnvironmentThemeDefinitions } from "../hooks/useEnvironmentTheme";
 import { BUILT_IN_THEMES } from "@t3tools/shared/themePalettes";
-import { getThemeDefinition } from "../themePalette";
+import { getThemeDefinition, TANDEM_THEMES } from "../themePalette";
 import {
   STANDARD_THEME_CARDS,
   getThemeCardDefinition,
@@ -804,7 +804,7 @@ function OpenCommandPaletteDialog(props: {
     const seen = new Set<string>();
     return [
       ...STANDARD_THEME_CARDS.map((card) => ({ ...card, id: null })),
-      ...[...BUILT_IN_THEMES, ...customThemes, ...environmentThemes]
+      ...[...BUILT_IN_THEMES, ...TANDEM_THEMES, ...customThemes, ...environmentThemes]
         .filter((definition) => {
           if (seen.has(definition.id)) return false;
           seen.add(definition.id);

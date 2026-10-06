@@ -20,6 +20,8 @@ import {
   type ThemeVariants,
 } from "@t3tools/shared/themePalettes";
 
+import { buildTandemThemes } from "./tandem/tandemThemes.ts";
+
 export { EMBER_THEME, GROVE_THEME, IRIS_THEME, OCEAN_THEME, T3_CHAT_THEME, THEME_COLOR_ROLES };
 export type { ThemeAppearance, ThemeColorRole, ThemeColors, ThemeDefinition, ThemeVariants };
 
@@ -1067,7 +1069,12 @@ export function updateThemeColorFamily(
   }
 }
 
-const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = BUILT_IN_THEMES;
+export const TANDEM_THEMES = buildTandemThemes(createVividThemeColors, getStandardThemeColors);
+
+const BUILT_IN_THEME_DEFINITIONS: ReadonlyArray<ThemeDefinition> = [
+  ...BUILT_IN_THEMES,
+  ...TANDEM_THEMES,
+];
 
 export function getThemeDefinition(theme: ThemePreference): ThemeDefinition | null {
   const themeId = themeIdFromPreference(theme);
