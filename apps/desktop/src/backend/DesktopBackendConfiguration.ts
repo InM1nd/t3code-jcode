@@ -1,5 +1,6 @@
 import * as NodeOS from "node:os";
 
+import { LOCAL_DOMAIN_PROXY_PORT } from "@t3tools/contracts";
 import { parsePersistedServerObservabilitySettings } from "@t3tools/shared/serverSettings";
 import { currentDesktopBootstrapToken } from "@t3tools/shared/desktopBootstrapToken";
 import * as Clock from "effect/Clock";
@@ -18,6 +19,7 @@ import serverPackageJson from "../../../server/package.json" with { type: "json"
 
 import * as DesktopBackendManager from "./DesktopBackendManager.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
+import * as DesktopLocalDomainListener from "../app/DesktopLocalDomainListener.ts";
 import * as DesktopServerExposure from "./DesktopServerExposure.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopWslEnvironment from "../wsl/DesktopWslEnvironment.ts";
@@ -93,6 +95,7 @@ const DESKTOP_BACKEND_ENV_NAMES = [
   "T3CODE_DESKTOP_HTTPS_ENDPOINTS",
   "T3CODE_TAILSCALE_SERVE",
   "T3CODE_TAILSCALE_SERVE_PORT",
+  "T3CODE_LOCAL_DOMAIN_PUBLIC_PORT",
 ] as const;
 
 // Env vars that the WSL backend needs but Windows process.env won't forward
@@ -266,6 +269,7 @@ interface SharedBootstrapInput {
   readonly bootstrapToken: string;
   readonly bootstrapSecret: string;
   readonly observabilitySettings: BackendObservabilitySettings;
+  readonly localDomainPublicPort: number;
 }
 
 // What the launch runs inside the distro. The staged runtime is the release's
@@ -592,6 +596,7 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
       env: {
         ...backendChildEnvPatch(),
         ELECTRON_RUN_AS_NODE: "1",
+        T3CODE_LOCAL_DOMAIN_PUBLIC_PORT: String(input.localDomainPublicPort),
       },
       // Primary wants process.env (PATH, dev-runner's T3CODE_HOME, etc.).
       extendEnv: true,
@@ -758,6 +763,7 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
       ...backendChildEnvPatch(),
       ...forwardedEnv,
       ...(wslEnv !== undefined ? { WSLENV: wslEnv } : {}),
+      T3CODE_LOCAL_DOMAIN_PUBLIC_PORT: String(input.localDomainPublicPort),
     },
     // env is already a complete process.env minus T3CODE_HOME; pass it
     // verbatim instead of letting the spawner re-merge process.env on top.
@@ -836,6 +842,9 @@ export const make = Effect.gen(function* () {
   const wslEnvironment = yield* DesktopWslEnvironment.DesktopWslEnvironment;
   const wslServerTree = yield* DesktopWslServerTree.DesktopWslServerTree;
   const settings = yield* DesktopAppSettings.DesktopAppSettings;
+  const localDomainListener = yield* Effect.serviceOption(
+    DesktopLocalDomainListener.DesktopLocalDomainListener,
+  );
   const crypto = yield* Crypto.Crypto;
   // SynchronizedRef (not a plain Ref) so the read-generate-write is atomic.
   // crypto.randomBytes is a yield point, and resolvePrimary + resolveWsl can
@@ -873,10 +882,15 @@ export const make = Effect.gen(function* () {
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(DesktopEnvironment.DesktopEnvironment, environment),
     );
+    const localDomainPublicPort = yield* Option.match(localDomainListener, {
+      onNone: () => Effect.succeed(LOCAL_DOMAIN_PROXY_PORT),
+      onSome: (listener) => listener.publicPort,
+    });
     return {
       bootstrapToken,
       bootstrapSecret,
       observabilitySettings,
+      localDomainPublicPort,
     } satisfies SharedBootstrapInput;
   });
 
