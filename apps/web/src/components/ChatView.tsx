@@ -683,6 +683,9 @@ const PreviewPanel = lazy(() =>
   import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
 const DiffPanel = lazy(() => import("./DiffPanel"));
+const ProjectBoardPanel = lazy(() =>
+  import("./ProjectBoardPanel").then((module) => ({ default: module.ProjectBoardPanel })),
+);
 const selectAutoShowFloatingPreview = (settings: { browserAutoShowFloatingPreview: boolean }) =>
   settings.browserAutoShowFloatingPreview;
 const DevicePanel = lazy(() =>
@@ -4246,6 +4249,11 @@ export default function ChatView(props: ChatViewProps) {
       useRightPanelStore.getState().toggle(activeThreadRef, "diff");
     }
   }, [activeThreadRef, diffOpen, isServerThread, onDiffPanelOpen]);
+  const onToggleBoard = useCallback(() => {
+    if (activeThreadRef && activeProject) {
+      useRightPanelStore.getState().toggle(activeThreadRef, "board");
+    }
+  }, [activeProject, activeThreadRef]);
 
   const needsLoadBalancing = automaticEnvironment && !draftThread?.loadBalancedEnvironmentId;
   const loadBalancingCandidates = useMemo(
@@ -5266,6 +5274,10 @@ export default function ChatView(props: ChatViewProps) {
   const addFilesSurface = useCallback(() => {
     if (!activeThreadRef || !activeProject) return;
     useRightPanelStore.getState().open(activeThreadRef, "files");
+  }, [activeProject, activeThreadRef]);
+  const addBoardSurface = useCallback(() => {
+    if (!activeThreadRef || !activeProject) return;
+    useRightPanelStore.getState().open(activeThreadRef, "board");
   }, [activeProject, activeThreadRef]);
   const supportsThreadPullRequests =
     serverConfig?.environment.capabilities.threadPullRequests === true;
@@ -7895,6 +7907,13 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
 
+      if (command === "board.toggle") {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggleBoard();
+        return;
+      }
+
       if (command === "modelPicker.toggle") {
         event.preventDefault();
         event.stopPropagation();
@@ -8007,6 +8026,7 @@ export default function ChatView(props: ChatViewProps) {
     isServerThread,
     onInterrupt,
     onToggleDiff,
+    onToggleBoard,
     pinThread,
     settleThread,
     supportsPinning,
@@ -10627,6 +10647,14 @@ export default function ChatView(props: ChatViewProps) {
           workspaceMutationId={workspaceMutationId}
         />
       </Suspense>
+    ) : renderedRightPanelSurface?.kind === "board" && activeProject ? (
+      <Suspense fallback={null}>
+        <ProjectBoardPanel
+          environmentId={activeThread.environmentId}
+          projectId={activeProject.id}
+          composerTarget={composerDraftTarget}
+        />
+      </Suspense>
     ) : renderedRightPanelSurface?.kind === "pull-request" && !pullRequestsCapabilityKnown ? (
       <PullRequestDetailGhost />
     ) : renderedRightPanelSurface?.kind === "pull-request" && !supportsPullRequests ? (
@@ -11559,6 +11587,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddTerminal={addTerminalSurface}
           onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
+          onAddBoard={addBoardSurface}
           onAddPullRequest={addPullRequestSurface}
           onAddPullRequests={addPullRequestsSurface}
           onAddDevice={addDeviceSurface}
@@ -11566,6 +11595,7 @@ export default function ChatView(props: ChatViewProps) {
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
+          boardAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={pullRequestsSurfaceAvailable}
           deviceAvailable={activeThreadRef !== null}
@@ -11614,6 +11644,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddTerminal={addTerminalSurface}
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
+            onAddBoard={addBoardSurface}
             onAddPullRequest={addPullRequestSurface}
             onAddPullRequests={addPullRequestsSurface}
             onAddDevice={addDeviceSurface}
@@ -11621,6 +11652,7 @@ export default function ChatView(props: ChatViewProps) {
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}
+            boardAvailable={activeProject !== null}
             pullRequestAvailable={pullRequestSurfaceAvailable}
             pullRequestsAvailable={pullRequestsSurfaceAvailable}
             deviceAvailable={activeThreadRef !== null}
