@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { runForkMigrations } from "./ForkMigrations.ts";
+import { repairDivergentUpstreamMigrations, runForkMigrations } from "./ForkMigrations.ts";
 import { runMigrations } from "./Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
@@ -153,7 +153,7 @@ it.layer(memory)("ForkMigrations divergent ledger", (it) => {
         )
       `;
 
-      yield* runForkMigrations();
+      yield* repairDivergentUpstreamMigrations;
 
       const sessions = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(auth_sessions)
@@ -184,6 +184,12 @@ it.layer(memory)("ForkMigrations divergent ledger", (it) => {
         WHERE project_id = 'project-1'
       `;
       assert.equal(project?.default_model_selection_json, null);
+
+      assert.deepStrictEqual(yield* runMigrations(), []);
+      assert.deepStrictEqual(yield* runForkMigrations(), [
+        [1, "RepairDivergentUpstreamMigrations"],
+        [2, "ProjectionProjectsBoardItemsColumn"],
+      ]);
 
       const projects = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_projects)

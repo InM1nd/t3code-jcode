@@ -5,7 +5,11 @@
  * `ProjectionProjectsBoardItems`. Those rows would make a V2 startup skip
  * `041_AuthSessionClientConnection` and `044_ClearAutomaticProjectModelDefaults`.
  *
- * Run this once, immediately after `runMigrations`.
+ * `repairDivergentUpstreamMigrations` runs before `runMigrations`. The upstream
+ * runner warns when recorded names disagree, and it will not re-run an id it
+ * has already stored, so the repair has to apply those two migrations and
+ * rewrite the names first. `runForkMigrations` then records that repair and
+ * adds the board column.
  */
 
 import * as Effect from "effect/Effect";
@@ -31,8 +35,17 @@ const divergentUpstreamRepairs = [
   },
 ] as const;
 
-const repairDivergentUpstreamMigrations = Effect.gen(function* () {
+export const repairDivergentUpstreamMigrations = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const ledger = yield* sql<{ readonly name: string }>`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'effect_sql_migrations'
+  `;
+  if (ledger.length === 0) {
+    return;
+  }
+
   const recorded = yield* sql<{ readonly migration_id: number; readonly name: string }>`
     SELECT migration_id, name
     FROM effect_sql_migrations
