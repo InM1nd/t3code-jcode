@@ -30,5 +30,3 @@ export const localDomainHandlers = Effect.gen(function* () {
     [LOCAL_DOMAINS_WS_METHODS.unpublish]: (input) => domains.unpublish(input),
   });
 });
-
-export const LocalDomainsWsRpcLayer = LocalDomainsRpcGroup.toLayer(localDomainHandlers);

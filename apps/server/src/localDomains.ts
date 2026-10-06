@@ -45,7 +45,7 @@ export function normalizeLocalDomain(value: string): string | null {
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.localhost$/.test(domain) ? domain : null;
 }
 
-export function suggestedLocalDomain(port: number): string {
+function suggestedLocalDomain(port: number): string {
   return `local-${port}.localhost`;
 }
 
