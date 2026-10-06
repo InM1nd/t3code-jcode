@@ -48,6 +48,8 @@ import { WorktreeToolkit } from "./toolkits/worktree/tools.ts";
 import * as WorktreeMcpService from "./WorktreeMcpService.ts";
 import * as PullRequestsHandlers from "./toolkits/pullRequests/handlers.ts";
 import { PullRequestsToolkit } from "./toolkits/pullRequests/tools.ts";
+import * as BoardHandlers from "./toolkits/board/handlers.ts";
+import { BoardToolkit } from "./toolkits/board/tools.ts";
 import * as DeviceHandlers from "./toolkits/device/handlers.ts";
 import {
   DeviceScreenshotTool,
@@ -725,6 +727,10 @@ const layerProjectRegistration = McpServer.toolkit(ProjectToolkit).pipe(
   Layer.provide(ProjectHandlers.layer),
 );
 
+const layerBoardRegistration = McpServer.toolkit(BoardToolkit).pipe(
+  Layer.provide(BoardHandlers.layer),
+);
+
 const layerAttachmentRegistration = McpServer.toolkit(AttachmentToolkit).pipe(
   Layer.provide(AttachmentHandlers.layer),
 );
@@ -759,6 +765,7 @@ export const layer = Layer.mergeAll(
   layerThreadToolkit,
   layerAttachmentRegistration,
   layerProjectRegistration,
+  layerBoardRegistration,
   layerEnvironmentRegistration,
   layerPreviewControlsRegistration,
   layerWorktreeToolkitRegistration,
