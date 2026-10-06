@@ -2683,6 +2683,7 @@ it.layer(
                 claudeAgent: { enabled: false },
                 cursor: { enabled: false },
                 grok: { enabled: false },
+                jcode: { enabled: false },
                 opencode: { enabled: false },
               },
             }),
@@ -2951,6 +2952,7 @@ it.layer(
               "codex",
               "cursor",
               "grok",
+              "jcode",
               "opencode",
               "pi",
             ]);

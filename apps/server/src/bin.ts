@@ -10,6 +10,19 @@
 import { isEntrypoint } from "./entrypoint.ts";
 
 if (
+  process.argv.includes("__jcode-mcp-stdio") &&
+  isEntrypoint({
+    moduleUrl: import.meta.url,
+    entryPath: process.argv[1],
+    runtimeMain: import.meta.main,
+  })
+) {
+  const { runJcodeMcpStdioBridge } = await import("./mcp/jcodeMcpStdioBridge.ts");
+  await runJcodeMcpStdioBridge();
+  process.exit(0);
+}
+
+if (
   isEntrypoint({
     moduleUrl: import.meta.url,
     entryPath: process.argv[1],
