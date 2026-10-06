@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - the packaged macOS sidecar needs Node's child process API.
 import * as NodeChildProcess from "node:child_process";
 
 import { LOCAL_DOMAIN_PROXY_PORT } from "@t3tools/contracts";
