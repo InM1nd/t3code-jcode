@@ -278,6 +278,10 @@ import {
 } from "./V2LifecycleRow";
 import { SecretRequestCard } from "./SecretRequestCard";
 import { TimelineSystemDivider } from "./TimelineSystemDivider";
+import {
+  WorkspaceScopeWarningNote,
+  workspaceScopeMismatchPath,
+} from "../../workspaceScopeWarningUi";
 
 import { SkillChipIcon, SkillInlineText } from "./SkillInlineText";
 import * as DateTime from "effect/DateTime";
@@ -304,6 +308,7 @@ interface TimelineRowSharedState {
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
+  threadWorktreePath: string | null;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   /** Provider snapshots for resolving handoff endpoints to icons + model names. */
   providerStatuses: ReadonlyArray<ServerProvider>;
@@ -469,6 +474,7 @@ interface MessagesTimelineProps {
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
+  threadWorktreePath?: string | null;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   providerStatuses: ReadonlyArray<ServerProvider>;
   runs: ReadonlyArray<HandoffTimelineRun>;
@@ -544,6 +550,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   resolvedTheme,
   timestampFormat,
   workspaceRoot,
+  threadWorktreePath = null,
   skills = EMPTY_TIMELINE_SKILLS,
   providerStatuses,
   runs: runsProp,
@@ -1160,6 +1167,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
+      threadWorktreePath,
       skills,
       providerStatuses,
       runs,
@@ -1195,6 +1203,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
+      threadWorktreePath,
       skills,
       providerStatuses,
       runs,
@@ -5028,6 +5037,11 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: WorkEntryRowP
 function WorkEntryLogRow(props: WorkEntryRowProps) {
   const { workEntry, workspaceRoot, displayLabel } = props;
   const ctx = use(TimelineRowCtx);
+  const workspaceScopeMismatch = workspaceScopeMismatchPath({
+    worktreePath: ctx.threadWorktreePath,
+    itemType: workEntry.itemType,
+    toolData: workEntry.toolData,
+  });
   const { threadRef, onImageExpand, timestampFormat } = ctx;
   const { retryableWorkspacePreparationRunIds, onRetryWorkspacePreparation } = ctx;
   const createdThread =
@@ -5405,6 +5419,9 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
             </>
           )}
         </WorkLogDetails>
+      ) : null}
+      {workspaceScopeMismatch ? (
+        <WorkspaceScopeWarningNote usedPath={workspaceScopeMismatch} />
       ) : null}
     </WorkLogRow>
   );

@@ -63,6 +63,7 @@ import * as DeviceService from "./device/DeviceService.ts";
 import * as DeviceHubProxy from "./device/DeviceHubProxy.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
+import { registerTurnPortScan } from "./orchestration-v2/turnContextPrompt.ts";
 import * as ProcessRunner from "./processRunner.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -552,6 +553,12 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
   ProviderUsageLimitsIngestion.layer,
   layerProviderInstallationRefresh,
   ReplayMarkers.layer,
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const ports = yield* PortScanner.PortDiscovery;
+      registerTurnPortScan((urls) => ports.scan(urls));
+    }),
+  ),
 ).pipe(
   // Core Services
   Layer.provideMerge(layerOrchestrationApplication),

@@ -48,6 +48,7 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import { makeProviderFailure } from "./ProviderFailure.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import { applyTurnContext, turnPortScan } from "./turnContextPrompt.ts";
 import {
   isRestartNoteContinuation,
   pendingRestartCancelledBackgroundWork,
@@ -944,9 +945,20 @@ export const layer: Layer.Layer<
       const routableSubagents = projection.subagents.filter((subagent) =>
         RunExecutionService.canRouteRelatedSubagent(subagent.status),
       );
-      const userText = projectComposerContextForProvider({
-        text: message.text,
-        records: message.context?.records ?? [],
+      const userText = yield* applyTurnContext({
+        text: projectComposerContextForProvider({
+          text: message.text,
+          records: message.context?.records ?? [],
+        }),
+        threadId: projection.thread.id,
+        worktreePath: projection.thread.worktreePath,
+        branch: projection.thread.branch,
+        portDiscovery: { scan: turnPortScan() },
+        getThreadTitle: (threadId) =>
+          projectionStore.getThreadShell(threadId).pipe(
+            Effect.map((shell) => shell?.title ?? null),
+            Effect.orElseSucceed(() => null),
+          ),
       });
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.

@@ -402,6 +402,10 @@
     "./jcodeInnerProvider": {
       "types": "./src/jcodeInnerProvider.ts",
       "import": "./src/jcodeInnerProvider.ts"
+    },
+    "./workspaceScope": {
+      "types": "./src/workspaceScope.ts",
+      "import": "./src/workspaceScope.ts"
     }
   },
   "scripts": {
