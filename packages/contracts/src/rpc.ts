@@ -12,6 +12,15 @@ import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
+  BoardArchiveRpc,
+  BoardDeleteRpc,
+  BoardHandoffRpc,
+  BoardListRpc,
+  BoardRestoreRpc,
+  BoardSubscribeRpc,
+  BoardUpsertRpc,
+} from "./projectBoardRpc.ts";
+import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
   ProviderAuthCancelInput,
@@ -1920,4 +1929,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeArchivedShellRpc,
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
+  BoardListRpc,
+  BoardSubscribeRpc,
+  BoardUpsertRpc,
+  BoardHandoffRpc,
+  BoardArchiveRpc,
+  BoardRestoreRpc,
+  BoardDeleteRpc,
 ).middleware(RpcScopeAuthorization);

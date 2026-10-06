@@ -100,6 +100,8 @@ import { readLocalApi } from "../localApi";
 import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { filesystemEnvironment } from "../state/filesystem";
 import { projectEnvironment } from "../state/projects";
+import { buildProjectBoardCommandItems } from "../projectBoardPalette";
+import { projectBoardItems } from "../state/projectBoard";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
 import { threadEnvironment } from "../state/threads";
@@ -737,7 +739,7 @@ function OpenCommandPaletteDialog(props: {
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
-  const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
+  const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeDraftId } =
     useHandleNewThread();
   const projects = useProjects();
   const referenceThreadRef =
@@ -1136,6 +1138,17 @@ function OpenCommandPaletteDialog(props: {
   const currentProjectEnvironmentId =
     activeThread?.environmentId ?? activeDraftThread?.environmentId ?? null;
   const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
+  const boardAtom = useMemo(
+    () =>
+      currentProjectEnvironmentId && currentProjectId
+        ? projectBoardItems({
+            environmentId: currentProjectEnvironmentId,
+            input: { projectId: currentProjectId },
+          })
+        : null,
+    [currentProjectEnvironmentId, currentProjectId],
+  );
+  const boardQuery = useEnvironmentQuery(boardAtom);
   // Where "without a project" threads start: the current environment when it
   // offers them, otherwise the first connected one that does.
   const scratchTargetEnvironmentId = scratchEnvironmentId(
@@ -1878,7 +1891,15 @@ function OpenCommandPaletteDialog(props: {
     pushPaletteView,
   ]);
 
-  const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [
+    ...buildProjectBoardCommandItems({
+      activeThread,
+      composerTarget: activeThread
+        ? scopeThreadRef(activeThread.environmentId, activeThread.id)
+        : routeDraftId,
+      items: boardQuery.data?.items ?? [],
+    }),
+  ];
 
   if (projects.length > 0) {
     const activeProjectTitle =

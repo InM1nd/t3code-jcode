@@ -139,6 +139,10 @@
       "types": "./src/String.ts",
       "import": "./src/String.ts"
     },
+    "./projectBoard": {
+      "types": "./src/projectBoard.ts",
+      "import": "./src/projectBoard.ts"
+    },
     "./projectScripts": {
       "types": "./src/projectScripts.ts",
       "import": "./src/projectScripts.ts"

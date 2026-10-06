@@ -120,6 +120,8 @@ import * as ThreadLaunchService from "./orchestration-v2/ThreadLaunchService.ts"
 import * as ThreadMessageIntake from "./orchestration-v2/ThreadMessageIntake.ts";
 import * as IdAllocator from "./orchestration-v2/IdAllocator.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
+import * as BoardService from "./projectBoard/BoardService.ts";
+import { makeBoardRpcHandlers } from "./projectBoard/boardRpcHandlers.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
 import {
   archivedShellStreamItemFromThreadShell,
@@ -1217,6 +1219,7 @@ const layerWsRpc = (
       const threadLaunch = yield* ThreadLaunchService.ThreadLaunchService;
       const providerSessionManager = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
+      const board = yield* BoardService.BoardService;
       const secretRequests = yield* SecretRequests.SecretRequests;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
@@ -3788,6 +3791,7 @@ const layerWsRpc = (
             ),
             { "rpc.aggregate": "server" },
           ),
+        ...makeBoardRpcHandlers(board),
       });
       return handlers;
     }),
@@ -3798,6 +3802,7 @@ export const layer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const board = yield* BoardService.BoardService;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3853,6 +3858,7 @@ export const layer = Layer.unwrap(
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+              Layer.provide(Layer.succeed(BoardService.BoardService, board)),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(

@@ -44,6 +44,8 @@ export * from "./threadTitle.ts";
 export * from "./t3ProjectFile.ts";
 export * from "./editor.ts";
 export * from "./project.ts";
+export * from "./projectBoard.ts";
+export * from "./projectBoardRpc.ts";
 export * from "./filesystem.ts";
 export * from "./agentSessions.ts";
 export * from "./assets.ts";

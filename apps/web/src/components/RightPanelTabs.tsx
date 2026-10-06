@@ -21,6 +21,7 @@ import {
   FileDiff,
   Files,
   Globe2,
+  ListTodo,
   Plus,
   TerminalSquare,
 } from "lucide-react";
@@ -123,6 +124,7 @@ interface RightPanelTabsProps {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  onAddBoard?: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -130,6 +132,7 @@ interface RightPanelTabsProps {
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
   deviceAvailable: boolean;
+  boardAvailable?: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   children: ReactNode;
 }
@@ -158,6 +161,7 @@ const SURFACE_DISABLED_REASONS = {
   pullRequest: "This thread's branch has no pull request yet.",
   pullRequests: "No linked pull requests are available for this thread.",
   device: "Devices are only available from a thread.",
+  board: "The project board is only available when a project is open.",
 } as const;
 
 /** Overlays that must win over the launcher's letter shortcuts. */
@@ -181,6 +185,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequest: "No pull request on this branch yet.",
   pullRequests: "No linked pull requests available.",
   device: "Available from a thread.",
+  board: "Available when a project is open.",
 } as const;
 
 type TabContextMenuAction =
@@ -320,6 +325,7 @@ function RightPanelEmptyState(props: {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddDevice: () => void;
+  onAddBoard?: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -327,6 +333,7 @@ function RightPanelEmptyState(props: {
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
   deviceAvailable: boolean;
+  boardAvailable?: boolean;
 }) {
   // -1 means no highlight: it only appears on hover or arrow use.
   const [highlight, setHighlight] = useState(-1);
@@ -389,7 +396,19 @@ function RightPanelEmptyState(props: {
       disabledReason: SURFACE_UNAVAILABLE_HINTS.device,
       onClick: props.onAddDevice,
     },
-  ] as const;
+    ...(props.onAddBoard
+      ? [
+          {
+            label: "Board",
+            icon: ListTodo,
+            shortcut: "O",
+            available: props.boardAvailable === true,
+            disabledReason: SURFACE_UNAVAILABLE_HINTS.board,
+            onClick: props.onAddBoard,
+          },
+        ]
+      : []),
+  ];
 
   type SurfaceAction = (typeof actions)[number];
 
@@ -598,6 +617,8 @@ function surfaceTitle(
       return "Pull requests";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
+    case "board":
+      return "Board";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -687,6 +708,8 @@ function SurfaceIcon({
       ) : (
         <Smartphone className="size-3 shrink-0" />
       );
+    case "board":
+      return <ListTodo className="size-3 shrink-0" />;
   }
 }
 
@@ -889,7 +912,19 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       disabledReason: SURFACE_DISABLED_REASONS.device,
       onClick: props.onAddDevice,
     },
-  ] as const;
+    ...(props.onAddBoard
+      ? [
+          {
+            label: "Board",
+            icon: ListTodo,
+            shortcut: "O",
+            available: props.boardAvailable === true,
+            disabledReason: SURFACE_DISABLED_REASONS.board,
+            onClick: props.onAddBoard,
+          },
+        ]
+      : []),
+  ];
 
   const handleAddSurfaceMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const action = surfaceShortcutActionForKey(addSurfaceActions, event.nativeEvent);
@@ -1371,6 +1406,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequest={props.onAddPullRequest}
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
+            {...(props.onAddBoard ? { onAddBoard: props.onAddBoard } : {})}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}
@@ -1378,6 +1414,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             pullRequestAvailable={props.pullRequestAvailable}
             pullRequestsAvailable={props.pullRequestsAvailable}
             deviceAvailable={props.deviceAvailable}
+            {...(props.boardAvailable !== undefined
+              ? { boardAvailable: props.boardAvailable }
+              : {})}
           />
         ) : (
           props.children

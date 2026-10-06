@@ -1,5 +1,6 @@
 import {
   type DeviceListInput,
+  BOARD_WS_METHODS,
   AuthAccessReadScope,
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
@@ -209,6 +210,13 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.subscribeServerLifecycle]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeAuthAccess]: AuthAccessReadScope,
   [WS_METHODS.subscribeBackgroundPolicy]: AuthOrchestrationReadScope,
+  [BOARD_WS_METHODS.boardList]: AuthOrchestrationReadScope,
+  [BOARD_WS_METHODS.boardSubscribe]: AuthOrchestrationReadScope,
+  [BOARD_WS_METHODS.boardUpsert]: AuthOrchestrationOperateScope,
+  [BOARD_WS_METHODS.boardHandoff]: AuthOrchestrationOperateScope,
+  [BOARD_WS_METHODS.boardArchive]: AuthOrchestrationOperateScope,
+  [BOARD_WS_METHODS.boardRestore]: AuthOrchestrationOperateScope,
+  [BOARD_WS_METHODS.boardDelete]: AuthOrchestrationOperateScope,
 } as const satisfies Readonly<Record<WsRpcMethod, AuthEnvironmentScope>>;
 
 export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope {

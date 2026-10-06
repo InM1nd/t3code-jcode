@@ -63,6 +63,7 @@ it.layer(memory)("ForkMigrations healthy ledger", (it) => {
       assert.deepStrictEqual(yield* runForkMigrations(), [
         [1, "RepairDivergentUpstreamMigrations"],
         [2, "ProjectionProjectsBoardItemsColumn"],
+        [3, "BoardItems"],
       ]);
       assert.deepStrictEqual(yield* runForkMigrations(), []);
 
@@ -189,6 +190,7 @@ it.layer(memory)("ForkMigrations divergent ledger", (it) => {
       assert.deepStrictEqual(yield* runForkMigrations(), [
         [1, "RepairDivergentUpstreamMigrations"],
         [2, "ProjectionProjectsBoardItemsColumn"],
+        [3, "BoardItems"],
       ]);
 
       const projects = yield* sql<{ readonly name: string }>`
@@ -198,6 +200,61 @@ it.layer(memory)("ForkMigrations divergent ledger", (it) => {
         projects.some((column) => column.name === "board_items_json"),
         true,
       );
+    }),
+  );
+});
+
+it.layer(memory)("ForkMigrations board copy", (it) => {
+  it.effect("copies board_items_json into fork_board_items and keeps the column", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations();
+      yield* sql`
+        ALTER TABLE projection_projects
+        ADD COLUMN board_items_json TEXT
+      `;
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id,
+          title,
+          workspace_root,
+          scripts_json,
+          created_at,
+          updated_at,
+          default_model_selection_json,
+          board_items_json
+        )
+        VALUES (
+          'project-1',
+          'Project',
+          '/tmp/project',
+          '[]',
+          '2026-10-06T00:00:00.000Z',
+          '2026-10-06T00:00:00.000Z',
+          '{"model":"kept"}',
+          ${`[{"id":"item-1","title":"Ship the board","status":"pending","source":"user","createdAt":"2026-10-06T00:00:00.000Z","updatedAt":"2026-10-06T00:00:00.000Z"}]`}
+        )
+      `;
+
+      yield* runForkMigrations();
+
+      const rows = yield* sql<{ readonly item_json: string; readonly position: number }>`
+        SELECT item_json, position
+        FROM fork_board_items
+        WHERE project_id = 'project-1'
+        ORDER BY position ASC
+      `;
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]?.position, 0);
+      assert.equal(rows[0]?.item_json.includes('"backlog"'), true);
+
+      const [project] = yield* sql<{ readonly board_items_json: string | null }>`
+        SELECT board_items_json
+        FROM projection_projects
+        WHERE project_id = 'project-1'
+      `;
+      assert.equal(project?.board_items_json?.includes('"pending"'), true);
+      assert.deepStrictEqual(yield* runForkMigrations(), []);
     }),
   );
 });
