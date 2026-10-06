@@ -11104,6 +11104,7 @@ export default function ChatView(props: ChatViewProps) {
                     ? (heldPaintContext?.workspaceRoot ?? undefined)
                     : activeWorkspaceRoot
                 }
+                threadWorktreePath={activeThreadWorktreePath}
                 skills={
                   activeProviderStatus
                     ? resolveProviderSkillsForCwd(activeProviderStatus, gitCwd)
