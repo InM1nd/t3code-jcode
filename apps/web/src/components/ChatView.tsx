@@ -7978,6 +7978,13 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
 
+      if (command === "composer.attachImages") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) composerRef.current?.openFilePicker();
+        return;
+      }
+
       if (
         command === "composer.host" ||
         command === "composer.effort" ||
