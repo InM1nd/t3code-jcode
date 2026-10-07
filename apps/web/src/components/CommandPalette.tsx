@@ -102,6 +102,7 @@ import { filesystemEnvironment } from "../state/filesystem";
 import { projectEnvironment } from "../state/projects";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { buildProjectBoardCommandItems } from "../projectBoardPalette";
+import { buildAttachFilesCommandItem } from "../composerAttachmentsPalette";
 import { buildRolloverCommandItem } from "../threadRollover";
 import { projectBoardItems } from "../state/projectBoard";
 import { useEnvironmentQuery } from "../state/query";
@@ -736,6 +737,7 @@ function OpenCommandPaletteDialog(props: {
   });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const setComposerPrompt = useComposerDraftStore((store) => store.setPrompt);
+  const composerHandleRef = useComposerHandleContext();
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -1904,6 +1906,12 @@ function OpenCommandPaletteDialog(props: {
       items: boardQuery.data?.items ?? [],
     }),
   ];
+  actionItems.push(
+    buildAttachFilesCommandItem({
+      hasComposerTarget: activeThread !== null || routeDraftId !== null,
+      composerHandleRef,
+    }),
+  );
   actionItems.push(
     buildRolloverCommandItem({
       activeThread,

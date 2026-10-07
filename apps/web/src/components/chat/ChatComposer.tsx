@@ -1401,6 +1401,8 @@ export interface ChatComposerHandle {
   restoreAfterTimelineReachedEnd: () => void;
   collapseForTimelineScrollKey: (key: string) => void;
   addDroppedFiles: (files: File[]) => void;
+  /** Open the same file picker as the paperclip button. */
+  openFilePicker: () => void;
   addDroppedFolders: (folders: File[]) => void;
   hasPendingAttachments: () => boolean;
   insertTextAtEnd: (
@@ -6277,6 +6279,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         void addComposerAttachments(files).then((inserted) => {
           if (!inserted) focusComposer();
         });
+      },
+      openFilePicker: () => {
+        attachmentInputRef.current?.click();
       },
       addDroppedFolders: (folders: File[]) => {
         const target = folderDropTarget({
