@@ -62,3 +62,13 @@ Terms whose meaning matters across T3 Code. Architecture and lifecycle constrain
 | Attachment inventory | The ordered image records shown as thumbnails above the prose, including images with no inline references.                          |
 
 See [composer context references](./composer-context-references.md) for the contract and lifecycle.
+
+## Fork
+
+Terms this fork adds. Isolation rules for where the code lives: [fork isolation](../fork/isolation.md).
+
+| Term         | Meaning                                                                                                                                                                                                                           |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Board        | Cards a project keeps outside the thread timeline, in `fork_board_items`. A turn can read them through the turn-start prompt.                                                                                                     |
+| Work mode    | How the next turn is framed: build, plan, debug, or swarm. Plan uses the provider's plan interaction mode. The other three use the default interaction mode. Debug and swarm add a short prefix when turn-context prompts are on. |
+| Local domain | A `.localhost` name for a dev server this environment started, so a preview keeps a stable address.                                                                                                                               |
