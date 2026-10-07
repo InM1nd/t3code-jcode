@@ -1,5 +1,6 @@
 import { SettingsGroup } from "./SettingsGroup";
 import { JcodeAsciiAnimationRow } from "./JcodeAsciiAnimationRow";
+import { PetEnabledRow } from "./PetEnabledRow";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
@@ -1452,6 +1453,7 @@ export function AppearanceSettingsPanel() {
             </div>
           }
         />
+        <PetEnabledRow />
       </SettingsSection>
 
       <SettingsSection id="motion" title="Motion">

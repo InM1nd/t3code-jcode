@@ -29,6 +29,14 @@ The controls retreat as the composer docks after you send the first message.
 Turn on **Composer context** to keep those controls visible after the thread starts. This preference
 applies to the web and desktop clients.
 
+## Companion pet
+
+On web and desktop, turn on **Companion pet** under **Settings → Appearance**. A small
+ASCII companion sits on the window and can be dragged. It follows the active thread:
+busy while the thread is working or waiting on you, briefly pleased when that work
+finishes, and down when the thread fails. It is off until you turn it on, and it
+holds still when the system asks for reduced motion. Mobile does not show it.
+
 ## Motion
 
 The main sidebar, right panel, and terminal drawer open and close immediately by default. Move the
