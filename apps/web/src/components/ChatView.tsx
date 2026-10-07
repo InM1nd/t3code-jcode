@@ -6292,11 +6292,12 @@ export default function ChatView(props: ChatViewProps) {
       branch?: string;
       runtimeMode: RuntimeMode;
       interactionMode: ProviderInteractionMode;
+      workMode?: WorkMode;
     }): Promise<AtomCommandResult<void, unknown>> => {
       const modeResult = mapAtomCommandResult(
         await saveThreadWorkMode({
           environmentId,
-          input: { threadId: input.threadId, mode: workModeForTurnRef.current },
+          input: { threadId: input.threadId, mode: input.workMode ?? workModeForTurnRef.current },
         }),
         () => undefined,
       );
@@ -9114,6 +9115,7 @@ export default function ChatView(props: ChatViewProps) {
           threadContexts: composerThreadContexts,
         }),
         interactionMode: followUp.interactionMode,
+        workMode: followUp.workMode,
       });
       if (!followUpSent) {
         promptRef.current = followUpPromptSnapshot;
@@ -10349,10 +10351,12 @@ export default function ChatView(props: ChatViewProps) {
     text,
     context,
     interactionMode: nextInteractionMode,
+    workMode: nextWorkMode,
   }: {
     text: string;
     context?: ReturnType<typeof buildMessageContext>;
     interactionMode: "default" | "plan";
+    workMode: WorkMode;
   }) {
     if (
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
@@ -10431,6 +10435,7 @@ export default function ChatView(props: ChatViewProps) {
       ...(localCheckoutBranchMismatch ? { branch: localCheckoutBranchMismatch.currentBranch } : {}),
       runtimeMode,
       interactionMode: nextInteractionMode,
+      workMode: nextWorkMode,
     });
     let failure: AtomCommandResult<unknown, unknown> | null =
       settingsResult._tag === "Failure" ? settingsResult : null;
@@ -10438,6 +10443,7 @@ export default function ChatView(props: ChatViewProps) {
     if (failure === null) {
       // Keep the mode toggle and plan-follow-up banner in sync immediately
       // while the same-thread implementation turn is starting.
+      setPickedWorkMode({ threadId: threadIdForSend, mode: nextWorkMode });
       setComposerDraftInteractionMode(
         scopeThreadRef(activeThread.environmentId, threadIdForSend),
         nextInteractionMode,

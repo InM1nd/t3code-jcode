@@ -80,18 +80,21 @@ export function buildPlanImplementationPrompt(planMarkdown: string): string {
 export function resolvePlanFollowUpSubmission(input: { draftText: string; planMarkdown: string }): {
   text: string;
   interactionMode: "default" | "plan";
+  workMode: "build" | "plan";
 } {
   const trimmedDraftText = input.draftText.trim();
   if (trimmedDraftText.length > 0) {
     return {
       text: trimmedDraftText,
       interactionMode: "plan",
+      workMode: "plan",
     };
   }
 
   return {
     text: buildPlanImplementationPrompt(input.planMarkdown),
     interactionMode: "default",
+    workMode: "build",
   };
 }
 
