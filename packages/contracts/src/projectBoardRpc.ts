@@ -6,6 +6,7 @@ import * as Rpc from "effect/rpc/Rpc";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
 import { ProjectId, ThreadId, TrimmedNonEmptyString, TurnId } from "./baseSchemas.ts";
+import { ProjectActivitySnapshot } from "./projectActivity.ts";
 import {
   ProjectBoardBrief,
   ProjectBoardItem,
@@ -22,6 +23,7 @@ export const BOARD_WS_METHODS = {
   boardArchive: "board.archive",
   boardRestore: "board.restore",
   boardDelete: "board.delete",
+  activityList: "projectActivity.list",
 } as const;
 
 export class BoardServiceError extends Schema.TaggedError<BoardServiceError>()(
@@ -116,5 +118,11 @@ export const BoardRestoreRpc = Rpc.make(BOARD_WS_METHODS.boardRestore, {
 export const BoardDeleteRpc = Rpc.make(BOARD_WS_METHODS.boardDelete, {
   payload: ProjectBoardItemRef,
   success: ProjectBoardItemRef,
+  error: boardError,
+});
+
+export const ProjectActivityListRpc = Rpc.make(BOARD_WS_METHODS.activityList, {
+  payload: ProjectBoardListInput,
+  success: ProjectActivitySnapshot,
   error: boardError,
 });

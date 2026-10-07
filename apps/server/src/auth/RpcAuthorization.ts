@@ -208,6 +208,7 @@ export const RPC_REQUIRED_SCOPES = {
   [BOARD_WS_METHODS.boardArchive]: AuthOrchestrationOperateScope,
   [BOARD_WS_METHODS.boardRestore]: AuthOrchestrationOperateScope,
   [BOARD_WS_METHODS.boardDelete]: AuthOrchestrationOperateScope,
+  [BOARD_WS_METHODS.activityList]: AuthOrchestrationReadScope,
   [WORK_MODE_WS_METHODS.get]: AuthOrchestrationReadScope,
   [WORK_MODE_WS_METHODS.subscribe]: AuthOrchestrationReadScope,
   [WORK_MODE_WS_METHODS.set]: AuthOrchestrationOperateScope,
