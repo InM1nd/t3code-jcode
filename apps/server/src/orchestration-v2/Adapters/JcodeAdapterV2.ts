@@ -22,7 +22,7 @@ import {
   currentJcodeModelIdFromSessionSetup,
   makeJcodeAcpRuntime,
   resolveJcodeAcpBaseModelId,
-  resolveJcodeAcpProvider,
+  resolveJcodeLaunchProvider,
   resolveJcodeRuntimeModelId,
 } from "../../provider/acp/JcodeAcpSupport.ts";
 import { startJcodeSessionDaemon } from "../../provider/acp/JcodeSessionDaemon.ts";
@@ -80,10 +80,11 @@ function jcodeLaunchProvider(
   input: AcpAdapterV2RuntimeInput,
   settings: JcodeSettings,
 ): string | undefined {
-  return (
-    resolveJcodeAcpProvider(input.launchModelSelection) ??
-    (settings.jcodeProvider.trim() || undefined)
-  );
+  return resolveJcodeLaunchProvider({
+    modelSelection: input.launchModelSelection,
+    settingsProvider: settings.jcodeProvider,
+    fallbackModel: settings.model,
+  });
 }
 
 function jcodeLaunchModel(
@@ -139,6 +140,11 @@ function makeJcodeRuntime(options: JcodeAdapterV2Options) {
   return (input: AcpAdapterV2RuntimeInput) =>
     Effect.gen(function* () {
       const provider = jcodeLaunchProvider(input, options.settings);
+      if (provider === undefined) {
+        return yield* new EffectAcpErrors.AcpTransportError({
+          detail: "Choose a Claude or Codex model for Jcode before starting a turn.",
+        });
+      }
       const model = jcodeLaunchModel(input, options.settings, provider);
       if (input.threadId != null) {
         yield* installThreadMcpBridge({
@@ -148,46 +154,43 @@ function makeJcodeRuntime(options: JcodeAdapterV2Options) {
         });
       }
 
-      let socketPath: string | undefined;
-      if (provider !== undefined) {
-        const directory = yield* options.fileSystem
-          .makeTempDirectoryScoped({ prefix: "jcode-session-" })
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new EffectAcpErrors.AcpTransportError({
-                  detail: "Failed to create a Jcode session directory.",
-                  cause,
-                }),
-            ),
-          );
-        socketPath = options.path.join(directory, "daemon.sock");
-        yield* startJcodeSessionDaemon(
-          {
-            threadId: input.threadId ?? "jcode",
-            provider,
-            model,
-            cwd: input.cwd,
-            socketPath,
-            ...(options.settings.binaryPath ? { binaryPath: options.settings.binaryPath } : {}),
-            ...(options.settings.providerProfile
-              ? { providerProfile: options.settings.providerProfile }
-              : {}),
-            environment: options.environment,
-          },
-          options.childProcessSpawner,
-        ).pipe(
-          Effect.provideService(FileSystem.FileSystem, options.fileSystem),
-          Effect.provideService(Path.Path, options.path),
+      const directory = yield* options.fileSystem
+        .makeTempDirectoryScoped({ prefix: "jcode-session-" })
+        .pipe(
           Effect.mapError(
             (cause) =>
               new EffectAcpErrors.AcpTransportError({
-                detail: cause.message,
+                detail: "Failed to create a Jcode session directory.",
                 cause,
               }),
           ),
         );
-      }
+      const socketPath = options.path.join(directory, "daemon.sock");
+      yield* startJcodeSessionDaemon(
+        {
+          threadId: input.threadId ?? "jcode",
+          provider,
+          model,
+          cwd: input.cwd,
+          socketPath,
+          ...(options.settings.binaryPath ? { binaryPath: options.settings.binaryPath } : {}),
+          ...(options.settings.providerProfile
+            ? { providerProfile: options.settings.providerProfile }
+            : {}),
+          environment: options.environment,
+        },
+        options.childProcessSpawner,
+      ).pipe(
+        Effect.provideService(FileSystem.FileSystem, options.fileSystem),
+        Effect.provideService(Path.Path, options.path),
+        Effect.mapError(
+          (cause) =>
+            new EffectAcpErrors.AcpTransportError({
+              detail: cause.message,
+              cause,
+            }),
+        ),
+      );
 
       return yield* makeJcodeAcpRuntime({
         cwd: input.cwd,
@@ -209,8 +212,8 @@ function makeJcodeRuntime(options: JcodeAdapterV2Options) {
         jcodeSettings: {
           ...options.settings,
           model,
-          ...(provider === undefined ? {} : { jcodeProvider: provider }),
-          ...(socketPath === undefined ? {} : { socketPath }),
+          jcodeProvider: provider,
+          socketPath,
         },
       });
     });

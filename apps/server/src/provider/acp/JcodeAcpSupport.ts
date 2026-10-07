@@ -5,7 +5,10 @@ import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
 import { ChildProcessSpawner } from "effect/process";
 import * as EffectAcpErrors from "effect-acp/errors";
-import { resolveJcodeInnerProvider } from "@t3tools/shared/jcodeInnerProvider";
+import {
+  inferJcodeInnerProviderId,
+  resolveJcodeInnerProvider,
+} from "@t3tools/shared/jcodeInnerProvider";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 
 import * as AcpSessionRuntime from "./AcpSessionRuntime.ts";
@@ -100,6 +103,23 @@ export function resolveJcodeAcpProvider(
   return resolveJcodeInnerProvider(
     getModelSelectionStringOptionValue(modelSelection, "jcodeProvider"),
   )?.id;
+}
+
+/**
+ * Provider for an isolated `jcode serve`. An explicit selection wins, then the
+ * instance setting, then the model slug. Undefined means the turn must not
+ * fall through to the shared daemon.
+ */
+export function resolveJcodeLaunchProvider(input: {
+  readonly modelSelection: ModelSelection | null | undefined;
+  readonly settingsProvider?: string | null;
+  readonly fallbackModel?: string | null;
+}): string | undefined {
+  const explicit = resolveJcodeAcpProvider(input.modelSelection);
+  if (explicit) return explicit;
+  const configured = input.settingsProvider?.trim();
+  if (configured) return configured;
+  return inferJcodeInnerProviderId(input.modelSelection?.model ?? input.fallbackModel);
 }
 
 export function currentJcodeModelIdFromSessionSetup(sessionSetupResult: {
