@@ -46,6 +46,7 @@ import * as ServerSettings from "./serverSettings.ts";
 import { forkParked, forkParkedFiber } from "./serverActivation.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import { reconcileTerminalSessions } from "./terminal/TerminalSessionReconciliation.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import {
   formatHeadlessServeOutput,
@@ -476,6 +477,8 @@ const make = (options?: StartupOptions) =>
       );
 
       yield* Effect.logDebug("startup phase: starting server settings runtime");
+      yield* runStartupPhase("terminal-sessions.reconcile", reconcileTerminalSessions);
+
       yield* runStartupPhase(
         "settings.start",
         serverSettings.start.pipe(
