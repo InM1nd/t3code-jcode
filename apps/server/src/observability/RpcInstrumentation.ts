@@ -1,4 +1,11 @@
-import { ORCHESTRATION_V2_WS_METHODS, WS_METHODS, type WsRpcGroup } from "@t3tools/contracts";
+import {
+  BOARD_WS_METHODS,
+  LOCAL_DOMAINS_WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
+  WORK_MODE_WS_METHODS,
+  WS_METHODS,
+  type WsRpcGroup,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
@@ -193,6 +200,19 @@ const RPC_AGGREGATES = {
   [WS_METHODS.subscribeServerLifecycle]: "server",
   [WS_METHODS.subscribeAuthAccess]: "auth",
   [WS_METHODS.subscribeBackgroundPolicy]: "server",
+  [BOARD_WS_METHODS.boardList]: "board",
+  [BOARD_WS_METHODS.boardSubscribe]: "board",
+  [BOARD_WS_METHODS.boardUpsert]: "board",
+  [BOARD_WS_METHODS.boardHandoff]: "board",
+  [BOARD_WS_METHODS.boardArchive]: "board",
+  [BOARD_WS_METHODS.boardRestore]: "board",
+  [BOARD_WS_METHODS.boardDelete]: "board",
+  [WORK_MODE_WS_METHODS.get]: "workMode",
+  [WORK_MODE_WS_METHODS.subscribe]: "workMode",
+  [WORK_MODE_WS_METHODS.set]: "workMode",
+  [LOCAL_DOMAINS_WS_METHODS.list]: "localDomains",
+  [LOCAL_DOMAINS_WS_METHODS.publish]: "localDomains",
+  [LOCAL_DOMAINS_WS_METHODS.unpublish]: "localDomains",
 } as const satisfies Readonly<Record<WsRpcMethod, string>>;
 
 const RPC_SPAN_PREFIX = "ws.rpc";

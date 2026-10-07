@@ -10,7 +10,8 @@ import * as Effect from "effect/Effect";
 import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 
 import * as BoardService from "../../../projectBoard/BoardService.ts";
-import { readCaller, readMutationCaller, resolveProjectId } from "../../threadAccess.ts";
+import * as McpToolAccess from "../../McpToolAccess.ts";
+import { readCaller, resolveProjectId } from "../../threadAccess.ts";
 import { BoardToolkit } from "./tools.ts";
 
 const failure = (
@@ -44,8 +45,8 @@ const activeCounts = (items: ReadonlyArray<ProjectBoardItem>) => {
   };
 };
 
-export const layer = BoardToolkit.toLayer({
-  board_list: (input) =>
+export const layer = McpToolAccess.toLayer(BoardToolkit, {
+  board_list: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const context = yield* readCaller();
       const projectId = yield* resolveProjectId(context, input.projectId);
@@ -65,7 +66,8 @@ export const layer = BoardToolkit.toLayer({
         items: input.includeDetails ? page : page.map(slimItem),
       };
     }),
-  board_digest: (input) =>
+  ),
+  board_digest: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const context = yield* readCaller();
       const projectId = yield* resolveProjectId(context, input.projectId);
@@ -77,14 +79,16 @@ export const layer = BoardToolkit.toLayer({
         ...activeCounts(snapshot.items),
       };
     }),
-  board_get_brief: (input) =>
+  ),
+  board_get_brief: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const found = yield* readItem(input.projectId, input.itemId);
       return { projectId: found.projectId, item: found.item };
     }),
-  board_upsert: (input) =>
+  ),
+  board_upsert: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
-      const context = yield* readMutationCaller();
+      const context = yield* readCaller();
       const projectId = yield* resolveProjectId(context, input.projectId);
       const board = yield* BoardService.BoardService;
       const crypto = yield* Crypto.Crypto;
@@ -121,9 +125,10 @@ export const layer = BoardToolkit.toLayer({
         .pipe(Effect.mapError(boardError));
       return { projectId, item };
     }),
-  board_set_status: (input) =>
+  ),
+  board_set_status: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
-      const found = yield* readItem(input.projectId, input.itemId, true);
+      const found = yield* readItem(input.projectId, input.itemId);
       const item = yield* found.board
         .upsert({
           projectId: found.projectId,
@@ -134,9 +139,10 @@ export const layer = BoardToolkit.toLayer({
         .pipe(Effect.mapError(boardError));
       return { projectId: found.projectId, item };
     }),
-  board_handoff: (input) =>
+  ),
+  board_handoff: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
-      const context = yield* readMutationCaller();
+      const context = yield* readCaller();
       if (context.caller === undefined) {
         return yield* failure(
           "A handoff records the calling thread, so it needs an agent running inside Tandem.",
@@ -157,9 +163,10 @@ export const layer = BoardToolkit.toLayer({
         .pipe(Effect.mapError(boardError));
       return { projectId, item };
     }),
-  board_link_turn: (input) =>
+  ),
+  board_link_turn: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
-      const found = yield* readItem(input.projectId, input.itemId, true);
+      const found = yield* readItem(input.projectId, input.itemId);
       const item = yield* found.board
         .upsert({
           projectId: found.projectId,
@@ -171,24 +178,27 @@ export const layer = BoardToolkit.toLayer({
         .pipe(Effect.mapError(boardError));
       return { projectId: found.projectId, item };
     }),
-  board_archive: (input) =>
+  ),
+  board_archive: McpToolAccess.writes((input) =>
     mutate(input, (board, projectId, itemId) => board.archive(projectId, itemId)),
-  board_restore: (input) =>
+  ),
+  board_restore: McpToolAccess.writes((input) =>
     mutate(input, (board, projectId, itemId) => board.restore(projectId, itemId)),
-  board_delete: (input) =>
+  ),
+  board_delete: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
-      const found = yield* readItem(input.projectId, input.itemId, true);
+      const found = yield* readItem(input.projectId, input.itemId);
       yield* found.board.delete(found.projectId, found.item.id).pipe(Effect.mapError(boardError));
       return { projectId: found.projectId, item: null };
     }),
+  ),
 });
 
 const readItem = Effect.fn("mcp.board.readItem")(function* (
   requestedProjectId: ProjectId | undefined,
   itemId: ProjectBoardItem["id"],
-  mutate = false,
 ) {
-  const context = yield* mutate ? readMutationCaller() : readCaller();
+  const context = yield* readCaller();
   const projectId = yield* resolveProjectId(context, requestedProjectId);
   const board = yield* BoardService.BoardService;
   const snapshot = yield* board.list(projectId).pipe(Effect.mapError(boardError));
@@ -211,7 +221,7 @@ const mutate = (
   ) => Effect.Effect<ProjectBoardItem, BoardServiceError>,
 ) =>
   Effect.gen(function* () {
-    const found = yield* readItem(input.projectId, input.itemId, true);
+    const found = yield* readItem(input.projectId, input.itemId);
     const item = yield* operation(found.board, found.projectId, found.item.id).pipe(
       Effect.mapError(boardError),
     );
