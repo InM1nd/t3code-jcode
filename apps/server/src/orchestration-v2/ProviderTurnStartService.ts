@@ -53,6 +53,7 @@ import { workModeInstruction } from "@t3tools/shared/workMode";
 import {
   TurnContextPrompts,
   applyTurnContext,
+  isProviderSlashCommand,
   turnBoardItems,
   turnPortScan,
 } from "./turnContextPrompt.ts";
@@ -960,30 +961,34 @@ export const layer: Layer.Layer<
       });
       const storedWorkMode = turnContextPrompts ? yield* turnWorkMode(projection.thread.id) : null;
       const workModeText = workModeInstruction(storedWorkMode);
+      const bareProviderCommand =
+        message.attachments.length === 0 && isProviderSlashCommand(composerText);
       const promptedText =
-        workModeText === null
+        bareProviderCommand || workModeText === null
           ? composerText
           : composerText.trim().length === 0
             ? workModeText
             : `${workModeText}\n\n${composerText}`;
-      const boardItems = turnContextPrompts
-        ? yield* turnBoardItems(projection.thread.projectId)
-        : [];
-      const userText = turnContextPrompts
-        ? yield* applyTurnContext({
-            text: promptedText,
-            threadId: projection.thread.id,
-            worktreePath: projection.thread.worktreePath,
-            branch: projection.thread.branch,
-            boardItems,
-            portDiscovery: { scan: turnPortScan() },
-            getThreadTitle: (threadId) =>
-              projectionStore.getThreadShell(threadId).pipe(
-                Effect.map((shell) => shell?.title ?? null),
-                Effect.orElseSucceed(() => null),
-              ),
-          })
-        : composerText;
+      const boardItems =
+        turnContextPrompts && !bareProviderCommand
+          ? yield* turnBoardItems(projection.thread.projectId)
+          : [];
+      const userText =
+        turnContextPrompts && !bareProviderCommand
+          ? yield* applyTurnContext({
+              text: promptedText,
+              threadId: projection.thread.id,
+              worktreePath: projection.thread.worktreePath,
+              branch: projection.thread.branch,
+              boardItems,
+              portDiscovery: { scan: turnPortScan() },
+              getThreadTitle: (threadId) =>
+                projectionStore.getThreadShell(threadId).pipe(
+                  Effect.map((shell) => shell?.title ?? null),
+                  Effect.orElseSucceed(() => null),
+                ),
+            })
+          : composerText;
       // Delivered once: this run's provider turn marks the work as told. A
       // restart continuation is prompted by its own text or resumes natively.
       const noteContinuation = isRestartNoteContinuation(
