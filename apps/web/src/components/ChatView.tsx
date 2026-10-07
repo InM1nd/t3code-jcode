@@ -341,6 +341,7 @@ import {
 import { useNowMinute } from "../hooks/useNowMinute";
 import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useDelegationTurnLink } from "../tandem/useDelegationTurnLink";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -1732,6 +1733,12 @@ export default function ChatView(props: ChatViewProps) {
     }
     return null;
   }, [serverProjection?.providerTurns]);
+  useDelegationTurnLink({
+    environmentId: routeKind === "server" ? environmentId : null,
+    projectId: routeKind === "server" ? (serverThread?.projectId ?? null) : null,
+    threadId: routeKind === "server" ? threadId : null,
+    latestTurnId: serverProjection?.providerTurns.at(-1)?.id ?? null,
+  });
   const serverVisibleTurnItems = useThreadVisibleTurnItems(routeThreadDetailRef);
   const serverThreadHistory = useThreadHistory(routeThreadDetailRef);
   const threadHistoryControls = useMemo<MessagesTimelineHistoryControls | undefined>(() => {
