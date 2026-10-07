@@ -79,6 +79,10 @@ import {
   type AcpToolCallState,
 } from "../../provider/acp/AcpRuntimeModel.ts";
 import {
+  mergeAcpPromptUsage,
+  providerTurnTokenUsageFromSnapshot,
+} from "../../provider/acp/acpTurnTokenUsage.ts";
+import {
   acpClientExecuteDisposition,
   acpMcpToolApprovalElicitationDisposition,
   acpPermissionDisposition,
@@ -6462,6 +6466,14 @@ export function makeAcpAdapterV2(
           status,
           startedAt: context.startedAt,
           completedAt,
+          ...(context.contextUsage === null
+            ? {}
+            : {
+                tokenUsage: providerTurnTokenUsageFromSnapshot(
+                  context.contextUsage,
+                  DateTime.formatIso(completedAt ?? context.startedAt),
+                ),
+              }),
         });
 
         const terminalizeOpenRunOwnedItems = Effect.fnUntraced(function* (
@@ -7125,6 +7137,8 @@ export function makeAcpAdapterV2(
                   promptGeneration,
                   Effect.gen(function* () {
                     if (context.finalized) return;
+                    const mergedUsage = mergeAcpPromptUsage(context.contextUsage, result.usage);
+                    if (mergedUsage) context.contextUsage = mergedUsage;
                     const status =
                       result.stopReason === "cancelled"
                         ? context.interrupted

@@ -34,6 +34,8 @@ import {
 import { parseScopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useAtomValue } from "@effect/atom-react";
 import { environmentThreadDetails } from "../../state/threads";
+import { TandemTurnUsage } from "../../tandem/TandemTurnUsage";
+import { indexTurnUsageByProviderTurnId } from "../../tandem/turnUsage";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
@@ -314,6 +316,7 @@ interface TimelineRowSharedState {
   providerStatuses: ReadonlyArray<ServerProvider>;
   /** Projection runs, for recovering handoff models on legacy items. */
   runs: ReadonlyArray<HandoffTimelineRun>;
+  turnUsageByProviderTurnId: ReturnType<typeof indexTurnUsageByProviderTurnId>;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
@@ -478,6 +481,7 @@ interface MessagesTimelineProps {
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   providerStatuses: ReadonlyArray<ServerProvider>;
   runs: ReadonlyArray<HandoffTimelineRun>;
+  providerTurns?: Parameters<typeof indexTurnUsageByProviderTurnId>[0];
   anchorMessageId: MessageId | null;
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
   onAnchorSizeChanged: (messageId: MessageId, size: number) => void;
@@ -554,6 +558,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   skills = EMPTY_TIMELINE_SKILLS,
   providerStatuses,
   runs: runsProp,
+  providerTurns,
   anchorMessageId,
   onAnchorReady,
   onAnchorSizeChanged,
@@ -1156,6 +1161,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     };
   }, [timelineViewportElement, rows.length, reportContentOverflow, chatWidth]);
 
+  const turnUsageByProviderTurnId = useMemo(
+    () => indexTurnUsageByProviderTurnId(providerTurns),
+    [providerTurns],
+  );
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
       citationRequest: readyCitationRequest,
@@ -1171,6 +1180,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       providerStatuses,
       runs,
+      turnUsageByProviderTurnId,
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onRunShellCommand,
@@ -1207,6 +1217,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       skills,
       providerStatuses,
       runs,
+      turnUsageByProviderTurnId,
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onRunShellCommand,
@@ -2657,6 +2668,15 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
+      {projectedItem?.item.type === "assistant_message" && !message.streaming ? (
+        <TandemTurnUsage
+          usage={
+            projectedItem.item.providerTurnId
+              ? ctx.turnUsageByProviderTurnId.get(projectedItem.item.providerTurnId)
+              : undefined
+          }
+        />
+      ) : null}
       {!message.streaming && (
         <Tooltip>
           <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>

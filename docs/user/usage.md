@@ -24,6 +24,9 @@ Cursor reads account usage from Cursor's dashboard API using the CLI login saved
 This includes headless T3 sessions and desktop usage across machines; the same account counts
 once across connected environments. Without an accessible CLI login, T3 shows a
 notice instead of incomplete local totals. T3 does not estimate missing tokens from conversation text.
+When a provider reports tokens for one turn, web and desktop show that count under the
+answer. Hover it for input, cached input, output, and reasoning. No count is shown when the
+provider does not report the turn. The mobile app does not show this count.
 On macOS, choose **Enable Cursor usage** on Usage to allow T3 to read your existing CLI login
 from Keychain. You can turn it off in **Settings → Providers → Usage providers**. macOS may ask
 you to allow access on the server Mac.
