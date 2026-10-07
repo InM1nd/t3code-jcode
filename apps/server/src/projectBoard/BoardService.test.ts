@@ -101,4 +101,59 @@ it.layer(layer)("BoardService", (it) => {
       assert.deepStrictEqual(listed.items, []);
     }),
   );
+
+  it.effect("keeps every handoff when writes overlap", () =>
+    Effect.gen(function* () {
+      const projects = yield* ProjectStore.ProjectStoreV2;
+      const board = yield* BoardService.BoardService;
+      yield* runMigrations();
+      yield* runForkMigrations();
+      const overlapProjectId = ProjectId.make("project-overlap");
+      yield* projects.apply({
+        sequence: 1,
+        eventId: EventId.make("event-project-overlap"),
+        aggregateKind: "project",
+        aggregateId: overlapProjectId,
+        occurredAt: "2026-10-06T00:00:00.000Z",
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        type: "project.created",
+        payload: {
+          projectId: overlapProjectId,
+          title: "Overlap",
+          workspaceRoot: "/tmp/overlap",
+          defaultModelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5.4",
+          },
+          scripts: [],
+          createdAt: "2026-10-06T00:00:00.000Z",
+          updatedAt: "2026-10-06T00:00:00.000Z",
+        },
+      });
+      const itemId = ProjectBoardItemId.make("item-overlap");
+      yield* board.upsert({
+        projectId: overlapProjectId,
+        itemId,
+        title: "Overlap",
+        status: "ready",
+      });
+      yield* Effect.forEach(
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        (index) =>
+          board.appendHandoff({
+            projectId: overlapProjectId,
+            itemId,
+            sourceThreadId: ThreadId.make("thread-1"),
+            summary: `step ${index}`,
+            nextStep: "continue",
+          }),
+        { concurrency: "unbounded" },
+      );
+      const listed = yield* board.list(overlapProjectId);
+      assert.equal(listed.items[0]?.handoffHistory?.length, 8);
+    }),
+  );
 });
