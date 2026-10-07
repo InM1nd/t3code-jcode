@@ -4,8 +4,8 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { resolveStorage } from "./lib/storage";
 
 export const PET_SIZE_PX = 88;
-export const PET_UI_STORAGE_KEY = "t3code:pet-ui:v1";
-export const PET_UI_STORAGE_VERSION = 1;
+const PET_UI_STORAGE_KEY = "t3code:pet-ui:v1";
+const PET_UI_STORAGE_VERSION = 1;
 
 export type PetPosition = Readonly<{ x: number; y: number }>;
 
