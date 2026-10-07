@@ -7,6 +7,7 @@ import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { usePullRequestsSupported } from "../../state/environments";
 import { APP_BASE_NAME } from "../../branding";
+import { TandemAgentAttention } from "../../tandem/TandemAgentAttention";
 import { TandemBrandMark } from "../../tandem/TandemBrandMark";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -73,6 +74,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           </div>
         ) : null}
       </div>
+      <TandemAgentAttention />
     </div>
   );
 });

@@ -100,7 +100,9 @@ import { readLocalApi } from "../localApi";
 import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { filesystemEnvironment } from "../state/filesystem";
 import { projectEnvironment } from "../state/projects";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { buildProjectBoardCommandItems } from "../projectBoardPalette";
+import { buildRolloverCommandItem } from "../threadRollover";
 import { projectBoardItems } from "../state/projectBoard";
 import { useEnvironmentQuery } from "../state/query";
 import { serverEnvironment } from "../state/server";
@@ -732,6 +734,8 @@ function OpenCommandPaletteDialog(props: {
   const stopThreadSession = useAtomCommand(threadEnvironment.stopSession, {
     reportFailure: false,
   });
+  const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
+  const setComposerPrompt = useComposerDraftStore((store) => store.setPrompt);
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
@@ -1900,6 +1904,15 @@ function OpenCommandPaletteDialog(props: {
       items: boardQuery.data?.items ?? [],
     }),
   ];
+  actionItems.push(
+    buildRolloverCommandItem({
+      activeThread,
+      boardItems: boardQuery.data?.items ?? [],
+      handleNewThread,
+      setPrompt: setComposerPrompt,
+      startThreadTurn,
+    }),
+  );
 
   if (projects.length > 0) {
     const activeProjectTitle =
