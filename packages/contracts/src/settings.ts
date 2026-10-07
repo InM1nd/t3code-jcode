@@ -500,6 +500,8 @@ export const ClientSettingsSchema = Schema.Struct({
   snapShotFlash: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   snapShotAnimations: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Floating ASCII companion in the web and desktop client. Off by default.
+  petEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   jcodeAsciiAnimation: JcodeAsciiAnimation.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_JCODE_ASCII_ANIMATION)),
   ),
@@ -1900,6 +1902,7 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotFlash: Schema.optionalKey(Schema.Boolean),
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
   wordWrap: Schema.optionalKey(Schema.Boolean),
+  petEnabled: Schema.optionalKey(Schema.Boolean),
   jcodeAsciiAnimation: Schema.optionalKey(JcodeAsciiAnimation),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

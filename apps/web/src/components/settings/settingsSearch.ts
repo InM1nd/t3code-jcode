@@ -230,6 +230,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["wide full width column layout messages composer monitor"],
   },
   {
+    id: "companion-pet",
+    title: "Companion pet",
+    to: "/settings/appearance",
+    searchTerms: ["ascii blob floating drag mood companion"],
+  },
+  {
     id: "panel-animations",
     title: "Panel animations",
     to: "/settings/appearance",
