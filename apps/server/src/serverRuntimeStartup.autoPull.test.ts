@@ -15,6 +15,7 @@ import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import * as ServerConfig from "./config.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as Keybindings from "./keybindings.ts";
+import * as TerminalSessionRegistry from "./persistence/TerminalSessionRegistry.ts";
 import * as EffectWorker from "./orchestration-v2/EffectWorker.ts";
 import * as LegacyV1ThreadImporter from "./orchestration-v2/legacy/LegacyV1ThreadImporter.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -104,6 +105,11 @@ it.effect("parks automatic pull until activation without delaying command readin
           autoBootstrapProjectFromCwd: false,
         }),
         Layer.mock(Keybindings.Keybindings)({ start: Effect.void }),
+        Layer.mock(TerminalSessionRegistry.TerminalSessionRegistryRepository)({
+          upsert: () => Effect.void,
+          list: () => Effect.succeed([]),
+          removeByKey: () => Effect.void,
+        }),
         Layer.mock(LegacyV1ThreadImporter.LegacyV1ThreadImporter)({
           pendingThreadCount: Effect.succeed(0),
           reconcileShells: Effect.succeed(importSummary),

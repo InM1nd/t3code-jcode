@@ -185,6 +185,22 @@ const addThreadWorkModes = Effect.gen(function* () {
   `;
 });
 
+const addTerminalSessionRegistry = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS terminal_session_registry (
+      thread_id TEXT NOT NULL,
+      terminal_id TEXT NOT NULL,
+      pid INTEGER NOT NULL,
+      shell_command TEXT NOT NULL,
+      worktree_path TEXT,
+      server_pid INTEGER NOT NULL,
+      started_at TEXT NOT NULL,
+      PRIMARY KEY (thread_id, terminal_id)
+    )
+  `;
+});
+
 const run = Migrator.make({});
 
 export const runForkMigrations = Effect.fn("runForkMigrations")(function* () {
@@ -194,6 +210,7 @@ export const runForkMigrations = Effect.fn("runForkMigrations")(function* () {
       "2_ProjectionProjectsBoardItemsColumn": addProjectBoardItemsColumn,
       "3_BoardItems": copyBoardItems,
       "4_ThreadWorkModes": addThreadWorkModes,
+      "5_TerminalSessionRegistry": addTerminalSessionRegistry,
     }),
     table: FORK_MIGRATIONS_TABLE,
   });
