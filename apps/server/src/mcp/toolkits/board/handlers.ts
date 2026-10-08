@@ -11,7 +11,8 @@ import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 
 import * as BoardService from "../../../projectBoard/BoardService.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
-import { readCaller, resolveProjectId } from "../../threadAccess.ts";
+import { readCaller, type Caller } from "../../threadAccess.ts";
+import { latestBoardTurnId, resolveCallerBoardProject } from "./projectScope.ts";
 import { BoardToolkit } from "./tools.ts";
 
 const failure = (
@@ -20,6 +21,29 @@ const failure = (
 ) => new OrchestratorMcpFailure({ code, message });
 
 const boardError = (error: BoardServiceError) => failure(error.message);
+
+const boardProjectId = (context: Caller, requested: ProjectId | undefined) => {
+  const resolved = resolveCallerBoardProject({
+    callerProjectId: context.caller?.projectId,
+    requestedProjectId: requested,
+  });
+  if (resolved === "missing") {
+    return failure("Pass projectId: this MCP client is not running inside a T3 thread.");
+  }
+  if (resolved === "mismatch") {
+    return failure("A thread can only use the board of its own project.");
+  }
+  return Effect.succeed(resolved);
+};
+
+const latestCallerTurnId = (context: Caller) =>
+  Effect.gen(function* () {
+    if (context.caller === undefined) return undefined;
+    const records = yield* context.threads
+      .getThreadRecords(context.caller.id, ["providerTurns"])
+      .pipe(Effect.mapError(() => failure("Could not read the calling thread's latest turn.")));
+    return latestBoardTurnId(records.providerTurns);
+  });
 
 const slimItem = (item: ProjectBoardItem): ProjectBoardItem => ({
   ...item,
@@ -49,7 +73,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
   board_list: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const context = yield* readCaller();
-      const projectId = yield* resolveProjectId(context, input.projectId);
+      const projectId = yield* boardProjectId(context, input.projectId);
       const board = yield* BoardService.BoardService;
       const snapshot = yield* board.list(projectId).pipe(Effect.mapError(boardError));
       const filtered = snapshot.items.filter((item) => {
@@ -70,7 +94,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
   board_digest: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const context = yield* readCaller();
-      const projectId = yield* resolveProjectId(context, input.projectId);
+      const projectId = yield* boardProjectId(context, input.projectId);
       const board = yield* BoardService.BoardService;
       const snapshot = yield* board.list(projectId).pipe(Effect.mapError(boardError));
       return {
@@ -89,7 +113,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
   board_upsert: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
       const context = yield* readCaller();
-      const projectId = yield* resolveProjectId(context, input.projectId);
+      const projectId = yield* boardProjectId(context, input.projectId);
       const board = yield* BoardService.BoardService;
       const crypto = yield* Crypto.Crypto;
       const existing = input.itemId
@@ -104,12 +128,14 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
             Effect.mapError(() => failure("Could not create a board card id.")),
           ),
         );
+      const linkTurnId = yield* latestCallerTurnId(context);
       const item = yield* board
         .upsert({
           projectId,
           itemId,
           title: input.title,
           status: input.status,
+          ...(linkTurnId !== undefined ? { linkTurnId } : {}),
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
           ...(input.brief !== undefined ? { brief: input.brief } : {}),
           ...(input.area !== undefined ? { area: input.area } : {}),
@@ -129,12 +155,14 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
   board_set_status: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
       const found = yield* readItem(input.projectId, input.itemId);
+      const linkTurnId = yield* latestCallerTurnId(found.context);
       const item = yield* found.board
         .upsert({
           projectId: found.projectId,
           itemId: found.item.id,
           title: found.item.title,
           status: input.status,
+          ...(linkTurnId !== undefined ? { linkTurnId } : {}),
         })
         .pipe(Effect.mapError(boardError));
       return { projectId: found.projectId, item };
@@ -149,7 +177,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
           "thread_credential_required",
         );
       }
-      const projectId = yield* resolveProjectId(context, input.projectId);
+      const projectId = yield* boardProjectId(context, input.projectId);
       const board = yield* BoardService.BoardService;
       const item = yield* board
         .appendHandoff({
@@ -167,13 +195,19 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
   board_link_turn: McpToolAccess.writes((input) =>
     Effect.gen(function* () {
       const found = yield* readItem(input.projectId, input.itemId);
+      const linkTurnId = input.turnId ?? (yield* latestCallerTurnId(found.context));
+      if (linkTurnId === undefined) {
+        return yield* failure(
+          "No turnId provided and the current thread has no latest turn to link.",
+        );
+      }
       const item = yield* found.board
         .upsert({
           projectId: found.projectId,
           itemId: found.item.id,
           title: found.item.title,
           status: found.item.status,
-          linkTurnId: input.turnId,
+          linkTurnId,
         })
         .pipe(Effect.mapError(boardError));
       return { projectId: found.projectId, item };
@@ -199,7 +233,7 @@ const readItem = Effect.fn("mcp.board.readItem")(function* (
   itemId: ProjectBoardItem["id"],
 ) {
   const context = yield* readCaller();
-  const projectId = yield* resolveProjectId(context, requestedProjectId);
+  const projectId = yield* boardProjectId(context, requestedProjectId);
   const board = yield* BoardService.BoardService;
   const snapshot = yield* board.list(projectId).pipe(Effect.mapError(boardError));
   const item = snapshot.items.find((entry) => entry.id === itemId);
