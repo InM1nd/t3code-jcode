@@ -39,6 +39,63 @@ export interface ClaudeModelCatalog {
   readonly models: ReadonlyArray<ClaudeCatalogModel>;
 }
 
+/**
+ * The fetched catalog drops context and speed on models that still accept them.
+ * Keep both selectable: 1M is the `[1m]` suffix, and speed is Claude fast mode.
+ */
+function forkClaudeModelControls(entry: ClaudeCatalogModel): ClaudeCatalogModel {
+  const descriptors = [...(entry.model.capabilities?.optionDescriptors ?? [])];
+  const hasEffort = descriptors.some(
+    (descriptor) => descriptor.id === "effort" || descriptor.id === "reasoning",
+  );
+  if (!hasEffort) return entry;
+
+  const needsContext = !descriptors.some((descriptor) => descriptor.id === "contextWindow");
+  const needsSpeed = !descriptors.some((descriptor) => descriptor.id === "fastMode");
+  if (!needsContext && !needsSpeed) return entry;
+
+  let runtime = entry.runtime;
+  if (needsContext) {
+    descriptors.push({
+      id: "contextWindow",
+      label: "Context",
+      type: "select",
+      options: [
+        { id: "200k", label: "200k", isDefault: true },
+        { id: "1m", label: "1M" },
+      ],
+    });
+    const { fixedContextWindowTokens: _fixedContextWindowTokens, ...rest } = runtime;
+    runtime = {
+      ...rest,
+      modelSuffixes: {
+        ...rest.modelSuffixes,
+        contextWindow: {
+          ...rest.modelSuffixes?.contextWindow,
+          "1m": rest.modelSuffixes?.contextWindow?.["1m"] ?? "[1m]",
+        },
+      },
+      contextWindowTokens: {
+        "200k": 200_000,
+        "1m": 1_000_000,
+        ...rest.contextWindowTokens,
+      },
+    };
+  }
+  if (needsSpeed) {
+    descriptors.push({ id: "fastMode", label: "Speed", type: "boolean" });
+  }
+
+  return {
+    ...entry,
+    runtime,
+    model: {
+      ...entry.model,
+      capabilities: { optionDescriptors: descriptors },
+    },
+  };
+}
+
 function tryResolveClaudeModelCatalog(manifest: ModelManifestData): ClaudeModelCatalog | null {
   const resolved = resolveProviderCatalog(manifest, CLAUDE);
   if (!resolved) return null;
@@ -48,11 +105,13 @@ function tryResolveClaudeModelCatalog(manifest: ModelManifestData): ClaudeModelC
     const profile = decodeClaudeProfileAdapter(entry.profileAdapter ?? {});
     const adapter = decodeClaudeModelAdapter(entry.adapter ?? {});
     if (Option.isNone(profile) || Option.isNone(adapter)) return null;
-    models.push({
-      model: entry.model,
-      runtime: profile.value.claudeCode ?? {},
-      compatibility: adapter.value.claudeCode ?? {},
-    });
+    models.push(
+      forkClaudeModelControls({
+        model: entry.model,
+        runtime: profile.value.claudeCode ?? {},
+        compatibility: adapter.value.claudeCode ?? {},
+      }),
+    );
   }
 
   return {

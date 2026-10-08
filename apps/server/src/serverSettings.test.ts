@@ -1030,7 +1030,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const settings = yield* serverSettings.getSettings;
 
       assert.isFalse(settings.providers.grok.enabled);
-      assert.isFalse(settings.providers.opencode.enabled);
+      assert.isTrue(settings.providers.opencode.enabled);
       assert.isFalse(settings.providers.cursor.enabled);
     }).pipe(Effect.provide(layerServerSettings())),
   );
@@ -1043,7 +1043,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const settings = yield* serverSettings.getSettings;
 
       assert.isTrue(settings.providers.grok.enabled);
-      assert.isFalse(settings.providers.opencode.enabled);
+      assert.isTrue(settings.providers.opencode.enabled);
       assert.isFalse(settings.providers.cursor.enabled);
     }).pipe(Effect.provide(layerServerSettings())),
   );
@@ -1060,7 +1060,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       assert.isTrue(settings.providers.cursor.enabled);
       assert.isFalse(settings.providers.grok.enabled);
-      assert.isFalse(settings.providers.opencode.enabled);
+      assert.isTrue(settings.providers.opencode.enabled);
     }).pipe(Effect.provide(layerServerSettings())),
   );
 
@@ -1079,7 +1079,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       assert.isFalse(settings.providers.cursor.enabled);
       assert.isTrue(settings.providers.grok.enabled);
-      assert.isFalse(settings.providers.opencode.enabled);
+      assert.isTrue(settings.providers.opencode.enabled);
     }).pipe(Effect.provide(layerServerSettings())),
   );
 
@@ -1164,7 +1164,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       const initial = yield* serverSettings.getSettings;
       assert.isFalse(initial.providers.grok.enabled);
-      assert.isFalse(initial.providers.opencode.enabled);
+      assert.isTrue(initial.providers.opencode.enabled);
       assert.isFalse(initial.providers.cursor.enabled);
 
       const next = yield* serverSettings.updateSettings({
@@ -1178,7 +1178,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       });
 
       assert.isFalse(next.providers.grok.enabled);
-      assert.isFalse(next.providers.opencode.enabled);
+      assert.isTrue(next.providers.opencode.enabled);
       assert.isFalse(next.providers.cursor.enabled);
       const grok = next.providerInstances[ProviderInstanceId.make("grok")];
       assert.isDefined(grok);
@@ -1188,7 +1188,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       const persisted = JSON.parse(raw);
       assert.isFalse(persisted.providers.cursor.enabled);
       assert.isFalse(persisted.providers.grok.enabled);
-      assert.isFalse(persisted.providers.opencode.enabled);
+      assert.isTrue(persisted.providers.opencode.enabled);
       assert.isUndefined(persisted.providerInstances.grok.enabled);
     }).pipe(Effect.provide(layerServerSettings())),
   );
@@ -1290,8 +1290,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         autoCompactWindow: "",
       });
       assert.deepEqual(next.providers.opencode, {
-        // OpenCode is disabled by default; this update only touches paths.
-        enabled: false,
+        enabled: true,
         binaryPath: "/opt/homebrew/bin/opencode",
         serverUrl: "http://127.0.0.1:4096",
         serverPassword: "secret-password",
@@ -1378,6 +1377,9 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           codex: {
             binaryPath: "/opt/homebrew/bin/codex",
           },
+          antigravity: {
+            enabled: true,
+          },
           cursor: {
             enabled: false,
           },
@@ -1385,7 +1387,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             enabled: false,
           },
           opencode: {
-            enabled: false,
+            enabled: true,
             serverUrl: "http://127.0.0.1:4096",
             serverPassword: "secret-password",
           },

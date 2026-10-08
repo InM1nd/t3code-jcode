@@ -283,6 +283,14 @@ export interface TraitsMenuContentProps {
   isComposerOwned?: boolean;
 }
 
+const TRAIT_MENU_LEAD_IDS = new Set(["contextWindow", "fastMode", "serviceTier"]);
+
+function traitMenuLabel(descriptor: ProviderOptionDescriptor): string {
+  if (descriptor.id === "contextWindow") return "Context";
+  if (descriptor.id === "fastMode" || descriptor.id === "serviceTier") return "Speed";
+  return descriptor.label;
+}
+
 export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   provider,
   instanceId,
@@ -319,8 +327,6 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   );
   const {
     descriptors,
-    selectDescriptors,
-    booleanDescriptors,
     primarySelectDescriptor,
     ultrathinkPromptControlled,
     ultrathinkInBodyText,
@@ -390,9 +396,54 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     );
   }
 
+  const orderedDescriptors = [
+    ...descriptors.filter((descriptor) => TRAIT_MENU_LEAD_IDS.has(descriptor.id)),
+    ...descriptors.filter((descriptor) => !TRAIT_MENU_LEAD_IDS.has(descriptor.id)),
+  ];
+
   return (
     <>
-      {selectDescriptors.map((descriptor, index) => {
+      {orderedDescriptors.map((descriptor, index) => {
+        if (descriptor.type === "boolean") {
+          const selectedValue = descriptor.currentValue === true ? "on" : "off";
+          const choices =
+            descriptor.id === "fastMode"
+              ? ([
+                  ["off", "Normal"],
+                  ["on", "Fast"],
+                ] as const)
+              : ([
+                  ["off", "Off"],
+                  ["on", "On"],
+                ] as const);
+          return (
+            <div key={descriptor.id}>
+              {index > 0 ? <MenuDivider /> : null}
+              <MenuGroup>
+                <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
+                  {traitMenuLabel(descriptor)}
+                </div>
+                <MenuRadioGroup
+                  value={selectedValue}
+                  onValueChange={(value) => {
+                    updateDescriptors(
+                      replaceDescriptorCurrentValue(descriptors, descriptor.id, value === "on"),
+                    );
+                  }}
+                >
+                  {choices.map(([value, label]) => (
+                    <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
+                      <span className="flex w-full min-w-0 items-center justify-between gap-3">
+                        <span>{label}</span>
+                      </span>
+                    </MenuRadioItem>
+                  ))}
+                </MenuRadioGroup>
+              </MenuGroup>
+            </div>
+          );
+        }
+
         const selectedValue =
           ultrathinkPromptControlled && descriptor.id === primarySelectDescriptor?.id
             ? "ultrathink"
@@ -403,7 +454,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
             {index > 0 ? <MenuDivider /> : null}
             <MenuGroup>
               <div className="px-2 pt-1.5 pb-1 font-medium text-muted-foreground text-xs">
-                {descriptor.label}
+                {traitMenuLabel(descriptor)}
               </div>
               {ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id ? (
                 <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">
@@ -442,36 +493,6 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                           {option.description}
                         </span>
                       ) : null}
-                    </span>
-                  </MenuRadioItem>
-                ))}
-              </MenuRadioGroup>
-            </MenuGroup>
-          </div>
-        );
-      })}
-      {booleanDescriptors.map((descriptor, index) => {
-        const selectedValue = descriptor.currentValue === true ? "on" : "off";
-
-        return (
-          <div key={descriptor.id}>
-            {index > 0 || selectDescriptors.length > 0 ? <MenuDivider /> : null}
-            <MenuGroup>
-              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
-                {descriptor.label}
-              </div>
-              <MenuRadioGroup
-                value={selectedValue}
-                onValueChange={(value) => {
-                  updateDescriptors(
-                    replaceDescriptorCurrentValue(descriptors, descriptor.id, value === "on"),
-                  );
-                }}
-              >
-                {(["on", "off"] as const).map((value) => (
-                  <MenuRadioItem key={value} value={value} hideIndicator closeOnClick>
-                    <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                      <span>{value === "on" ? "On" : "Off"}</span>
                     </span>
                   </MenuRadioItem>
                 ))}

@@ -397,6 +397,19 @@ const decodePersistedOptionalProviderSettingsJsonExit = Schema.decodeUnknownExit
   fromLenientJson(PersistedOptionalProviderSettings),
 );
 
+function forkProviderEnabled(
+  settings: ServerSettings,
+  driver: "opencode" | "antigravity",
+): boolean {
+  const instance = settings.providerInstances[ProviderInstanceId.make(driver)];
+  if (instance) {
+    return resolveProviderInstanceEnabled(instance);
+  }
+  // No explicit instance means the legacy flag is the old opt-in default, not a
+  // choice to hide the provider. The fork keeps both available to probe.
+  return true;
+}
+
 function restoreUsedProviders(
   settings: ServerSettings,
   persisted: typeof PersistedOptionalProviderSettings.Type,
@@ -438,7 +451,11 @@ function restoreUsedProviders(
       },
       opencode: {
         ...settings.providers.opencode,
-        enabled: persisted.providers?.opencode?.enabled ?? usedProviders.has("opencode"),
+        enabled: forkProviderEnabled(settings, "opencode"),
+      },
+      antigravity: {
+        ...settings.providers.antigravity,
+        enabled: forkProviderEnabled(settings, "antigravity"),
       },
     },
     providerInstances,

@@ -4,7 +4,11 @@ import {
   type ProjectBoardItem,
   type ProjectId,
 } from "@t3tools/contracts";
+import { ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
+
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "~/components/ui/collapsible";
+import { cn, randomUUID } from "~/lib/utils";
 
 import type { ComposerThreadTarget } from "../composerDraftStore";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -17,7 +21,6 @@ import {
   upsertBoardItem,
 } from "../state/projectBoard";
 import { useAtomCommand } from "../state/use-atom-command";
-import { randomUUID } from "~/lib/utils";
 import { BoardCardEditor } from "../tandem/BoardCardEditor";
 import { boardCardUpsertFields } from "../tandem/boardCardDraft";
 import { buildTandemDelegationPrompt, isTandemDelegation } from "../tandem/delegationQueue";
@@ -34,6 +37,25 @@ import {
   projectBoardItemDisplayTitle,
   projectBoardStatusLabel,
 } from "./ProjectBoardPanel.logic";
+
+const BOARD_STATUS_STYLES: Record<
+  ProjectBoardItem["status"],
+  { readonly accent: string; readonly chip: string }
+> = {
+  backlog: { accent: "bg-slate-400", chip: "bg-slate-500/15 text-slate-600 dark:text-slate-300" },
+  ready: { accent: "bg-sky-400", chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
+  inProgress: {
+    accent: "bg-violet-400",
+    chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+  },
+  inReview: { accent: "bg-amber-400", chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  blocked: { accent: "bg-rose-400", chip: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
+  completed: {
+    accent: "bg-emerald-400",
+    chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  },
+  cancelled: { accent: "bg-zinc-400", chip: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300" },
+};
 
 export function ProjectBoardPanel(props: {
   readonly environmentId: EnvironmentId;
@@ -171,76 +193,130 @@ export function ProjectBoardPanel(props: {
             }}
           />
         ) : null}
+        {selected ? null : (
+          <div className="mb-2 flex flex-wrap gap-1">
+            {PROJECT_BOARD_STATUS_ORDER.map((status) =>
+              grouped.active[status].length > 0 ? (
+                <span
+                  key={status}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                    BOARD_STATUS_STYLES[status].chip,
+                  )}
+                >
+                  {grouped.active[status].length} {projectBoardStatusLabel(status)}
+                </span>
+              ) : null,
+            )}
+          </div>
+        )}
         {selected
           ? null
           : PROJECT_BOARD_STATUS_ORDER.map((status) => {
               const section = grouped.active[status];
               if (section.length === 0) return null;
               return (
-                <section key={status} className="mb-3">
-                  <h3 className="mb-1 text-xs font-medium opacity-70">
-                    {projectBoardStatusLabel(status)}
-                  </h3>
-                  <ul className="flex flex-col gap-1">
+                <Collapsible
+                  key={status}
+                  defaultOpen={status === "inProgress" || status === "ready"}
+                  className="mb-1"
+                >
+                  <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs font-medium text-foreground/85 hover:bg-accent/40">
+                    <ChevronRight
+                      aria-hidden
+                      className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-open:rotate-90 group-data-panel-open:rotate-90"
+                    />
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        BOARD_STATUS_STYLES[status].accent,
+                      )}
+                    />
+                    <span>{projectBoardStatusLabel(status)}</span>
+                    <span className="tabular-nums text-muted-foreground">{section.length}</span>
+                  </CollapsibleTrigger>
+                  <CollapsiblePanel>
                     {section.map((item) => (
-                      <li key={item.id} className="flex items-start gap-2">
-                        <button
-                          type="button"
-                          className="mt-0.5 shrink-0 text-xs opacity-70"
-                          aria-label={`${projectBoardStatusLabel(item.status)}. Advance status.`}
-                          onClick={() => {
-                            void upsert({
-                              environmentId: props.environmentId,
-                              input: {
-                                projectId: props.projectId,
-                                itemId: item.id,
-                                title: item.title,
-                                status: nextProjectBoardItemStatus(item.status),
-                              },
-                            });
-                          }}
-                        >
-                          {projectBoardStatusLabel(item.status)}
-                        </button>
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 text-left"
-                          onClick={() => setSelectedId(item.id)}
-                        >
-                          <div className="truncate">{projectBoardItemDisplayTitle(item.title)}</div>
+                      <div
+                        key={item.id}
+                        className="group/card rounded-md px-1.5 py-1.5 hover:bg-accent/40"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "mt-1 h-4 w-0.5 shrink-0 rounded-full",
+                              BOARD_STATUS_STYLES[item.status].accent,
+                            )}
+                          />
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate text-left text-sm leading-5"
+                            onClick={() => setSelectedId(item.id)}
+                          >
+                            {projectBoardItemDisplayTitle(item.title)}
+                          </button>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 pl-3">
                           {item.area ? (
-                            <div className="truncate text-xs opacity-70">{item.area}</div>
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                              {item.area}
+                            </span>
                           ) : null}
-                        </button>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs opacity-70"
-                          onClick={() =>
-                            insertPrompt(
-                              isTandemDelegation(item)
-                                ? buildTandemDelegationPrompt(item)
-                                : buildBoardImplementPrompt(item),
-                            )
-                          }
-                        >
-                          Start
-                        </button>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs opacity-70"
-                          onClick={() => {
-                            void archive({
-                              environmentId: props.environmentId,
-                              input: { projectId: props.projectId, itemId: item.id },
-                            });
-                          }}
-                        >
-                          Archive
-                        </button>
-                      </li>
+                          <button
+                            type="button"
+                            className={cn(
+                              "shrink-0 cursor-pointer rounded px-1.5 py-px text-[10px] font-medium uppercase tracking-wide",
+                              BOARD_STATUS_STYLES[item.status].chip,
+                            )}
+                            aria-label={`${projectBoardStatusLabel(item.status)}. Advance status.`}
+                            onClick={() => {
+                              void upsert({
+                                environmentId: props.environmentId,
+                                input: {
+                                  projectId: props.projectId,
+                                  itemId: item.id,
+                                  title: item.title,
+                                  status: nextProjectBoardItemStatus(item.status),
+                                },
+                              });
+                            }}
+                          >
+                            {projectBoardStatusLabel(item.status)}
+                          </button>
+                          <span className="ml-auto flex items-center gap-1 opacity-0 group-hover/card:opacity-100">
+                            <button
+                              type="button"
+                              className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                              onClick={() =>
+                                insertPrompt(
+                                  isTandemDelegation(item)
+                                    ? buildTandemDelegationPrompt(item)
+                                    : buildBoardImplementPrompt(item),
+                                )
+                              }
+                            >
+                              Start
+                            </button>
+                            <button
+                              type="button"
+                              className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                              onClick={() => {
+                                void archive({
+                                  environmentId: props.environmentId,
+                                  input: { projectId: props.projectId, itemId: item.id },
+                                });
+                              }}
+                            >
+                              Archive
+                            </button>
+                          </span>
+                        </div>
+                      </div>
                     ))}
-                  </ul>
-                </section>
+                  </CollapsiblePanel>
+                </Collapsible>
               );
             })}
         {!selected && showArchived && grouped.archived.length > 0 ? (

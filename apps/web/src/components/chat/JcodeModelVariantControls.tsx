@@ -67,7 +67,19 @@ function VariantGroup(props: {
               "rounded px-1.5 py-1 text-xs hover:bg-muted",
               value === props.selected && "bg-muted font-medium",
             )}
-            onClick={() => props.onSelect(slug)}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              props.onSelect(slug);
+            }}
           >
             {value}
           </button>

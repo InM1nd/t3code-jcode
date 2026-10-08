@@ -67,6 +67,7 @@ import {
   CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  ChevronDownIcon,
   CircleDashedIcon,
   ClockIcon,
   EyeIcon,
@@ -129,7 +130,11 @@ import {
   projectGroupsSpanEnvironments,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
-import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
+import {
+  legacyProjectCwdPreferenceKey,
+  resolveProjectExpanded,
+  useUiStateStore,
+} from "../uiStateStore";
 import {
   getThreadKeysToDeselectAfterDelete,
   useThreadSelectionStore,
@@ -2367,6 +2372,14 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   );
 });
 
+function projectExpansionPreferenceKeys(project: SidebarProjectSnapshot): string[] {
+  return [
+    project.projectKey,
+    ...project.memberProjects.map((member) => member.physicalProjectKey),
+    ...project.memberProjects.map((member) => legacyProjectCwdPreferenceKey(member.workspaceRoot)),
+  ];
+}
+
 export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
@@ -2558,6 +2571,24 @@ export default function Sidebar() {
         ),
       ),
     [projectGroups],
+  );
+  const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
+  const setProjectExpanded = useUiStateStore((store) => store.setProjectExpanded);
+  const projectGroupByMemberKey = useMemo(() => {
+    const groups = new Map<string, SidebarProjectSnapshot>();
+    for (const group of projectGroups) {
+      for (const member of group.memberProjects) {
+        groups.set(`${member.environmentId}:${member.id}`, group);
+      }
+    }
+    return groups;
+  }, [projectGroups]);
+  const isProjectGroupExpanded = useCallback(
+    (group: SidebarProjectSnapshot | undefined) =>
+      group === undefined || projectGroups.length < 2
+        ? true
+        : resolveProjectExpanded(projectExpandedById, projectExpansionPreferenceKeys(group)),
+    [projectExpandedById, projectGroups.length],
   );
 
   const nowMinute = useNowMinute();
@@ -3751,6 +3782,20 @@ export default function Sidebar() {
   // Include every visible row in the measured order. Older servers disable
   // pickup on their rows without changing where those rows render.
   const sidebarListItems = useMemo((): readonly SidebarListItem[] => {
+    const projectName = (thread: EnvironmentThreadShell) =>
+      projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? "";
+    const byProject = (list: readonly EnvironmentThreadShell[]) =>
+      projectGroups.length < 2
+        ? list
+        : [...list].sort((left, right) => projectName(left).localeCompare(projectName(right)));
+    const shownThreads = (list: readonly EnvironmentThreadShell[], section: SidebarSection) =>
+      section === "pinned"
+        ? list
+        : list.filter((thread) =>
+            isProjectGroupExpanded(
+              projectGroupByMemberKey.get(`${thread.environmentId}:${thread.projectId}`),
+            ),
+          );
     const rowsOf = (
       list: readonly EnvironmentThreadShell[],
       section: SidebarSection,
@@ -3770,22 +3815,33 @@ export default function Sidebar() {
       return [];
     }
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
-    const pinnedRows = rowsOf(pinnedThreads, "pinned");
+    const pinnedRows = rowsOf(shownThreads(pinnedThreads, "pinned"), "pinned");
     items.push(...pinnedRows);
     items.push({ kind: "marker", marker: "pinned-divider" });
-    const activeRows = rowsOf(activeThreads, "active");
+    const activeRows = rowsOf(byProject(shownThreads(activeThreads, "active")), "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
-    if (workingThreads.length > 0) {
+    const workingRows = rowsOf(
+      byProject(shownThreads(visibleWorkingThreads, "working")),
+      "working",
+    );
+    if (workingRows.length > 0) {
       items.push({ kind: "marker", marker: "working-header" });
-      items.push(...rowsOf(visibleWorkingThreads, "working"));
+      items.push(...workingRows);
     }
-    if (snoozedThreads.length > 0) {
+    const snoozedRows = rowsOf(
+      byProject(shownThreads(visibleSnoozedThreads, "snoozed")),
+      "snoozed",
+    );
+    if (snoozedRows.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
-      items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
+      items.push(...snoozedRows);
     }
     items.push({ kind: "marker", marker: "settled-header" });
-    const settledRows = rowsOf(renderedSettledThreads, "settled");
+    const settledRows = rowsOf(
+      byProject(shownThreads(renderedSettledThreads, "settled")),
+      "settled",
+    );
     items.push({ kind: "marker", marker: "settled-placeholder" });
     items.push(...settledRows);
     return items;
@@ -3796,6 +3852,10 @@ export default function Sidebar() {
     settledThreads.length,
     snoozedThreads.length,
     visibleSnoozedThreads,
+    isProjectGroupExpanded,
+    projectDisplayNameByKey,
+    projectGroupByMemberKey,
+    projectGroups.length,
     visibleWorkingThreads,
     workingThreads.length,
   ]);
@@ -5373,9 +5433,50 @@ export default function Sidebar() {
                           onDraftContextMenu={handleDraftContextMenu}
                         />,
                       ];
+                      let previousProjectKey: string | null = null;
+                      let previousSection: SidebarSection | null = null;
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
-                          items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                          const thread = threadByKey.get(item.key)!;
+                          const projectKey = `${thread.environmentId}:${thread.projectId}`;
+                          if (
+                            projectGroups.length > 1 &&
+                            item.section !== "pinned" &&
+                            (projectKey !== previousProjectKey || item.section !== previousSection)
+                          ) {
+                            const group = projectGroupByMemberKey.get(projectKey);
+                            items.push(
+                              <li
+                                key={`project-${item.section}-${projectKey}`}
+                                className="list-none"
+                              >
+                                <button
+                                  type="button"
+                                  data-thread-selection-safe
+                                  aria-expanded
+                                  className="mt-2 mb-0.5 flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                                  onClick={() => {
+                                    if (!group) return;
+                                    setProjectExpanded(
+                                      projectExpansionPreferenceKeys(group),
+                                      false,
+                                    );
+                                  }}
+                                >
+                                  <ChevronDownIcon aria-hidden className="size-3 shrink-0" />
+                                  <FolderIcon aria-hidden className="size-3.5 shrink-0" />
+                                  <span className="min-w-0 flex-1 truncate">
+                                    {projectDisplayNameByKey.get(
+                                      `${thread.environmentId}:${thread.projectId}`,
+                                    ) ?? "Project"}
+                                  </span>
+                                </button>
+                              </li>,
+                            );
+                          }
+                          previousProjectKey = projectKey;
+                          previousSection = item.section;
+                          items.push(renderThreadRow(thread, item.section));
                           continue;
                         }
                         switch (item.marker) {
@@ -5400,6 +5501,56 @@ export default function Sidebar() {
                                 isDropTarget={dragTargetSection === "active"}
                               />,
                             );
+                            if (projectGroups.length > 1) {
+                              for (const group of projectGroups) {
+                                if (isProjectGroupExpanded(group)) continue;
+                                const memberKeys = new Set(
+                                  group.memberProjects.map(
+                                    (member) => `${member.environmentId}:${member.id}`,
+                                  ),
+                                );
+                                const count = [
+                                  ...activeThreads,
+                                  ...workingThreads,
+                                  ...snoozedThreads,
+                                  ...settledThreads,
+                                ].filter((thread) =>
+                                  memberKeys.has(`${thread.environmentId}:${thread.projectId}`),
+                                ).length;
+                                if (count === 0) continue;
+                                items.push(
+                                  <li
+                                    key={`project-collapsed-${group.projectKey}`}
+                                    className="list-none"
+                                  >
+                                    <button
+                                      type="button"
+                                      data-thread-selection-safe
+                                      aria-expanded={false}
+                                      className="mt-2 mb-0.5 flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                                      onClick={() =>
+                                        setProjectExpanded(
+                                          projectExpansionPreferenceKeys(group),
+                                          true,
+                                        )
+                                      }
+                                    >
+                                      <ChevronDownIcon
+                                        aria-hidden
+                                        className="size-3 shrink-0 -rotate-90"
+                                      />
+                                      <FolderIcon aria-hidden className="size-3.5 shrink-0" />
+                                      <span className="min-w-0 flex-1 truncate">
+                                        {group.displayName}
+                                      </span>
+                                      <span className="shrink-0 tabular-nums text-sidebar-muted-foreground/65">
+                                        {count}
+                                      </span>
+                                    </button>
+                                  </li>,
+                                );
+                              }
+                            }
                             break;
                           case "active-placeholder":
                             items.push(

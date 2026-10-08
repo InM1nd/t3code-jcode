@@ -994,8 +994,9 @@ export type AcpRegistrySettings = typeof AcpRegistrySettings.Type;
 
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
-    // Off by default (like Cursor and Grok): the binding is not yet stable
-    // enough to probe on every install. Users opt in from Settings.
+    // Off by default on an instance with no flag. The fork still turns the
+    // legacy provider on when no OpenCode instance exists, so the picker can
+    // probe it. An explicit instance can turn it off.
     enabled: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(false)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),

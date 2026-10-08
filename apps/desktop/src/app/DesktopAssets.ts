@@ -79,6 +79,9 @@ function resolveSourceTreeIconPath(
   ext: keyof DesktopIconPaths,
 ): string | undefined {
   if (environment.isPackaged || ext === "icns") return undefined;
+  if (!environment.isDevelopment && environment.platform === "darwin" && ext === "png") {
+    return environment.path.join(environment.rootDir, "assets", "tandem", "macos-1024.png");
+  }
   const brand = environment.isDevelopment ? "dev" : "prod";
   const fileNames = sourceTreeIconFileNames[brand];
   const fileName =
