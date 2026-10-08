@@ -143,6 +143,7 @@ function makeJcodeRuntime(options: JcodeAdapterV2Options) {
       if (provider === undefined) {
         return yield* new EffectAcpErrors.AcpTransportError({
           detail: "Choose a Claude or Codex model for Jcode before starting a turn.",
+          cause: "missing-jcode-provider",
         });
       }
       const model = jcodeLaunchModel(input, options.settings, provider);
