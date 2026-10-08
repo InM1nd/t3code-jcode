@@ -36,6 +36,29 @@ export function tandemTurnUsageFromProviderTurn(
   };
 }
 
+/** The last assistant message of a provider turn is the one that shows the label. */
+export function messageIdsShowingTurnUsage(
+  rows: ReadonlyArray<{
+    readonly kind: string;
+    readonly message?: { readonly id: string };
+    readonly projectedItem?: {
+      readonly item: { readonly type?: string; readonly providerTurnId?: string | null };
+    };
+  }>,
+): ReadonlySet<string> {
+  const lastMessageIdByTurn = new Map<string, string>();
+  for (const row of rows) {
+    if (row.kind !== "message" && row.kind !== "assistant-meta") continue;
+    const item = row.projectedItem?.item;
+    if (item?.type !== "assistant_message") continue;
+    const turnId = item.providerTurnId;
+    const messageId = row.message?.id;
+    if (!turnId || !messageId) continue;
+    lastMessageIdByTurn.set(turnId, messageId);
+  }
+  return new Set(lastMessageIdByTurn.values());
+}
+
 export function indexTurnUsageByProviderTurnId(
   turns: ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "id" | "tokenUsage">> | undefined,
 ): ReadonlyMap<ProviderTurnId, TandemTurnUsage> {

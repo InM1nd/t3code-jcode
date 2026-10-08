@@ -5,6 +5,7 @@ import {
   formatTurnUsageDetail,
   formatTurnUsageLabel,
   indexTurnUsageByProviderTurnId,
+  messageIdsShowingTurnUsage,
   tandemTurnUsageFromProviderTurn,
 } from "./turnUsage";
 
@@ -59,6 +60,34 @@ describe("indexTurnUsageByProviderTurnId", () => {
     ]);
     expect(indexed.get(turnId)?.totalTokens).toBe(10);
     expect(indexed.size).toBe(1);
+  });
+});
+
+describe("messageIdsShowingTurnUsage", () => {
+  it("keeps only the last assistant message of each provider turn", () => {
+    const ids = messageIdsShowingTurnUsage([
+      {
+        kind: "message",
+        message: { id: "first" },
+        projectedItem: { item: { type: "assistant_message", providerTurnId: "turn-1" } },
+      },
+      {
+        kind: "assistant-meta",
+        message: { id: "first" },
+        projectedItem: { item: { type: "assistant_message", providerTurnId: "turn-1" } },
+      },
+      {
+        kind: "message",
+        message: { id: "second" },
+        projectedItem: { item: { type: "assistant_message", providerTurnId: "turn-1" } },
+      },
+      {
+        kind: "message",
+        message: { id: "other" },
+        projectedItem: { item: { type: "assistant_message", providerTurnId: "turn-2" } },
+      },
+    ]);
+    expect([...ids].sort()).toEqual(["other", "second"]);
   });
 });
 

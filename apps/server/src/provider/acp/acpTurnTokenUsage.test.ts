@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { mergeAcpPromptUsage, providerTurnTokenUsageFromSnapshot } from "./acpTurnTokenUsage.ts";
+import {
+  contextUsageForNewTurn,
+  mergeAcpPromptUsage,
+  providerTurnTokenUsageFromSnapshot,
+} from "./acpTurnTokenUsage.ts";
 
 describe("mergeAcpPromptUsage", () => {
   it("keeps the context window and adds the prompt breakdown", () => {
@@ -40,6 +44,29 @@ describe("mergeAcpPromptUsage", () => {
     const current = { usedTokens: 4, maxTokens: 8 };
     expect(mergeAcpPromptUsage(current, null)).toBe(current);
     expect(mergeAcpPromptUsage(current, { inputTokens: 0, outputTokens: 0 })).toBe(current);
+  });
+});
+
+describe("contextUsageForNewTurn", () => {
+  it("keeps the window and drops the previous turn's breakdown", () => {
+    expect(
+      contextUsageForNewTurn({
+        usedTokens: 12000,
+        maxTokens: 200000,
+        inputTokens: 800,
+        cachedInputTokens: 400,
+        outputTokens: 200,
+        reasoningOutputTokens: 50,
+        lastUsedTokens: 1000,
+        lastInputTokens: 800,
+        lastOutputTokens: 200,
+      }),
+    ).toEqual({ usedTokens: 12000, maxTokens: 200000 });
+  });
+
+  it("returns null when there is no previous snapshot", () => {
+    expect(contextUsageForNewTurn(null)).toBeNull();
+    expect(contextUsageForNewTurn(undefined)).toBeNull();
   });
 });
 

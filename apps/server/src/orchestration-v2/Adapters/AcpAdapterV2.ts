@@ -79,6 +79,7 @@ import {
   type AcpToolCallState,
 } from "../../provider/acp/AcpRuntimeModel.ts";
 import {
+  contextUsageForNewTurn,
   mergeAcpPromptUsage,
   providerTurnTokenUsageFromSnapshot,
 } from "../../provider/acp/acpTurnTokenUsage.ts";
@@ -6968,7 +6969,9 @@ export function makeAcpAdapterV2(
               user: { current: null, nextSegment: 0 },
               assistant: { current: null, nextSegment: 0 },
               reasoning: { current: null, nextSegment: 0 },
-              contextUsage: rememberedContextUsage ?? turnInput.providerThread.contextUsage ?? null,
+              contextUsage: contextUsageForNewTurn(
+                rememberedContextUsage ?? turnInput.providerThread.contextUsage ?? null,
+              ),
               nativeMetadata: initialNativeMetadata,
               tools: new Map(),
               toolStartedAt: new Map(),
