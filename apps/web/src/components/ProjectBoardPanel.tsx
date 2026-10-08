@@ -1,4 +1,9 @@
-import { ProjectBoardItemId, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
+import {
+  ProjectBoardItemId,
+  type EnvironmentId,
+  type ProjectBoardItem,
+  type ProjectId,
+} from "@t3tools/contracts";
 import { useMemo, useState } from "react";
 
 import type { ComposerThreadTarget } from "../composerDraftStore";
