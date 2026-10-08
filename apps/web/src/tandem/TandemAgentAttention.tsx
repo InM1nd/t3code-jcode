@@ -23,6 +23,7 @@ import {
   type TandemAgentAttentionThread,
   type TandemAgentState,
 } from "./agentAttention";
+import { TandemDelegationQueue } from "./TandemDelegationQueue";
 
 type AgentEntry = Omit<TandemAgentAttentionThread, "archivedAt" | "updatedAt"> & {
   readonly environmentId: EnvironmentId;
@@ -152,6 +153,7 @@ export function TandemAgentAttention() {
           label="Recently completed"
           onOpenThread={openThread}
         />
+        <TandemDelegationQueue />
       </PopoverPopup>
     </Popover>
   );
