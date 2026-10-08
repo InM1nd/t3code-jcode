@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { derivePetBaseMood, nextHappyPulseUntilMs, resolvePetMood } from "./petMood";
+import {
+  derivePetBaseMood,
+  nextHappyPulseUntilMs,
+  petCanvasFrameRate,
+  resolvePetMood,
+} from "./petMood";
 
 describe("derivePetBaseMood", () => {
   it("maps working-like statuses to thinking", () => {
@@ -55,5 +60,12 @@ describe("nextHappyPulseUntilMs", () => {
         nowMs: 100,
       }),
     ).toBeNull();
+  });
+});
+
+describe("petCanvasFrameRate", () => {
+  it("stays at 8 frames and drops to one when motion is reduced", () => {
+    expect(petCanvasFrameRate(false)).toBe(8);
+    expect(petCanvasFrameRate(true)).toBe(1);
   });
 });

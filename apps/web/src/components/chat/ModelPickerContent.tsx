@@ -37,6 +37,7 @@ import {
 } from "../../keybindings";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
+import { JcodeModelVariantControls } from "./JcodeModelVariantControls";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import { TooltipProvider } from "../ui/tooltip";
 import { InlineButton } from "../ui/button";
@@ -902,6 +903,13 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               showSidebar && "border-l border-border/70",
             )}
           >
+            {selectedEntry?.driverKind === "jcode" && !isSearching ? (
+              <JcodeModelVariantControls
+                models={modelOptionsByInstance.get(selectedEntry.instanceId) ?? []}
+                currentSlug={activeModelSlug}
+                onSelect={(slug) => handleModelSelect(slug, selectedEntry.instanceId)}
+              />
+            ) : null}
             <ComboboxSearchInput
               ref={searchInputRef}
               placeholder="Search models..."

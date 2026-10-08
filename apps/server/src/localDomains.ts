@@ -67,6 +67,18 @@ function writeProxyError(response: NodeHttp.ServerResponse, error: unknown) {
   response.end(error instanceof Error ? error.message : "Local development server unavailable");
 }
 
+function writeRawHttpHead(socket: NodeJS.WritableStream, response: NodeHttp.IncomingMessage) {
+  const status = `HTTP/${response.httpVersion} ${response.statusCode ?? 502} ${response.statusMessage ?? ""}\r\n`;
+  const headers = Object.entries(response.headers)
+    .flatMap(([key, value]) =>
+      (Array.isArray(value) ? value : [value])
+        .filter((item): item is string => item !== undefined)
+        .map((item) => `${key}: ${item}\r\n`),
+    )
+    .join("");
+  socket.write(`${status}${headers}\r\n`);
+}
+
 /** A deliberately small proxy: it only routes names in the managed binding list. */
 export function createLocalDomainProxy(getDomains: () => ReadonlyArray<LocalDomainBinding>) {
   const findPort = (host: string | undefined) => {
@@ -103,6 +115,7 @@ export function createLocalDomainProxy(getDomains: () => ReadonlyArray<LocalDoma
   server.on("upgrade", (request, socket, head) => {
     const port = findPort(request.headers.host);
     if (!port) {
+      socket.on("error", () => socket.destroy());
       socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
       return;
     }
@@ -117,20 +130,25 @@ export function createLocalDomainProxy(getDomains: () => ReadonlyArray<LocalDoma
         "x-forwarded-host": request.headers.host,
       },
     });
+    const closeClient = () => socket.destroy();
+    socket.on("error", () => upstream.destroy());
+    upstream.on("error", closeClient);
+    // A normal HTTP response (anything other than 101) never emits "upgrade".
+    // Forward it so the client socket is not left waiting.
+    upstream.on("response", (upstreamResponse) => {
+      writeRawHttpHead(socket, upstreamResponse);
+      upstreamResponse.on("error", closeClient);
+      upstreamResponse.pipe(socket);
+    });
     upstream.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
-      const status = `HTTP/${upstreamResponse.httpVersion} ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage}\r\n`;
-      const headers = Object.entries(upstreamResponse.headers)
-        .flatMap(([key, value]) =>
-          (Array.isArray(value) ? value : [value]).map((item) => `${key}: ${item}\r\n`),
-        )
-        .join("");
-      socket.write(`${status}${headers}\r\n`);
+      writeRawHttpHead(socket, upstreamResponse);
       if (upstreamHead.length) socket.write(upstreamHead);
       if (head.length) upstreamSocket.write(head);
+      socket.on("error", () => upstreamSocket.destroy());
+      upstreamSocket.on("error", closeClient);
       upstreamSocket.pipe(socket);
       socket.pipe(upstreamSocket);
     });
-    upstream.on("error", () => socket.destroy());
     upstream.end();
   });
   return server;

@@ -17,6 +17,9 @@
  * `Manager.ts` spawn a second dev server on top of the orphaned first one
  * the next time that thread's terminal is opened.
  */
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- pid start time and taskkill are synchronous probes; Effect's ChildProcess is async.
+import * as NodeChildProcess from "node:child_process";
+
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -25,6 +28,39 @@ import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { TerminalSessionRegistryRepository } from "../persistence/TerminalSessionRegistry.ts";
 
 const RECONCILE_KILL_GRACE_MS = 1_000;
+/** The shell starts, then the row is written. A later start is a reused pid. */
+const PROCESS_START_SLACK_MS = 60_000;
+
+export type OrphanProcessIdentity = "same" | "reused" | "unknown";
+
+/** A pid that started well after the row was written belongs to someone else. */
+export function classifyProcessStart(
+  processStartedAtMs: number | null,
+  recordedStartedAt: string,
+  slackMs = PROCESS_START_SLACK_MS,
+): OrphanProcessIdentity {
+  if (processStartedAtMs === null) return "unknown";
+  const recorded = Date.parse(recordedStartedAt);
+  if (Number.isNaN(recorded)) return "unknown";
+  return processStartedAtMs <= recorded + slackMs ? "same" : "reused";
+}
+
+/** Posix signals the process group. Windows has no groups, so taskkill walks the tree. */
+export function orphanTerminateArgs(
+  platform: NodeJS.Platform,
+  pid: number,
+  signal: "SIGTERM" | "SIGKILL",
+):
+  | { readonly kind: "signal-group"; readonly pid: number; readonly signal: "SIGTERM" | "SIGKILL" }
+  | { readonly kind: "taskkill"; readonly args: ReadonlyArray<string> } {
+  if (platform === "win32") {
+    return {
+      kind: "taskkill",
+      args: signal === "SIGKILL" ? ["/PID", String(pid), "/T", "/F"] : ["/PID", String(pid), "/T"],
+    };
+  }
+  return { kind: "signal-group", pid: -pid, signal };
+}
 
 class TerminalSessionSignalError extends Schema.TaggedError<TerminalSessionSignalError>()(
   "TerminalSessionSignalError",
@@ -40,7 +76,9 @@ class TerminalSessionSignalError extends Schema.TaggedError<TerminalSessionSigna
 }
 
 export interface TerminalSessionProcessControl {
+  readonly currentPid: number;
   readonly isAlive: (pid: number) => boolean;
+  readonly identify: (pid: number, startedAt: string) => OrphanProcessIdentity;
   readonly terminate: (pid: number, signal: "SIGTERM" | "SIGKILL") => Effect.Effect<void>;
 }
 
@@ -53,16 +91,50 @@ function isAlive(pid: number): boolean {
   }
 }
 
+function readProcessStartMs(pid: number, platform: NodeJS.Platform): number | null {
+  if (platform === "win32") {
+    const result = NodeChildProcess.spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        `(Get-Process -Id ${pid}).StartTime.ToUniversalTime().ToString('o')`,
+      ],
+      { encoding: "utf8" },
+    );
+    if (result.status !== 0) return null;
+    const started = Date.parse(result.stdout.trim());
+    return Number.isNaN(started) ? null : started;
+  }
+  const result = NodeChildProcess.spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) return null;
+  const started = Date.parse(result.stdout.trim());
+  return Number.isNaN(started) ? null : started;
+}
+
 function makeDefaultProcessControl(platform: NodeJS.Platform): TerminalSessionProcessControl {
   return {
+    currentPid: process.pid,
     isAlive,
+    identify: (pid, startedAt) =>
+      classifyProcessStart(readProcessStartMs(pid, platform), startedAt),
     terminate: (pid, signal) =>
       Effect.try({
-        // node-pty makes the shell a session/process-group leader, so a
-        // negative pid signals the whole group on posix — the dev server
-        // and its descendants, not just the shell. Windows has no such
-        // group semantics, so the bare pid is used there.
-        try: () => process.kill(platform === "win32" ? pid : -pid, signal),
+        try: () => {
+          const plan = orphanTerminateArgs(platform, pid, signal);
+          if (plan.kind === "taskkill") {
+            const result = NodeChildProcess.spawnSync("taskkill", [...plan.args], {
+              encoding: "utf8",
+            });
+            if (result.status !== 0) {
+              throw new Error(result.stderr || result.stdout || `taskkill exited ${result.status}`);
+            }
+            return;
+          }
+          process.kill(plan.pid, plan.signal);
+        },
         catch: (cause) => new TerminalSessionSignalError({ cause, signal, pid }),
       }).pipe(
         Effect.catch((error) =>
@@ -77,28 +149,29 @@ function makeDefaultProcessControl(platform: NodeJS.Platform): TerminalSessionPr
  * it, drop it if the target is already dead, otherwise kill (SIGTERM ->
  * grace -> SIGKILL) and drop it.
  *
- * `serverPid` liveness is a cheap, deliberately lightweight identity check:
- * it distinguishes "another currently-running server instance still owns
- * this session" (skip) from "the writing server is gone" (safe to reap").
- * It does not re-verify the terminal `pid` still runs the same command —
- * a full check would mean exporting Manager.ts's ps/wmic-based process
- * inspector out of that upstream file for a low-probability, low-blast-
- * radius edge case (pid reuse in the narrow window between a crash and the
- * next boot).
+ * A row whose `serverPid` is this process was written by a previous boot
+ * that reused the pid (PID 1 under Docker or a supervisor). This boot does
+ * not own it. A terminal pid that started after the row was written has
+ * been reused; drop the row instead of signaling that new process group.
  */
 function reconcileRow(
-  row: { threadId: string; terminalId: string; pid: number; serverPid: number },
+  row: { threadId: string; terminalId: string; pid: number; serverPid: number; startedAt: string },
   registry: TerminalSessionRegistryRepository["Service"],
   processControl: TerminalSessionProcessControl,
 ): Effect.Effect<void> {
   const key = { threadId: row.threadId, terminalId: row.terminalId };
 
   return Effect.gen(function* () {
-    if (processControl.isAlive(row.serverPid)) {
+    if (row.serverPid !== processControl.currentPid && processControl.isAlive(row.serverPid)) {
       return;
     }
 
     if (!processControl.isAlive(row.pid)) {
+      yield* registry.removeByKey(key).pipe(Effect.ignoreCause({ log: true }));
+      return;
+    }
+
+    if (processControl.identify(row.pid, row.startedAt) === "reused") {
       yield* registry.removeByKey(key).pipe(Effect.ignoreCause({ log: true }));
       return;
     }

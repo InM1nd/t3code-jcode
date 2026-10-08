@@ -123,6 +123,7 @@ import * as IdAllocator from "./orchestration-v2/IdAllocator.ts";
 import * as ScheduledTasks from "./scheduledTasks/ScheduledTaskService.ts";
 import * as BoardService from "./projectBoard/BoardService.ts";
 import { makeBoardRpcHandlers } from "./projectBoard/boardRpcHandlers.ts";
+import { makeProjectActivityRpcHandlers } from "./projectBoard/projectActivity.ts";
 import * as WorkModeService from "./workMode/WorkModeService.ts";
 import { makeWorkModeRpcHandlers } from "./workMode/workModeRpcHandlers.ts";
 import * as SecretRequests from "./secrets/SecretRequests.ts";
@@ -3101,6 +3102,7 @@ const layerWsRpc = (
             ),
           ),
         ...makeBoardRpcHandlers(board),
+        ...makeProjectActivityRpcHandlers(sql, board),
         ...makeWorkModeRpcHandlers(workModes),
       });
       return handlers;

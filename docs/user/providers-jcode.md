@@ -47,7 +47,7 @@ Optional in T3 → Jcode settings: **Jcode provider** (`-p`, e.g. `cursor`) and
 
 1. Start T3 as usual (`vp run dev` / desktop / `npx t3`).
 2. Open provider settings and ensure a **Jcode** instance is enabled (or add one).
-3. Create/select a thread and pick **Jcode** in the provider picker.
+3. Create/select a thread and pick **Jcode** in the provider picker. When the catalog includes another reasoning or speed variant of that model, those choices appear above the search field. Picking one selects that model before the session starts.
 4. Send a prompt. File edits should show up in T3 diffs/checkpoints like other providers.
 
 ## Diagnostics

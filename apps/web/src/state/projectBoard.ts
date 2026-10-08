@@ -1,6 +1,7 @@
 import { BOARD_WS_METHODS } from "@t3tools/contracts";
 import {
   createEnvironmentRpcCommand,
+  createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcSubscriptionAtomFamily,
 } from "@t3tools/client-runtime/state/runtime";
 
@@ -9,6 +10,12 @@ import { connectionAtomRuntime } from "../connection/runtime";
 export const projectBoardItems = createEnvironmentRpcSubscriptionAtomFamily(connectionAtomRuntime, {
   label: "project-board:subscribe",
   tag: BOARD_WS_METHODS.boardSubscribe,
+});
+
+export const projectActivity = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "project-activity:list",
+  tag: BOARD_WS_METHODS.activityList,
+  staleTimeMs: 5_000,
 });
 
 export const upsertBoardItem = createEnvironmentRpcCommand(connectionAtomRuntime, {

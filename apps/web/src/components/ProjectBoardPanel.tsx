@@ -1,9 +1,4 @@
-import {
-  ProjectBoardItemId,
-  type EnvironmentId,
-  type ProjectBoardItem,
-  type ProjectId,
-} from "@t3tools/contracts";
+import { ProjectBoardItemId, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
 import { useMemo, useState } from "react";
 
 import type { ComposerThreadTarget } from "../composerDraftStore";
@@ -21,6 +16,7 @@ import { randomUUID } from "~/lib/utils";
 import { BoardCardEditor } from "../tandem/BoardCardEditor";
 import { boardCardUpsertFields } from "../tandem/boardCardDraft";
 import { buildTandemDelegationPrompt, isTandemDelegation } from "../tandem/delegationQueue";
+import { ProjectActivityTimeline } from "../tandem/ProjectActivityTimeline";
 import { formatQuietBoardLabel } from "../tandem/quietBoard";
 import {
   buildBoardImplementPrompt,
@@ -268,30 +264,13 @@ export function ProjectBoardPanel(props: {
             </ul>
           </section>
         ) : null}
-        {selected ? null : <HandoffActivity items={items} />}
+        {selected ? null : (
+          <ProjectActivityTimeline
+            environmentId={props.environmentId}
+            projectId={props.projectId}
+          />
+        )}
       </div>
     </div>
-  );
-}
-
-function HandoffActivity(props: { readonly items: ReadonlyArray<ProjectBoardItem> }) {
-  const handoffs = props.items
-    .flatMap((item) => (item.latestHandoff ? [{ item, handoff: item.latestHandoff }] : []))
-    .sort((left, right) => right.handoff.createdAt.localeCompare(left.handoff.createdAt))
-    .slice(0, 12);
-  if (handoffs.length === 0) return null;
-  return (
-    <section className="mt-4 border-t pt-3">
-      <h3 className="mb-1 text-xs font-medium opacity-70">Activity</h3>
-      <ul className="flex flex-col gap-2">
-        {handoffs.map((entry) => (
-          <li key={entry.item.id}>
-            <div className="truncate text-xs">{projectBoardItemDisplayTitle(entry.item.title)}</div>
-            <p className="text-xs opacity-70">{entry.handoff.summary}</p>
-            <p className="text-xs opacity-70">Next: {entry.handoff.nextStep}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

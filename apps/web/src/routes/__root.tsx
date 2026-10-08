@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-router";
 import { Check, Copy } from "lucide";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { lazy, Suspense } from "react";
 
 import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL, APP_VERSION } from "../branding";
 import { resolveServerBackedAppDisplayName } from "../branding.logic";
@@ -37,7 +38,9 @@ import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoo
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { ChatGptWelcomeCoordinator } from "../components/settings/ChatGptWelcomeCoordinator";
 import { ProviderAuthCallbackCoordinator } from "../components/settings/ProviderAuthCallbackCoordinator";
-import { PetHost } from "../components/pet/PetHost";
+const PetHost = lazy(() =>
+  import("../components/pet/PetHost").then((mod) => ({ default: mod.PetHost })),
+);
 import { ThemeEditorHost } from "../components/settings/ThemeEditorHost";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useDefaultThemeAdoption } from "../hooks/useDefaultTheme";
@@ -253,7 +256,9 @@ function RootRouteView() {
           {/* Above the router: a theme draft is judged by walking the app, so the
               editor has to survive navigation away from settings. */}
           <ThemeEditorHost />
-          <PetHost />
+          <Suspense fallback={null}>
+            <PetHost />
+          </Suspense>
         </FirstRunGate>
       </AnchoredToastProvider>
     </ToastProvider>
