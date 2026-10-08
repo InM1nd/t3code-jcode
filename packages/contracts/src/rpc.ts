@@ -21,6 +21,7 @@ import {
   BoardRestoreRpc,
   BoardSubscribeRpc,
   BoardUpsertRpc,
+  ProjectActivityListRpc,
 } from "./projectBoardRpc.ts";
 import {
   CodexAuthCallbackInput,
@@ -1938,6 +1939,7 @@ export const WsRpcGroup = RpcGroup.make(
   BoardArchiveRpc,
   BoardRestoreRpc,
   BoardDeleteRpc,
+  ProjectActivityListRpc,
 )
   .merge(LocalDomainsRpcGroup)
   .merge(WorkModeRpcGroup)
