@@ -43,14 +43,19 @@ jcode ACP is “backed by the Jcode daemon”. Findings from local probes on
 2. jcode **rejects** ACP `authenticate` (`Unsupported ACP method`). T3’s
    `AcpSessionRuntime` therefore supports `skipAuthenticate: true` for this
    driver only.
-3. T3 starts one scoped `jcode serve` daemon per provider session, bound to a
-   short temporary socket. The ACP subprocess connects to that same socket.
-   This prevents an ambient/shared daemon from silently supplying a different
-   provider or model.
+3. When a provider is known, T3 starts one scoped `jcode serve` daemon for
+   that provider session, bound to a short temporary socket. The ACP subprocess
+   connects to that same socket. This prevents an ambient daemon from silently
+   supplying a different provider or model. Without a provider, the turn
+   fails and the session does not get that socket.
 4. T3 removes only its session socket and stops only the child handle it
    spawned. It never searches for or kills Jcode processes by name.
 5. Prompting without configured model credentials fails with a clear
    “no usable provider” error until `jcode login`.
+   Thread sessions start the private daemon only when a provider is known
+   (Claude or Codex on the model selection, or any non-empty Jcode provider
+   setting). Short text generation (titles, commit messages, pull-request
+   text) does not start that daemon; it uses the ambient jcode daemon.
 6. Non-empty ACP `session/new.mcpServers` is rejected (`ACP mcpServers are not
 supported yet`). Configure MCP in `~/.jcode/mcp.json` or project-local
    `.jcode/mcp.json` / `.mcp.json` (stdio only; HTTP/SSE entries are skipped).
@@ -65,10 +70,10 @@ this provider`). Provider and model selection are applied only at daemon
    provider verification relies on the isolated daemon argv plus the matching
    socket as the binding invariant. Do not invent an ACP provider field.
 
-MVP guarantee: each T3 provider session owns an isolated daemon created with
-the selected inner provider, exact discovered model slug, and that thread’s
+MVP guarantee: a provider session with a known provider owns an isolated
+daemon created with that provider, the exact model slug, and that thread’s
 worktree cwd. Daemon startup always includes `--no-selfdev`. Do not auto-start
-swarm.
+swarm. Text generation is outside this guarantee.
 
 ## Out of scope (MVP)
 
@@ -82,21 +87,25 @@ swarm.
 
 ```
 UI (provider instance "Jcode")
-  -> orchestration.dispatch (existing)
-  -> ProviderCommandReactor (existing)
-  -> JcodeAdapter (ACP runtime events -> ProviderRuntimeEvent)
-  -> isolated jcode serve subprocess + socket
-  -> jcode acp subprocess on the same socket
+  -> orchestration V2 turn
+  -> JcodeAdapterV2 (a flavor of AcpAdapterV2)
+  -> jcode serve on a private socket, when a provider is known
+  -> jcode acp subprocess on that same socket
 ```
 
-Files (mirror Grok/Cursor ACP stack):
+There is no `apps/server/src/provider/Layers/JcodeAdapter.ts` or
+`Layers/JcodeProvider.ts`. Those names were the V1 layout.
 
-- `apps/server/src/provider/Drivers/JcodeDriver.ts`
-- `apps/server/src/provider/Layers/JcodeAdapter.ts`
-- `apps/server/src/provider/Layers/JcodeProvider.ts`
-- `apps/server/src/provider/acp/JcodeAcpSupport.ts`
-- `packages/contracts` `JcodeSettings` + `ServerSettings.providers.jcode`
-- Web picker/settings/icons
+- `apps/server/src/provider/Drivers/JcodeDriver.ts` — installs the driver
+- `apps/server/src/provider/JcodeProvider.ts` — snapshot, model discovery
+- `apps/server/src/orchestration-v2/Adapters/JcodeAdapterV2.ts` — thread runtime
+- `apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.ts` — shared ACP session the flavor plugs into
+- `apps/server/src/provider/acp/JcodeAcpSupport.ts` — spawn argv and the reported-model check
+- `apps/server/src/provider/acp/JcodeSessionDaemon.ts` — per-thread `jcode serve`
+- `apps/server/src/provider/jcodeMcpConfig.ts` and `apps/server/src/mcp/jcodeMcpStdioBridge.ts` — project-local stdio bridge
+- `apps/server/src/textGeneration/JcodeTextGeneration.ts` — ambient daemon, no session socket
+- `packages/contracts/src/settings.ts` — `JcodeSettings`
+- Web picker, settings, and icons under `apps/web/src/components/chat/`
 
 ## Auth / probe UX
 
