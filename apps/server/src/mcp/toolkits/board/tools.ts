@@ -134,11 +134,12 @@ export const BoardToolkit = Toolkit.make(
     .annotate(Tool.Idempotent, true),
   Tool.make("board_link_turn", {
     ...shared,
-    description: "Link a turn id to a project board card.",
+    description:
+      "Link a turn to a project board card. Omit turnId to link the calling thread's latest turn.",
     parameters: Schema.Struct({
       projectId,
       itemId: ProjectBoardItemId,
-      turnId: TurnId,
+      turnId: Schema.optional(TurnId),
     }),
     success: BoardMutateResult,
   })

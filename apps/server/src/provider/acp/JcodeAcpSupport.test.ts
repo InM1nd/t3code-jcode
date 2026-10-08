@@ -6,6 +6,7 @@ import {
   resolveJcodeRuntimeModelId,
   resolveJcodeAcpProvider,
   resolveJcodeAcpBaseModelId,
+  resolveJcodeLaunchProvider,
 } from "./JcodeAcpSupport.ts";
 
 describe("resolveJcodeAcpProvider", () => {
@@ -16,6 +17,38 @@ describe("resolveJcodeAcpProvider", () => {
         instanceId: "jcode" as never,
         model: "gpt-5.5",
         options: [{ id: "jcodeProvider", value: "cursor" }],
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("resolveJcodeLaunchProvider", () => {
+  it("prefers an explicit selection, then settings, then the model slug", () => {
+    expect(
+      resolveJcodeLaunchProvider({
+        modelSelection: {
+          instanceId: "jcode" as never,
+          model: "gpt-5.5",
+          options: [{ id: "jcodeProvider", value: "claude" }],
+        },
+        settingsProvider: "openai",
+      }),
+    ).toBe("claude");
+    expect(
+      resolveJcodeLaunchProvider({
+        modelSelection: { instanceId: "jcode" as never, model: "claude-opus-5" },
+        settingsProvider: "openai",
+      }),
+    ).toBe("openai");
+    expect(
+      resolveJcodeLaunchProvider({
+        modelSelection: { instanceId: "jcode" as never, model: "gpt-5.4" },
+        settingsProvider: "  ",
+      }),
+    ).toBe("openai");
+    expect(
+      resolveJcodeLaunchProvider({
+        modelSelection: { instanceId: "jcode" as never, model: "my-router" },
       }),
     ).toBeUndefined();
   });

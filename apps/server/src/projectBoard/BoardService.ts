@@ -23,6 +23,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 import {
@@ -73,6 +74,9 @@ const make = Effect.gen(function* () {
   const projects = yield* ProjectStore.ProjectStoreV2;
   const crypto = yield* Crypto.Crypto;
   const changes = yield* PubSub.unbounded<ProjectId>();
+  const writeLock = yield* Semaphore.make(1);
+  const exclusively = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Semaphore.withPermits(writeLock, 1)(effect);
 
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -190,121 +194,129 @@ const make = Effect.gen(function* () {
     );
 
   const upsert: BoardService["Service"]["upsert"] = (input) =>
-    Effect.gen(function* () {
-      yield* requireProject(input.projectId);
-      const items = yield* readItems(input.projectId);
-      const existing = items.find((entry) => entry.id === input.itemId);
-      if (!existing && items.length >= PROJECT_BOARD_ITEM_LIMIT) {
-        return yield* new BoardServiceError({
-          message: `Project board is limited to ${PROJECT_BOARD_ITEM_LIMIT} items.`,
-        });
-      }
-      const occurredAt = yield* nowIso;
-      const item: ProjectBoardItemShape = {
-        id: input.itemId,
-        title: input.title,
-        status: input.status,
-        notes: input.notes === undefined ? (existing?.notes ?? null) : input.notes,
-        brief: input.brief === undefined ? (existing?.brief ?? null) : input.brief,
-        latestHandoff: existing?.latestHandoff ?? null,
-        handoffHistory: existing?.handoffHistory ?? [],
-        source: input.source ?? existing?.source ?? "user",
-        sourceThreadId:
-          input.sourceThreadId === undefined
-            ? (existing?.sourceThreadId ?? null)
-            : input.sourceThreadId,
-        linkedTurnIds: mergeProjectBoardLinkedTurnIds({
-          existing: existing?.linkedTurnIds,
-          ...(input.linkedTurnIds !== undefined ? { linkedTurnIds: input.linkedTurnIds } : {}),
-          ...(input.linkTurnId !== undefined ? { linkTurnId: input.linkTurnId } : {}),
-        }),
-        area: input.area === undefined ? (existing?.area ?? null) : input.area,
-        externalRefs: mergeProjectBoardExternalRefs({
-          existing: existing?.externalRefs,
-          ...(input.externalRefs !== undefined ? { externalRefs: input.externalRefs } : {}),
-        }),
-        relatedItemIds: mergeProjectBoardRelatedItemIds({
-          existing: existing?.relatedItemIds,
-          ...(input.relatedItemIds !== undefined ? { relatedItemIds: input.relatedItemIds } : {}),
-          selfId: input.itemId,
-        }),
-        archivedAt: existing?.archivedAt ?? null,
-        createdAt: existing?.createdAt ?? occurredAt,
-        updatedAt: occurredAt,
-      };
-      const position = existing ? null : yield* nextPosition(input.projectId);
-      yield* writeItem(input.projectId, item, position);
-      yield* publish(input.projectId);
-      return item;
-    });
+    exclusively(
+      Effect.gen(function* () {
+        yield* requireProject(input.projectId);
+        const items = yield* readItems(input.projectId);
+        const existing = items.find((entry) => entry.id === input.itemId);
+        if (!existing && items.length >= PROJECT_BOARD_ITEM_LIMIT) {
+          return yield* new BoardServiceError({
+            message: `Project board is limited to ${PROJECT_BOARD_ITEM_LIMIT} items.`,
+          });
+        }
+        const occurredAt = yield* nowIso;
+        const item: ProjectBoardItemShape = {
+          id: input.itemId,
+          title: input.title,
+          status: input.status,
+          notes: input.notes === undefined ? (existing?.notes ?? null) : input.notes,
+          brief: input.brief === undefined ? (existing?.brief ?? null) : input.brief,
+          latestHandoff: existing?.latestHandoff ?? null,
+          handoffHistory: existing?.handoffHistory ?? [],
+          source: input.source ?? existing?.source ?? "user",
+          sourceThreadId:
+            input.sourceThreadId === undefined
+              ? (existing?.sourceThreadId ?? null)
+              : input.sourceThreadId,
+          linkedTurnIds: mergeProjectBoardLinkedTurnIds({
+            existing: existing?.linkedTurnIds,
+            ...(input.linkedTurnIds !== undefined ? { linkedTurnIds: input.linkedTurnIds } : {}),
+            ...(input.linkTurnId !== undefined ? { linkTurnId: input.linkTurnId } : {}),
+          }),
+          area: input.area === undefined ? (existing?.area ?? null) : input.area,
+          externalRefs: mergeProjectBoardExternalRefs({
+            existing: existing?.externalRefs,
+            ...(input.externalRefs !== undefined ? { externalRefs: input.externalRefs } : {}),
+          }),
+          relatedItemIds: mergeProjectBoardRelatedItemIds({
+            existing: existing?.relatedItemIds,
+            ...(input.relatedItemIds !== undefined ? { relatedItemIds: input.relatedItemIds } : {}),
+            selfId: input.itemId,
+          }),
+          archivedAt: existing?.archivedAt ?? null,
+          createdAt: existing?.createdAt ?? occurredAt,
+          updatedAt: occurredAt,
+        };
+        const position = existing ? null : yield* nextPosition(input.projectId);
+        yield* writeItem(input.projectId, item, position);
+        yield* publish(input.projectId);
+        return item;
+      }),
+    );
 
   const appendHandoff: BoardService["Service"]["appendHandoff"] = (input) =>
-    Effect.gen(function* () {
-      yield* requireProject(input.projectId);
-      const existing = yield* requireItem(input.projectId, input.itemId);
-      const occurredAt = yield* nowIso;
-      const handoffId = ProjectBoardHandoffId.make(
-        yield* crypto.randomUUIDv4.pipe(
-          Effect.mapError(
-            () => new BoardServiceError({ message: "Could not save the board handoff." }),
+    exclusively(
+      Effect.gen(function* () {
+        yield* requireProject(input.projectId);
+        const existing = yield* requireItem(input.projectId, input.itemId);
+        const occurredAt = yield* nowIso;
+        const handoffId = ProjectBoardHandoffId.make(
+          yield* crypto.randomUUIDv4.pipe(
+            Effect.mapError(
+              () => new BoardServiceError({ message: "Could not save the board handoff." }),
+            ),
           ),
-        ),
-      );
-      const handoff = {
-        id: handoffId,
-        sourceThreadId: input.sourceThreadId,
-        summary: input.summary,
-        decisions: input.decisions ?? [],
-        nextStep: input.nextStep,
-        createdAt: occurredAt,
-      };
-      const item: ProjectBoardItemShape = {
-        ...existing,
-        latestHandoff: handoff,
-        handoffHistory: pushProjectBoardHandoffHistory({
-          existing: existing.handoffHistory,
-          handoff,
-        }),
-        updatedAt: occurredAt,
-      };
-      yield* writeItem(input.projectId, item, null);
-      yield* publish(input.projectId);
-      return item;
-    });
+        );
+        const handoff = {
+          id: handoffId,
+          sourceThreadId: input.sourceThreadId,
+          summary: input.summary,
+          decisions: input.decisions ?? [],
+          nextStep: input.nextStep,
+          createdAt: occurredAt,
+        };
+        const item: ProjectBoardItemShape = {
+          ...existing,
+          latestHandoff: handoff,
+          handoffHistory: pushProjectBoardHandoffHistory({
+            existing: existing.handoffHistory,
+            handoff,
+          }),
+          updatedAt: occurredAt,
+        };
+        yield* writeItem(input.projectId, item, null);
+        yield* publish(input.projectId);
+        return item;
+      }),
+    );
 
   const setArchived = (
     projectId: ProjectId,
     itemId: ProjectBoardItemShape["id"],
     archived: boolean,
   ) =>
-    Effect.gen(function* () {
-      yield* requireProject(projectId);
-      const existing = yield* requireItem(projectId, itemId);
-      const occurredAt = yield* nowIso;
-      const item: ProjectBoardItemShape = {
-        ...existing,
-        archivedAt: archived ? occurredAt : null,
-        updatedAt: occurredAt,
-      };
-      yield* writeItem(projectId, item, null);
-      yield* publish(projectId);
-      return item;
-    });
+    exclusively(
+      Effect.gen(function* () {
+        yield* requireProject(projectId);
+        const existing = yield* requireItem(projectId, itemId);
+        const occurredAt = yield* nowIso;
+        const item: ProjectBoardItemShape = {
+          ...existing,
+          archivedAt: archived ? occurredAt : null,
+          updatedAt: occurredAt,
+        };
+        yield* writeItem(projectId, item, null);
+        yield* publish(projectId);
+        return item;
+      }),
+    );
 
   const remove: BoardService["Service"]["delete"] = (projectId, itemId) =>
-    Effect.gen(function* () {
-      yield* requireProject(projectId);
-      yield* requireItem(projectId, itemId);
-      yield* sql`
+    exclusively(
+      Effect.gen(function* () {
+        yield* requireProject(projectId);
+        yield* requireItem(projectId, itemId);
+        yield* sql`
         DELETE FROM fork_board_items
         WHERE project_id = ${projectId} AND item_id = ${itemId}
       `.pipe(
-        Effect.mapError(
-          () => new BoardServiceError({ message: "Could not delete the project board card." }),
-        ),
-      );
-      yield* publish(projectId);
-    });
+          Effect.mapError(
+            () => new BoardServiceError({ message: "Could not delete the project board card." }),
+          ),
+        );
+        yield* publish(projectId);
+      }),
+    );
 
   registerTurnBoardItems((projectId) =>
     list(projectId).pipe(

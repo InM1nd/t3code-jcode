@@ -13,9 +13,19 @@ import {
 } from "./localDomains.ts";
 
 const servers: NodeHttp.Server[] = [];
+const socketsByServer = new Map<NodeHttp.Server, Set<import("node:net").Socket>>();
 
 const listen = (server: NodeHttp.Server) =>
   new Promise<number>((resolve, reject) => {
+    const sockets = new Set<import("node:net").Socket>();
+    socketsByServer.set(server, sockets);
+    // Upgraded sockets stay out of Server.closeAllConnections(), so track them here.
+    server.on("connection", (socket) => {
+      sockets.add(socket);
+      socket.on("close", () => {
+        sockets.delete(socket);
+      });
+    });
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
       servers.push(server);
@@ -27,9 +37,17 @@ const listen = (server: NodeHttp.Server) =>
 
 afterEach(async () => {
   await Promise.all(
-    servers
-      .splice(0)
-      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+    servers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          for (const socket of socketsByServer.get(server) ?? []) {
+            socket.on("error", () => {});
+            socket.destroy();
+          }
+          socketsByServer.delete(server);
+          server.close(() => resolve());
+        }),
+    ),
   );
 });
 
@@ -118,5 +136,72 @@ describe("local domains", () => {
       request.end();
     });
     expect(statusCode).toBe(101);
+  });
+
+  it("forwards a non-upgrade response instead of leaving the client waiting", async () => {
+    const upstream = NodeHttp.createServer();
+    upstream.on("upgrade", (_request, socket) => {
+      socket.end("HTTP/1.1 426 Upgrade Required\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    });
+    const upstreamPort = await listen(upstream);
+    const proxy = createLocalDomainProxy(() => [{ domain: "shop.localhost", port: upstreamPort }]);
+    const proxyPort = await listen(proxy);
+
+    const statusCode = await new Promise<number>((resolve, reject) => {
+      const request = NodeHttp.request({
+        host: "127.0.0.1",
+        port: proxyPort,
+        headers: { host: "shop.localhost:7777", connection: "Upgrade", upgrade: "websocket" },
+      });
+      request.once("response", (response) => {
+        response.resume();
+        resolve(response.statusCode ?? 0);
+      });
+      request.once("upgrade", () => reject(new Error("expected a normal HTTP response")));
+      request.once("error", reject);
+      request.end();
+    });
+    expect(statusCode).toBe(426);
+  });
+
+  it("survives a client reset after the websocket upgrade", async () => {
+    const crashes: Array<Error> = [];
+    const onCrash = (error: Error) => {
+      crashes.push(error);
+    };
+    process.on("uncaughtException", onCrash);
+    try {
+      const upstream = NodeHttp.createServer();
+      upstream.on("upgrade", (_request, socket) => {
+        socket.on("error", () => {});
+        socket.write(
+          "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
+        );
+      });
+      const upstreamPort = await listen(upstream);
+      const proxy = createLocalDomainProxy(() => [
+        { domain: "shop.localhost", port: upstreamPort },
+      ]);
+      const proxyPort = await listen(proxy);
+
+      await new Promise<void>((resolve, reject) => {
+        const request = NodeHttp.request({
+          host: "127.0.0.1",
+          port: proxyPort,
+          headers: { host: "shop.localhost:7777", connection: "Upgrade", upgrade: "websocket" },
+        });
+        request.once("upgrade", (_response, socket) => {
+          socket.on("error", () => {});
+          socket.on("close", () => resolve());
+          socket.destroy();
+        });
+        request.once("error", reject);
+        request.end();
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(crashes).toEqual([]);
+    } finally {
+      process.off("uncaughtException", onCrash);
+    }
   });
 });

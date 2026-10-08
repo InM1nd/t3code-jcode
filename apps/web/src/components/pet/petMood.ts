@@ -2,6 +2,11 @@ import type { SidebarThreadStatus } from "../Sidebar.logic";
 
 export type PetMood = "idle" | "thinking" | "happy" | "sad";
 
+/** The companion canvas sits beside a blurred disc. Eight frames keeps that disc from repainting at the display rate. */
+export function petCanvasFrameRate(reducedMotion: boolean): number {
+  return reducedMotion ? 1 : 8;
+}
+
 export type PetBaseMood = Exclude<PetMood, "happy">;
 
 /** Map the active thread's sidebar status onto a durable pet mood. */

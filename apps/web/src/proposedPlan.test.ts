@@ -71,6 +71,7 @@ describe("resolvePlanFollowUpSubmission", () => {
       expect(resolvePlanFollowUpSubmission({ draftText, planMarkdown: "# Plan" })).toEqual({
         text: draftText,
         interactionMode: "plan",
+        workMode: "plan",
       });
     },
   );
@@ -83,6 +84,7 @@ describe("resolvePlanFollowUpSubmission", () => {
     ).toEqual({
       text: "PLEASE IMPLEMENT THIS PLAN:\n## Ship it\n\n- step 1",
       interactionMode: "default",
+      workMode: "build",
     });
   });
 
@@ -95,6 +97,7 @@ describe("resolvePlanFollowUpSubmission", () => {
     ).toEqual({
       text: "Refine step 2 first",
       interactionMode: "plan",
+      workMode: "plan",
     });
   });
 });

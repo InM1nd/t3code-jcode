@@ -88,12 +88,7 @@ export const PetOverlay = memo(function PetOverlay(props: { mood: PetMood }) {
       ref={shellRef}
       role="img"
       aria-label={`Companion pet, ${props.mood}`}
-      className={cn(
-        "fixed z-[90] touch-none select-none overflow-hidden rounded-full border border-border/60",
-        "bg-background/40 shadow-lg backdrop-blur-md",
-        "cursor-grab active:cursor-grabbing",
-        "ring-1 ring-black/5 dark:ring-white/10",
-      )}
+      className={cn("fixed z-[90] touch-none select-none", "cursor-grab active:cursor-grabbing")}
       style={{
         width: PET_SIZE_PX,
         height: PET_SIZE_PX,
@@ -105,7 +100,13 @@ export const PetOverlay = memo(function PetOverlay(props: { mood: PetMood }) {
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
     >
-      <PetAscii mood={props.mood} size={PET_SIZE_PX} />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 overflow-hidden rounded-full border border-border/60 bg-background/40 shadow-lg backdrop-blur-md ring-1 ring-black/5 dark:ring-white/10"
+      />
+      <div className="relative size-full">
+        <PetAscii mood={props.mood} size={PET_SIZE_PX} />
+      </div>
     </div>
   );
 });

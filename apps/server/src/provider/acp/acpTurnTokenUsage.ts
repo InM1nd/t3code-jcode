@@ -56,6 +56,20 @@ export function mergeAcpPromptUsage(
   };
 }
 
+/**
+ * A new turn keeps the context window and drops the previous turn's
+ * input/output. Otherwise a turn that reports no usage repeats the last label.
+ */
+export function contextUsageForNewTurn(
+  snapshot: ThreadTokenUsageSnapshot | null | undefined,
+): ThreadTokenUsageSnapshot | null {
+  if (!snapshot) return null;
+  return {
+    usedTokens: snapshot.usedTokens,
+    ...(snapshot.maxTokens !== undefined ? { maxTokens: snapshot.maxTokens } : {}),
+  };
+}
+
 /** The provider-turn field the chat meter and the per-answer label both read. */
 export function providerTurnTokenUsageFromSnapshot(
   snapshot: ThreadTokenUsageSnapshot,

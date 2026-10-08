@@ -35,7 +35,7 @@ import { parseScopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/en
 import { useAtomValue } from "@effect/atom-react";
 import { environmentThreadDetails } from "../../state/threads";
 import { TandemTurnUsage } from "../../tandem/TandemTurnUsage";
-import { indexTurnUsageByProviderTurnId } from "../../tandem/turnUsage";
+import { indexTurnUsageByProviderTurnId, messageIdsShowingTurnUsage } from "../../tandem/turnUsage";
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
@@ -317,6 +317,7 @@ interface TimelineRowSharedState {
   /** Projection runs, for recovering handoff models on legacy items. */
   runs: ReadonlyArray<HandoffTimelineRun>;
   turnUsageByProviderTurnId: ReturnType<typeof indexTurnUsageByProviderTurnId>;
+  turnUsageMessageIds: ReadonlySet<string>;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
@@ -1179,6 +1180,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     () => indexTurnUsageByProviderTurnId(providerTurns),
     [providerTurns],
   );
+  const turnUsageMessageIds = useMemo(() => messageIdsShowingTurnUsage(rows), [rows]);
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
       citationRequest: readyCitationRequest,
@@ -1195,6 +1197,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       providerStatuses,
       runs,
       turnUsageByProviderTurnId,
+      turnUsageMessageIds,
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onRunShellCommand,
@@ -1232,6 +1235,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       providerStatuses,
       runs,
       turnUsageByProviderTurnId,
+      turnUsageMessageIds,
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onRunShellCommand,
@@ -2684,7 +2688,9 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
-      {projectedItem?.item.type === "assistant_message" && !message.streaming ? (
+      {projectedItem?.item.type === "assistant_message" &&
+      !message.streaming &&
+      ctx.turnUsageMessageIds.has(message.id) ? (
         <TandemTurnUsage
           usage={
             projectedItem.item.providerTurnId
