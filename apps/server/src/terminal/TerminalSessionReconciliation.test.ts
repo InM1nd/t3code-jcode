@@ -12,6 +12,8 @@ import {
   layer as TerminalSessionRegistryLive,
 } from "../persistence/TerminalSessionRegistry.ts";
 import {
+  classifyProcessStart,
+  orphanTerminateArgs,
   reconcileTerminalSessionsWithControl,
   type TerminalSessionProcessControl,
 } from "./TerminalSessionReconciliation.ts";
@@ -26,7 +28,9 @@ function makeFakeProcessControl(aliveByPid: Record<number, boolean>) {
   const alive = new Map(Object.entries(aliveByPid).map(([pid, isAlive]) => [Number(pid), isAlive]));
   const terminateCalls: Array<{ pid: number; signal: "SIGTERM" | "SIGKILL" }> = [];
   const control: TerminalSessionProcessControl = {
+    currentPid: 999,
     isAlive: (pid) => alive.get(pid) ?? false,
+    identify: () => "same",
     terminate: (pid, signal) => Effect.sync(() => terminateCalls.push({ pid, signal })),
   };
   return { control, terminateCalls };
@@ -108,4 +112,78 @@ layer("reconcileTerminalSessionsWithControl", (it) => {
       ]);
     }).pipe(Effect.provide(TestClock.layer())),
   );
+
+  it.effect("reaps a row whose server pid was reused by this boot", () =>
+    Effect.gen(function* () {
+      yield* runMigrations();
+      yield* runForkMigrations();
+      const repository = yield* TerminalSessionRegistryRepository;
+      const reused = { ...row, serverPid: 999 };
+      yield* repository.upsert(reused);
+
+      const { control, terminateCalls } = makeFakeProcessControl({
+        [reused.serverPid]: true,
+        [reused.pid]: true,
+      });
+
+      const fiber = yield* reconcileTerminalSessionsWithControl(control).pipe(Effect.forkScoped);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+      yield* Fiber.join(fiber);
+
+      const rows = yield* repository.list();
+      assert.deepStrictEqual(rows, []);
+      assert.deepStrictEqual(terminateCalls, [
+        { pid: reused.pid, signal: "SIGTERM" },
+        { pid: reused.pid, signal: "SIGKILL" },
+      ]);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
+
+  it.effect("drops a reused terminal pid without signaling its new process group", () =>
+    Effect.gen(function* () {
+      yield* runMigrations();
+      yield* runForkMigrations();
+      const repository = yield* TerminalSessionRegistryRepository;
+      yield* repository.upsert(row);
+
+      const { control, terminateCalls } = makeFakeProcessControl({
+        [row.serverPid]: false,
+        [row.pid]: true,
+      });
+      const reusedControl: TerminalSessionProcessControl = {
+        ...control,
+        identify: () => "reused",
+      };
+
+      yield* reconcileTerminalSessionsWithControl(reusedControl);
+
+      const rows = yield* repository.list();
+      assert.deepStrictEqual(rows, []);
+      assert.deepStrictEqual(terminateCalls, []);
+    }),
+  );
 });
+
+it.effect("classifies a later process start as pid reuse", () =>
+  Effect.sync(() => {
+    assert.strictEqual(
+      classifyProcessStart(Date.parse("2026-01-01T00:02:00.000Z"), "2026-01-01T00:00:00.000Z"),
+      "reused",
+    );
+    assert.strictEqual(
+      classifyProcessStart(Date.parse("2026-01-01T00:00:00.000Z"), "2026-01-01T00:00:30.000Z"),
+      "same",
+    );
+    assert.strictEqual(classifyProcessStart(null, "2026-01-01T00:00:00.000Z"), "unknown");
+    assert.deepStrictEqual(orphanTerminateArgs("linux", 111, "SIGTERM"), {
+      kind: "signal-group",
+      pid: -111,
+      signal: "SIGTERM",
+    });
+    assert.deepStrictEqual(orphanTerminateArgs("win32", 111, "SIGKILL"), {
+      kind: "taskkill",
+      args: ["/PID", "111", "/T", "/F"],
+    });
+  }),
+);
