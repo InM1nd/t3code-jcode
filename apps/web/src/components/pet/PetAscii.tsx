@@ -7,7 +7,7 @@ import {
   readJcodeAsciiThemeColors,
   type JcodeAsciiThemeColors,
 } from "../chat/jcodeAsciiTheme";
-import type { PetMood } from "./petMood";
+import { petCanvasFrameRate, type PetMood } from "./petMood";
 
 const RAMP = " .·:;=+*#%@";
 const MAX_COLS = 28;
@@ -17,20 +17,6 @@ function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
-}
-
-function moodFrameRate(mood: PetMood, reduced: boolean): number {
-  if (reduced) return 1;
-  switch (mood) {
-    case "thinking":
-      return 12;
-    case "happy":
-      return 14;
-    case "sad":
-      return 6;
-    case "idle":
-      return 8;
-  }
 }
 
 function moodPaintParams(mood: PetMood) {
@@ -133,7 +119,7 @@ export const PetAscii = memo(function PetAscii(props: { mood: PetMood; size: num
         width: props.size,
         height: props.size,
         fontSize: 11,
-        frameRate: moodFrameRate(moodRef.current, reduced),
+        frameRate: petCanvasFrameRate(reduced),
         pixelDensity: Math.min(window.devicePixelRatio || 1, 1.25),
       });
     } catch (error) {
