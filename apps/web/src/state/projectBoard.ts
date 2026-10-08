@@ -32,3 +32,8 @@ export const restoreBoardItem = createEnvironmentRpcCommand(connectionAtomRuntim
   label: "project-board:restore",
   tag: BOARD_WS_METHODS.boardRestore,
 });
+
+export const deleteBoardItem = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "project-board:delete",
+  tag: BOARD_WS_METHODS.boardDelete,
+});

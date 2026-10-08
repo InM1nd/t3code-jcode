@@ -6,12 +6,15 @@ import { useComposerDraftStore } from "../composerDraftStore";
 import { useEnvironmentQuery } from "../state/query";
 import {
   archiveBoardItem,
+  deleteBoardItem,
   projectBoardItems,
   restoreBoardItem,
   upsertBoardItem,
 } from "../state/projectBoard";
 import { useAtomCommand } from "../state/use-atom-command";
 import { randomUUID } from "~/lib/utils";
+import { BoardCardEditor } from "../tandem/BoardCardEditor";
+import { boardCardUpsertFields } from "../tandem/boardCardDraft";
 import { buildTandemDelegationPrompt, isTandemDelegation } from "../tandem/delegationQueue";
 import { ProjectActivityTimeline } from "../tandem/ProjectActivityTimeline";
 import { formatQuietBoardLabel } from "../tandem/quietBoard";
@@ -44,10 +47,12 @@ export function ProjectBoardPanel(props: {
   const upsert = useAtomCommand(upsertBoardItem);
   const archive = useAtomCommand(archiveBoardItem);
   const restore = useAtomCommand(restoreBoardItem);
+  const remove = useAtomCommand(deleteBoardItem);
   const [title, setTitle] = useState("");
   const [search, setSearch] = useState("");
   const [area, setArea] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedId, setSelectedId] = useState<ProjectBoardItem["id"] | null>(null);
 
   const items = query.data?.items ?? [];
   const searched = filterProjectBoardItemsByQuery(items, search);
@@ -55,6 +60,7 @@ export function ProjectBoardPanel(props: {
   const grouped = groupProjectBoardItems(visible);
   const areas = getProjectBoardAreas(items);
   const activeCount = items.filter((item) => !item.archivedAt).length;
+  const selected = items.find((item) => item.id === selectedId) ?? null;
 
   const insertPrompt = (prompt: string) => {
     const existing =
@@ -135,73 +141,104 @@ export function ProjectBoardPanel(props: {
           <p className="text-xs opacity-70">Loading board…</p>
         ) : null}
         {query.error ? <p className="text-xs">{query.error}</p> : null}
-        {PROJECT_BOARD_STATUS_ORDER.map((status) => {
-          const section = grouped.active[status];
-          if (section.length === 0) return null;
-          return (
-            <section key={status} className="mb-3">
-              <h3 className="mb-1 text-xs font-medium opacity-70">
-                {projectBoardStatusLabel(status)}
-              </h3>
-              <ul className="flex flex-col gap-1">
-                {section.map((item) => (
-                  <li key={item.id} className="flex items-start gap-2">
-                    <button
-                      type="button"
-                      className="mt-0.5 shrink-0 text-xs opacity-70"
-                      aria-label={`${projectBoardStatusLabel(item.status)}. Advance status.`}
-                      onClick={() => {
-                        void upsert({
-                          environmentId: props.environmentId,
-                          input: {
-                            projectId: props.projectId,
-                            itemId: item.id,
-                            title: item.title,
-                            status: nextProjectBoardItemStatus(item.status),
-                          },
-                        });
-                      }}
-                    >
-                      {projectBoardStatusLabel(item.status)}
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate">{projectBoardItemDisplayTitle(item.title)}</div>
-                      {item.area ? (
-                        <div className="truncate text-xs opacity-70">{item.area}</div>
-                      ) : null}
-                    </div>
-                    <button
-                      type="button"
-                      className="shrink-0 text-xs opacity-70"
-                      onClick={() =>
-                        insertPrompt(
-                          isTandemDelegation(item)
-                            ? buildTandemDelegationPrompt(item)
-                            : buildBoardImplementPrompt(item),
-                        )
-                      }
-                    >
-                      Start
-                    </button>
-                    <button
-                      type="button"
-                      className="shrink-0 text-xs opacity-70"
-                      onClick={() => {
-                        void archive({
-                          environmentId: props.environmentId,
-                          input: { projectId: props.projectId, itemId: item.id },
-                        });
-                      }}
-                    >
-                      Archive
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-        {showArchived && grouped.archived.length > 0 ? (
+        {selected ? (
+          <BoardCardEditor
+            key={selected.id}
+            item={selected}
+            items={items}
+            areas={areas}
+            onClose={() => setSelectedId(null)}
+            onSave={(draft) => {
+              const fields = boardCardUpsertFields(selected, draft);
+              if (!fields) return;
+              void upsert({
+                environmentId: props.environmentId,
+                input: { projectId: props.projectId, itemId: selected.id, ...fields },
+              });
+              setSelectedId(null);
+            }}
+            onDelete={() => {
+              void remove({
+                environmentId: props.environmentId,
+                input: { projectId: props.projectId, itemId: selected.id },
+              });
+              setSelectedId(null);
+            }}
+          />
+        ) : null}
+        {selected
+          ? null
+          : PROJECT_BOARD_STATUS_ORDER.map((status) => {
+              const section = grouped.active[status];
+              if (section.length === 0) return null;
+              return (
+                <section key={status} className="mb-3">
+                  <h3 className="mb-1 text-xs font-medium opacity-70">
+                    {projectBoardStatusLabel(status)}
+                  </h3>
+                  <ul className="flex flex-col gap-1">
+                    {section.map((item) => (
+                      <li key={item.id} className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          className="mt-0.5 shrink-0 text-xs opacity-70"
+                          aria-label={`${projectBoardStatusLabel(item.status)}. Advance status.`}
+                          onClick={() => {
+                            void upsert({
+                              environmentId: props.environmentId,
+                              input: {
+                                projectId: props.projectId,
+                                itemId: item.id,
+                                title: item.title,
+                                status: nextProjectBoardItemStatus(item.status),
+                              },
+                            });
+                          }}
+                        >
+                          {projectBoardStatusLabel(item.status)}
+                        </button>
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => setSelectedId(item.id)}
+                        >
+                          <div className="truncate">{projectBoardItemDisplayTitle(item.title)}</div>
+                          {item.area ? (
+                            <div className="truncate text-xs opacity-70">{item.area}</div>
+                          ) : null}
+                        </button>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs opacity-70"
+                          onClick={() =>
+                            insertPrompt(
+                              isTandemDelegation(item)
+                                ? buildTandemDelegationPrompt(item)
+                                : buildBoardImplementPrompt(item),
+                            )
+                          }
+                        >
+                          Start
+                        </button>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs opacity-70"
+                          onClick={() => {
+                            void archive({
+                              environmentId: props.environmentId,
+                              input: { projectId: props.projectId, itemId: item.id },
+                            });
+                          }}
+                        >
+                          Archive
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+        {!selected && showArchived && grouped.archived.length > 0 ? (
           <section>
             <h3 className="mb-1 text-xs font-medium opacity-70">Archived</h3>
             <ul className="flex flex-col gap-1">
@@ -227,7 +264,12 @@ export function ProjectBoardPanel(props: {
             </ul>
           </section>
         ) : null}
-        <ProjectActivityTimeline environmentId={props.environmentId} projectId={props.projectId} />
+        {selected ? null : (
+          <ProjectActivityTimeline
+            environmentId={props.environmentId}
+            projectId={props.projectId}
+          />
+        )}
       </div>
     </div>
   );

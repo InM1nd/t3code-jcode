@@ -4,7 +4,7 @@ Each project has a board of cards. The board is shared by every thread in that p
 
 Open it from the right panel with **Board**, or press `Shift+Command+B` (`Shift+Ctrl+B` on Windows and Linux). The command palette can also toggle the board and insert a short digest into the composer.
 
-A card has a title, a status, and an optional area. Status moves from backlog to ready, in progress, in review, and done. Blocked cards return to ready. Done and cancelled cards can go back to the backlog. Archive hides a card without deleting it; restore brings it back.
+A card has a title, a status, and an optional area. Status moves from backlog to ready, in progress, in review, and done. Blocked cards return to ready. Done and cancelled cards can go back to the backlog. Open a card to edit its title, notes, status, area, brief, links, and related cards. The status list includes Blocked and Cancelled. Delete removes the card. Archive hides a card without deleting it; restore brings it back.
 
 **Start** puts that card's brief into the composer so the next message is about that card only.
 
