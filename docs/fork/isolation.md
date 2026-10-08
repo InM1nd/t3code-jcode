@@ -106,10 +106,8 @@ Before you consider a feature done, compare the fork branch with upstream.
 Until cutover that branch is `tandem-v2`, not `main`.
 
 ```bash
-MB=$(git merge-base tandem-v2 upstream/main)
-
-# Lines this feature added to upstream files. Over ~10 in one file: extract.
-git diff --numstat $MB -- <files you touched>
+# Lines this feature added relative to current upstream. Over ~10 in one file: extract.
+git diff --numstat upstream/main...HEAD -- <files you touched>
 
 # Definitive: what would conflict if you merged upstream right now.
 git merge-tree --write-tree --name-only tandem-v2 upstream/main
@@ -121,24 +119,42 @@ git merge-tree --write-tree --name-only tandem-v2 upstream/main
 
 Some fork work is not an addition — it replaces upstream behaviour. Extraction
 cannot help there. Measure before deciding, with both numbers that matter.
-Counts below are from the V2 pin `9bd1d8009a` to `tandem-v2`, and upstream
-commits on that file since the same pin:
+The fork diff is `upstream/main...tandem-v2` (three dots). A two-dot diff from
+the cut pin `9bd1d8009a` now includes upstream's own edits and inflates the
+counts. Upstream commit counts are still since that pin. Measured at
+`86c0d998a1`:
 
 ```bash
-MB=9bd1d8009a
-git diff --numstat $MB tandem-v2 -- <file>
-git rev-list --count $MB..upstream/main -- <file>
+git diff --numstat upstream/main...tandem-v2 -- <file>
+git rev-list --count 9bd1d8009a..upstream/main -- <file>
 ```
 
-| File                                                           | Fork diff | Upstream commits since pin | Nature                                                                                   |
-| -------------------------------------------------------------- | --------- | -------------------------- | ---------------------------------------------------------------------------------------- |
-| `apps/web/src/components/ChatView.tsx`                         | 107+/7−   | 10                         | scattered wiring: work mode, rollover, tokens, attach. Stop adding sites here            |
-| `apps/web/index.html`                                          | 214+/4−   | 0                          | one theme block plus the product name. Cold upstream; keep the block contiguous          |
-| `apps/web/src/components/chat/ChatComposer.tsx`                | 52+/58−   | 3                          | the footer mode control moved into a fork component; what remains is wiring              |
-| `apps/web/src/components/CommandPalette.tsx`                   | 46+/4−    | 3                          | palette items pushed in                                                                  |
-| `apps/server/src/terminal/Manager.ts`                          | 55+/0−    | 1                          | spawn, exit, and stop callbacks for the terminal registry                                |
-| `packages/contracts/src/rpc.ts`                                | 22+/1−    | 3                          | board members listed in the group, plus two `.merge()` calls. New services merge a group |
-| `apps/server/src/orchestration-v2/ProviderTurnStartService.ts` | 37+/1−    | 0                          | the one turn-start read of `TurnContextPrompts`                                          |
+| File                                                           | Fork diff | Upstream commits since pin | Nature                                                                                     |
+| -------------------------------------------------------------- | --------- | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `apps/web/index.html`                                          | 214+/4−   | 0                          | one theme block plus the product name. Cold upstream; keep the block contiguous            |
+| `apps/web/src/components/ChatView.tsx`                         | 107+/7−   | 10                         | scattered wiring: work mode, rollover, tokens, attach. Stop adding sites here              |
+| `scripts/build-desktop-artifact.ts`                            | 94+/4−    | 2                          | Tandem app id and staging for the local-domain listener                                    |
+| `packages/contracts/src/settings.ts`                           | 67+/0−    | 2                          | `JcodeSettings`, the companion pet, and the empty-chat animation. Keep new fields together |
+| `apps/server/src/terminal/Manager.ts`                          | 55+/0−    | 1                          | spawn, exit, and stop callbacks for the terminal registry                                  |
+| `apps/web/src/components/chat/ChatComposer.tsx`                | 52+/58−   | 3                          | the footer mode control moved into a fork component; what remains is wiring                |
+| `apps/web/src/components/CommandPalette.tsx`                   | 46+/4−    | 3                          | palette items pushed in                                                                    |
+| `apps/web/src/components/RightPanelTabs.tsx`                   | 41+/2−    | 1                          | the project board as a right-panel surface                                                 |
+| `apps/web/src/components/chat/MessagesTimeline.tsx`            | 37+/0−    | 1                          | per-answer token labels and the worktree warning                                           |
+| `apps/server/src/orchestration-v2/ProviderTurnStartService.ts` | 37+/1−    | 0                          | the one turn-start read of `TurnContextPrompts`                                            |
+| `packages/contracts/src/rpc.ts`                                | 22+/1−    | 3                          | board members listed in the group, plus two `.merge()` calls. New services merge a group   |
+| `apps/server/src/server.ts`                                    | 21+/1−    | 3                          | board, work modes, local domains, terminal registry, and the turn-context flag             |
+| `apps/server/src/observability/RpcInstrumentation.ts`          | 21+/1−    | 2                          | instrumentation names for those RPC groups                                                 |
+| `apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.ts`    | 20+/0−    | 1                          | thread id, launch model, and prompt token usage handed into the ACP runtime                |
+| `apps/web/src/components/sidebar/SidebarChrome.tsx`            | 16+/5−    | 0                          | Tandem brand, agent attention, and the Ports item                                          |
+| `packages/shared/package.json`                                 | 16+/0−    | 1                          | subpath exports for the board, work mode, workspace scope, and Jcode                       |
+| `apps/server/src/auth/RpcAuthorization.ts`                     | 16+/0−    | 8                          | scopes for the board, work modes, and local domains. Hot upstream                          |
+| `apps/server/src/ws.ts`                                        | 15+/0−    | 5                          | handler spreads for those groups. Hot upstream                                             |
+| `apps/desktop/src/backend/DesktopBackendConfiguration.ts`      | 14+/0−    | 2                          | the local-domain public port on the desktop backend                                        |
+| `apps/web/src/components/preview/PreviewLocalServerCard.tsx`   | 13+/1−    | 0                          | which thread owns a discovered port                                                        |
+| `apps/server/src/bin.ts`                                       | 13+/0−    | 0                          | the Jcode MCP stdio entrypoint                                                             |
+| `apps/web/src/components/chat/CompactComposerControlsMenu.tsx` | 12+/8−    | 0                          | work-mode choices in the compact composer menu                                             |
+| `apps/web/src/components/settings/settingsSearch.ts`           | 12+/0−    | 3                          | settings search entries for the pet and the empty-chat animation                           |
+| `scripts/build-desktop-artifact.test.ts`                       | 11+/7−    | 1                          | follows the desktop artifact script                                                        |
 
 The V1 sidebar replacement is not on this branch. Phase 4.6 was skipped: V2
 already filters the settled shelf by project. Do not vendor a `ForkSidebar`.
@@ -146,7 +162,13 @@ already filters the settled shelf by project. Do not vendor a `ForkSidebar`.
 Whitespace is not the source of these diffs. The deletions in `ChatComposer.tsx`
 are the extracted mode footer, which is the shape you want. The file to protect
 on the next sync is `ChatView.tsx`: many small insertions, and upstream has
-already committed to it ten times since the pin.
+already committed to it ten times since the pin. `RpcAuthorization.ts` (8
+upstream commits) and `ws.ts` (5) are the hot registration files; new fork RPCs
+merge a group instead of growing those lists. `apps/web/src/routeTree.gen.ts`
+is generated (21+/0−, 1 upstream commit). Do not edit it.
+
+Workflow diffs (`.github/workflows/ci.yml` 12+/12−, `release.yml` 20+/22−) are
+the runner-label swap in [CI runners](#ci-runners), not product code.
 
 ### Two strategies
 

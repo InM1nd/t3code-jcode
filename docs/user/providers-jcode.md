@@ -40,15 +40,18 @@ jcode version
 jcode acp --help
 ```
 
-Optional in T3 → Jcode settings: **Jcode provider** (`-p`, e.g. `cursor`) and
-**Model** (`-m`). Leave them empty to let jcode auto-pick after login.
+The model picker chooses the model for the thread. Optional Jcode settings
+(**Binary path**, **Model**, **Jcode provider**, **Provider profile**) are the
+fallback when the thread has not picked one. Claude and Codex can come from
+the model selection. Any other backend, including Cursor, comes from **Jcode
+provider**.
 
 ## Enable in Tandem
 
-1. Start T3 as usual (`vp run dev` / desktop / `npx t3`).
+1. Open Tandem.
 2. Open provider settings and ensure a **Jcode** instance is enabled (or add one).
-3. Create/select a thread and pick **Jcode** in the provider picker.
-4. Send a prompt. File edits should show up in T3 diffs/checkpoints like other providers.
+3. Create/select a thread and pick **Jcode** in the provider picker. When the catalog includes another reasoning or speed variant of that model, those choices appear above the search field. Picking one selects that model before the session starts.
+4. Send a prompt. File edits should show up in Tandem diffs/checkpoints like other providers.
 
 ## Diagnostics
 
@@ -64,10 +67,11 @@ Optional in T3 → Jcode settings: **Jcode provider** (`-p`, e.g. `cursor`) and
 
 ## Limits
 
-- One ACP session per T3 thread (not “one global agent per workspace”)
-- Shared jcode daemon is OK; sessions are isolated by `session/new` cwd
+- One session per thread
+- A thread with a known provider gets its own daemon, so another Jcode client cannot retarget it. See [Jcode model routing](jcode-model-routing.md)
 - jcode’s ACP surface may change across releases
 
 ## See also
 
+- Model routing: [jcode-model-routing.md](jcode-model-routing.md)
 - Design notes: [internals/jcode-provider.md](../internals/jcode-provider.md)
