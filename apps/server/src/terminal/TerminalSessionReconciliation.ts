@@ -17,6 +17,7 @@
  * `Manager.ts` spawn a second dev server on top of the orphaned first one
  * the next time that thread's terminal is opened.
  */
+// @effect-diagnostics-next-line nodeBuiltinImport:off -- pid start time and taskkill are synchronous probes; Effect's ChildProcess is async.
 import * as NodeChildProcess from "node:child_process";
 
 import * as Cause from "effect/Cause";
