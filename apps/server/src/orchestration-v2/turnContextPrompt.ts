@@ -122,8 +122,17 @@ function prependBlock(input: string, block: string | null): string {
 }
 
 /**
+ * A leading slash is a provider command (`/compact`, `/goal`, `/compress`, Pi
+ * expansions). Prefixing it makes the adapter treat the command as a prompt.
+ */
+export function isProviderSlashCommand(text: string): boolean {
+  return text.trimStart().startsWith("/");
+}
+
+/**
  * Prefixes the text a provider receives. A port scan or board read that fails
- * or times out leaves the rest of the turn unchanged.
+ * or times out leaves the rest of the turn unchanged. Slash commands pass
+ * through unchanged.
  */
 export function applyTurnContext(input: {
   readonly text: string;
@@ -135,6 +144,7 @@ export function applyTurnContext(input: {
   readonly getThreadTitle: (threadId: ThreadId) => Effect.Effect<string | null>;
 }): Effect.Effect<string> {
   return Effect.gen(function* () {
+    if (isProviderSlashCommand(input.text)) return input.text;
     let text = input.worktreePath
       ? prependBlock(
           input.text,

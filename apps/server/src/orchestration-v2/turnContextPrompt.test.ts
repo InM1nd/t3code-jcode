@@ -11,6 +11,7 @@ import { describe, expect } from "vite-plus/test";
 import {
   applyTurnContext,
   formatWorkspaceScopePromptBlock,
+  isProviderSlashCommand,
   selectOtherThreadPortOwners,
 } from "./turnContextPrompt.ts";
 
@@ -79,6 +80,37 @@ describe("turnContextPrompt", () => {
         getThreadTitle: () => Effect.die("no title"),
       });
       assert.strictEqual(unchanged, "ship it");
+    }),
+  );
+
+  it("recognizes a leading slash as a provider command", () => {
+    expect(isProviderSlashCommand("/compact")).toBe(true);
+    expect(isProviderSlashCommand("  /goal clear")).toBe(true);
+    expect(isProviderSlashCommand("/compress")).toBe(true);
+    expect(isProviderSlashCommand("ship /compact")).toBe(false);
+  });
+
+  it.effect("leaves slash commands unprefixed", () =>
+    Effect.gen(function* () {
+      const text = yield* applyTurnContext({
+        text: " /compact",
+        threadId: thread("current"),
+        worktreePath: "/repo/.t3/worktrees/feature",
+        branch: "feature",
+        boardItems: [
+          {
+            id: ProjectBoardItemId.make("card-1"),
+            title: "Ship the prompt",
+            status: "inProgress",
+            source: "user",
+            createdAt: "2026-10-06T00:00:00.000Z",
+            updatedAt: "2026-10-06T00:00:00.000Z",
+          } as ProjectBoardItem,
+        ],
+        portDiscovery: { scan: () => Effect.die("scanner should not run") },
+        getThreadTitle: () => Effect.die("title should not be read"),
+      });
+      assert.strictEqual(text, " /compact");
     }),
   );
 });
