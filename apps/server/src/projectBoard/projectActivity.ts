@@ -74,7 +74,7 @@ const readFailure = new BoardServiceError({
   message: "Could not read project activity.",
 });
 
-export const listProjectActivity = (
+const listProjectActivity = (
   sql: SqlClient.SqlClient,
   projectId: ProjectId,
   boardItems: ReadonlyArray<ProjectBoardItem>,
