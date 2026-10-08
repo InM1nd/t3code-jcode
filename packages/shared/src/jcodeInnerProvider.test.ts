@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  inferJcodeInnerProviderId,
   resolveJcodeInnerProvider,
   readJcodeProviderSetting,
   resolveJcodeInnerProviderIconKind,
@@ -59,5 +60,15 @@ describe("readJcodeProviderSetting", () => {
         legacyJcodeProvider: "openai",
       }),
     ).toBe("openai");
+  });
+});
+
+describe("inferJcodeInnerProviderId", () => {
+  it("maps Claude and Codex slugs and leaves other slugs unset", () => {
+    expect(inferJcodeInnerProviderId("claude-opus-5")).toBe("claude");
+    expect(inferJcodeInnerProviderId("gpt-5.4")).toBe("openai");
+    expect(inferJcodeInnerProviderId("o3")).toBe("openai");
+    expect(inferJcodeInnerProviderId("cursor-grok")).toBeUndefined();
+    expect(inferJcodeInnerProviderId("my-router")).toBeUndefined();
   });
 });

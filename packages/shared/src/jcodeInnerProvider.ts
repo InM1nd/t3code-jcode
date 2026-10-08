@@ -76,6 +76,24 @@ function iconKindFromModelSlug(model: string): JcodeInnerProviderIconKind | null
 }
 
 /**
+ * The `-p` id implied by a model slug. Used when a turn's selection never
+ * recorded `jcodeProvider`, which is how the picker stores a discovered model.
+ * Cursor and Grok slugs stay unresolved: discovery only publishes Claude and Codex.
+ */
+export function inferJcodeInnerProviderId(
+  model: string | null | undefined,
+): "claude" | "openai" | undefined {
+  switch (iconKindFromModelSlug(model ?? "")) {
+    case "claudeAgent":
+      return "claude";
+    case "codex":
+      return "openai";
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Prefer an explicit jcode `-p` setting; fall back to model-slug heuristics.
  */
 export function resolveJcodeInnerProviderIconKind(input: {
