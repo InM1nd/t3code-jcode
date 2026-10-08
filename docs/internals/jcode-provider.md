@@ -46,8 +46,8 @@ jcode ACP is “backed by the Jcode daemon”. Findings from local probes on
 3. When a provider is known, T3 starts one scoped `jcode serve` daemon for
    that provider session, bound to a short temporary socket. The ACP subprocess
    connects to that same socket. This prevents an ambient daemon from silently
-   supplying a different provider or model. Without a provider, the session
-   does not get that socket.
+   supplying a different provider or model. Without a provider, the turn
+   fails and the session does not get that socket.
 4. T3 removes only its session socket and stops only the child handle it
    spawned. It never searches for or kills Jcode processes by name.
 5. Prompting without configured model credentials fails with a clear
