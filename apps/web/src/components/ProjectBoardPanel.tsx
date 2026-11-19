@@ -22,13 +22,13 @@ import {
   restoreBoardItem,
   upsertBoardItem,
 } from "../state/projectBoard";
+import { useRightPanelStore } from "../rightPanelStore";
 import { useAtomCommand } from "../state/use-atom-command";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { BoardCardEditor } from "../tandem/BoardCardEditor";
 import { boardCardUpsertFields } from "../tandem/boardCardDraft";
 import { buildTandemDelegationPrompt, isTandemDelegation } from "../tandem/delegationQueue";
 import { ProjectActivityTimeline } from "../tandem/ProjectActivityTimeline";
-import { TandemMegathreadWorkers } from "../tandem/TandemMegathreadWorkers";
 import { formatQuietBoardLabel } from "../tandem/quietBoard";
 import {
   buildBoardImplementPrompt,
@@ -108,13 +108,27 @@ export function ProjectBoardPanel(props: {
           <div className="font-medium">Board</div>
           <div className="truncate text-xs opacity-70">{formatQuietBoardLabel(activeCount)}</div>
         </div>
-        <button
-          type="button"
-          className="text-xs opacity-70"
-          onClick={() => setShowArchived((current) => !current)}
-        >
-          {showArchived ? "Hide archived" : `Archived (${grouped.archived.length})`}
-        </button>
+        <div className="flex items-center gap-3">
+          {typeof props.composerTarget === "string" ? null : (
+            <button
+              type="button"
+              className="text-xs opacity-70"
+              onClick={() => {
+                if (typeof props.composerTarget === "string") return;
+                useRightPanelStore.getState().open(props.composerTarget, "workers");
+              }}
+            >
+              Workers
+            </button>
+          )}
+          <button
+            type="button"
+            className="text-xs opacity-70"
+            onClick={() => setShowArchived((current) => !current)}
+          >
+            {showArchived ? "Hide archived" : `Archived (${grouped.archived.length})`}
+          </button>
+        </div>
       </div>
       <form
         className="flex gap-2 border-b px-3 py-2"
@@ -198,13 +212,6 @@ export function ProjectBoardPanel(props: {
             }}
           />
         ) : null}
-        {selected || typeof props.composerTarget === "string" ? null : (
-          <TandemMegathreadWorkers
-            environmentId={props.environmentId}
-            bossThreadId={props.composerTarget.threadId}
-            items={items}
-          />
-        )}
         {selected ? null : (
           <div className="mb-2 flex flex-wrap gap-1">
             {PROJECT_BOARD_STATUS_ORDER.map((status) =>

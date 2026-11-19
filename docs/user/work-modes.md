@@ -15,13 +15,15 @@ Debug and Megathread run as normal build turns with that extra instruction. Plan
 
 ## Megathread
 
-A megathread is the boss of one feature. It splits the feature into [board](project-board.md) cards, hands each card to a worker subthread with its own worktree and model, has each branch reviewed, merges it into the feature branch, and runs one final verification. It does not write the feature code itself.
+A megathread is the boss of one feature. It splits the feature into [board](project-board.md) cards, hands each card to a worker subthread with its own worktree and model, checks each branch, merges it into the feature branch, and runs the final checks. It does not write the feature code itself.
 
-To start, open a thread on the feature branch, select Megathread, and describe the feature. The megathread proposes the cards and a model for each one, and delegates nothing until you approve. You merge the feature branch into main yourself.
+To start, open a thread on the feature branch, select Megathread, and describe the feature. The megathread proposes the cards, a model for each one, a cost profile, and a rough token estimate against doing it in one thread. It delegates nothing until you approve. You merge the feature branch into main yourself.
 
-To follow the workers, open the Board panel in the megathread. Its Workers list shows each worker's card, model, branch, status, and tokens spent, plus the feature total and the megathread's own share. Select a worker to open its thread. A card with a worker has a Worker link too.
+The profile sets how much checking you pay for. **Lean** skips reviewer threads, and the megathread runs the final checks itself. **Standard**, the default, reviews only cards that touch shared code, public interfaces, or several files. **Thorough** reviews every card and adds a separate verifier. To pick one, say so when you approve the plan, for example "approve, Lean".
 
-It is worth it for a feature with three or more independent cards that each touch several files. For less, the megathread says so and Build is cheaper.
+A megathread costs several times a single thread, because every worker starts with a fresh context. It is worth it for three or more independent cards that each touch several files, or when finishing sooner matters. For less, the megathread says so and Build is cheaper.
+
+To follow the workers, open the Workers tab: use the Workers button in the Board panel or "Toggle workers" in the command palette. It shows each worker's card, model, branch, status, and tokens spent, plus the feature total and the megathread's own share. Select a worker to open its thread. The tab also shows this thread's own tokens, so you can compare a megathread with a single-thread run.
 
 Stop on the megathread stops every worker. Progress is kept on the board, so the next message picks up from the cards. Worker worktrees stay until you accept the feature.
 

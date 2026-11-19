@@ -25,6 +25,7 @@ import {
   ListTodo,
   Plus,
   TerminalSquare,
+  UsersRound,
 } from "lucide-react";
 import { Volume2, VolumeOff } from "lucide";
 import {
@@ -624,6 +625,8 @@ function surfaceTitle(
       return surface.title ?? surface.target?.name ?? "Device";
     case "board":
       return "Board";
+    case "workers":
+      return "Workers";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -715,6 +718,8 @@ function SurfaceIcon({
       );
     case "board":
       return <ListTodo className="size-3 shrink-0" />;
+    case "workers":
+      return <UsersRound className="size-3 shrink-0" />;
   }
 }
 

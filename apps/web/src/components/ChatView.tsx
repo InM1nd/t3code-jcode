@@ -705,6 +705,9 @@ const DiffPanel = lazy(() => import("./DiffPanel"));
 const ProjectBoardPanel = lazy(() =>
   import("./ProjectBoardPanel").then((module) => ({ default: module.ProjectBoardPanel })),
 );
+const TandemWorkersPanel = lazy(() =>
+  import("../tandem/TandemWorkersPanel").then((m) => ({ default: m.TandemWorkersPanel })),
+);
 const selectAutoShowFloatingPreview = (settings: { browserAutoShowFloatingPreview: boolean }) =>
   settings.browserAutoShowFloatingPreview;
 const DevicePanel = lazy(() =>
@@ -10987,6 +10990,14 @@ export default function ChatView(props: ChatViewProps) {
           mode="embedded"
           composerDraftTarget={composerDraftTarget}
           workspaceMutationId={workspaceMutationId}
+        />
+      </Suspense>
+    ) : renderedRightPanelSurface?.kind === "workers" && activeProject ? (
+      <Suspense fallback={null}>
+        <TandemWorkersPanel
+          environmentId={activeThread.environmentId}
+          projectId={activeProject.id}
+          bossThreadId={activeThread.id}
         />
       </Suspense>
     ) : renderedRightPanelSurface?.kind === "board" && activeProject ? (
