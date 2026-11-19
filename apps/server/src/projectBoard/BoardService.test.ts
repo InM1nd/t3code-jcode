@@ -91,10 +91,27 @@ it.layer(layer)("BoardService", (it) => {
       assert.equal(handed.latestHandoff?.summary, "The table exists.");
       assert.equal(handed.handoffHistory?.length, 1);
 
+      const execution = { role: "implementation" as const, threadId: ThreadId.make("worker-1") };
+      yield* board.upsert({
+        projectId,
+        itemId,
+        title: created.title,
+        status: "inProgress",
+        execution,
+      });
+      const reviewed = yield* board.upsert({
+        projectId,
+        itemId,
+        title: created.title,
+        status: "inReview",
+      });
+      assert.deepStrictEqual(reviewed.execution, execution);
+
       const archived = yield* board.archive(projectId, itemId);
       assert.equal(typeof archived.archivedAt, "string");
       const restored = yield* board.restore(projectId, itemId);
       assert.equal(restored.archivedAt, null);
+      assert.deepStrictEqual(restored.execution, execution);
 
       yield* board.delete(projectId, itemId);
       const listed = yield* board.list(projectId);

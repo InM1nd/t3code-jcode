@@ -12,8 +12,8 @@ export const composerWorkModes: ReadonlyArray<{
   { mode: "debug", label: "Debug", description: "Find and verify the root cause", icon: BugIcon },
   {
     mode: "swarm",
-    label: "Swarm Lite",
-    description: "Coordinate independent roles",
+    label: "Megathread",
+    description: "Run one feature through worker subthreads",
     icon: NetworkIcon,
   },
 ];

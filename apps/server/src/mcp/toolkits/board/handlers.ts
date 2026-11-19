@@ -10,7 +10,10 @@ import * as Effect from "effect/Effect";
 import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 
 import * as BoardService from "../../../projectBoard/BoardService.ts";
+import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
+import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
+import { dispatchBoardCard } from "./dispatch.ts";
 import { readCaller, type Caller } from "../../threadAccess.ts";
 import { latestBoardTurnId, resolveCallerBoardProject } from "./projectScope.ts";
 import { BoardToolkit } from "./tools.ts";
@@ -135,6 +138,15 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
           itemId,
           title: input.title,
           status: input.status,
+          ...(input.role !== undefined || input.target !== undefined
+            ? {
+                execution: {
+                  ...existing?.execution,
+                  ...(input.role !== undefined ? { role: input.role } : {}),
+                  ...(input.target !== undefined ? { target: input.target } : {}),
+                },
+              }
+            : {}),
           ...(linkTurnId !== undefined ? { linkTurnId } : {}),
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
           ...(input.brief !== undefined ? { brief: input.brief } : {}),
@@ -224,6 +236,20 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
       const found = yield* readItem(input.projectId, input.itemId);
       yield* found.board.delete(found.projectId, found.item.id).pipe(Effect.mapError(boardError));
       return { projectId: found.projectId, item: null };
+    }),
+  ),
+  board_dispatch: McpToolAccess.actsAsCaller((input) =>
+    Effect.gen(function* () {
+      const found = yield* readItem(undefined, input.itemId);
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const orchestrator = yield* OrchestratorMcpService.OrchestratorMcpService;
+      return yield* dispatchBoardCard({
+        ...input,
+        projectId: found.projectId,
+        item: found.item,
+        delegate: (task) => orchestrator.delegateTask(scope, task),
+        save: (card) => found.board.upsert(card).pipe(Effect.mapError(boardError)),
+      });
     }),
   ),
 });

@@ -218,6 +218,8 @@ const make = Effect.gen(function* () {
             input.sourceThreadId === undefined
               ? (existing?.sourceThreadId ?? null)
               : input.sourceThreadId,
+          execution:
+            input.execution === undefined ? (existing?.execution ?? null) : input.execution,
           linkedTurnIds: mergeProjectBoardLinkedTurnIds({
             existing: existing?.linkedTurnIds,
             ...(input.linkedTurnIds !== undefined ? { linkedTurnIds: input.linkedTurnIds } : {}),

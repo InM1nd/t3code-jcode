@@ -8,7 +8,8 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
-import { IsoDateTime, ThreadId, TrimmedNonEmptyString, TurnId } from "./baseSchemas.ts";
+import { IsoDateTime, NodeId, ThreadId, TrimmedNonEmptyString, TurnId } from "./baseSchemas.ts";
+import { OrchestratorMcpTarget, OrchestratorMcpTaskRole } from "./orchestratorMcp.ts";
 
 /** Soft cap so one project cannot grow the board without bound. */
 export const PROJECT_BOARD_ITEM_LIMIT = 500;
@@ -73,6 +74,18 @@ export const ProjectBoardHandoff = Schema.Struct({
 });
 export type ProjectBoardHandoff = typeof ProjectBoardHandoff.Type;
 
+/**
+ * Who works on a card. `role` and `target` are the plan approved for it;
+ * `threadId` and `taskId` are the worker `board_dispatch` started.
+ */
+export const ProjectBoardExecution = Schema.Struct({
+  role: Schema.optional(OrchestratorMcpTaskRole),
+  target: Schema.optional(OrchestratorMcpTarget),
+  threadId: Schema.optional(ThreadId),
+  taskId: Schema.optional(NodeId),
+});
+export type ProjectBoardExecution = typeof ProjectBoardExecution.Type;
+
 export const ProjectBoardItem = Schema.Struct({
   id: ProjectBoardItemId,
   title: TrimmedNonEmptyString,
@@ -83,6 +96,7 @@ export const ProjectBoardItem = Schema.Struct({
   handoffHistory: Schema.optional(Schema.Array(ProjectBoardHandoff)),
   source: ProjectBoardItemSource,
   sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  execution: Schema.optional(Schema.NullOr(ProjectBoardExecution)),
   linkedTurnIds: Schema.optional(Schema.Array(TurnId)),
   area: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   externalRefs: Schema.optional(Schema.Array(TrimmedNonEmptyString)),

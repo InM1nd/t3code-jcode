@@ -44,11 +44,16 @@ export function registerTurnBoardItems(
   registeredBoardItems = read;
 }
 
+/**
+ * A delegated child works on the one task its prompt carries, so it gets no
+ * board digest. It can still call `board_digest`.
+ */
 export function turnBoardItems(
   projectId: ProjectId,
+  lineage?: { readonly relationshipToParent: "fork" | "subagent" | null },
 ): Effect.Effect<ReadonlyArray<ProjectBoardItem>> {
   const read = registeredBoardItems;
-  if (!read) return Effect.succeed([]);
+  if (!read || lineage?.relationshipToParent === "subagent") return Effect.succeed([]);
   return read(projectId).pipe(
     Effect.timeout(Duration.seconds(2)),
     Effect.catchCause(() => Effect.succeed([])),

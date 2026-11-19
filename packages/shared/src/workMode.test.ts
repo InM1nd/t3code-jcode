@@ -20,7 +20,7 @@ describe("workMode", () => {
     expect(workModeInstruction("plan")).toBeNull();
     expect(workModeInstruction(null)).toBeNull();
     expect(workModeInstruction("debug")).toContain("Debug mode");
-    expect(workModeInstruction("swarm")).toContain("Swarm Lite");
+    expect(workModeInstruction("swarm")).toContain("Megathread mode");
   });
 
   it("shows the stored mode, and otherwise the upstream plan or build choice", () => {

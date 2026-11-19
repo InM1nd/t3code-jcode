@@ -4,6 +4,8 @@ import {
   type ProjectBoardItem,
   type ProjectId,
 } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { useRouter } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -21,10 +23,12 @@ import {
   upsertBoardItem,
 } from "../state/projectBoard";
 import { useAtomCommand } from "../state/use-atom-command";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { BoardCardEditor } from "../tandem/BoardCardEditor";
 import { boardCardUpsertFields } from "../tandem/boardCardDraft";
 import { buildTandemDelegationPrompt, isTandemDelegation } from "../tandem/delegationQueue";
 import { ProjectActivityTimeline } from "../tandem/ProjectActivityTimeline";
+import { TandemMegathreadWorkers } from "../tandem/TandemMegathreadWorkers";
 import { formatQuietBoardLabel } from "../tandem/quietBoard";
 import {
   buildBoardImplementPrompt,
@@ -71,6 +75,7 @@ export function ProjectBoardPanel(props: {
     [props.environmentId, props.projectId],
   );
   const query = useEnvironmentQuery(boardAtom);
+  const router = useRouter();
   const upsert = useAtomCommand(upsertBoardItem);
   const archive = useAtomCommand(archiveBoardItem);
   const restore = useAtomCommand(restoreBoardItem);
@@ -193,6 +198,13 @@ export function ProjectBoardPanel(props: {
             }}
           />
         ) : null}
+        {selected || typeof props.composerTarget === "string" ? null : (
+          <TandemMegathreadWorkers
+            environmentId={props.environmentId}
+            bossThreadId={props.composerTarget.threadId}
+            items={items}
+          />
+        )}
         {selected ? null : (
           <div className="mb-2 flex flex-wrap gap-1">
             {PROJECT_BOARD_STATUS_ORDER.map((status) =>
@@ -285,6 +297,24 @@ export function ProjectBoardPanel(props: {
                           >
                             {projectBoardStatusLabel(item.status)}
                           </button>
+                          {item.execution?.threadId ? (
+                            <button
+                              type="button"
+                              className="shrink-0 cursor-pointer rounded px-1.5 py-px text-3xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                              onClick={() => {
+                                const workerThreadId = item.execution?.threadId;
+                                if (!workerThreadId) return;
+                                void router.navigate({
+                                  to: "/$environmentId/$threadId",
+                                  params: buildThreadRouteParams(
+                                    scopeThreadRef(props.environmentId, workerThreadId),
+                                  ),
+                                });
+                              }}
+                            >
+                              Worker
+                            </button>
+                          ) : null}
                           <span className="ml-auto flex items-center gap-1 opacity-0 group-hover/card:opacity-100">
                             <button
                               type="button"

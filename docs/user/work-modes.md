@@ -9,11 +9,21 @@ Work mode is separate from the permission mode. A permission mode decides when t
 - **Build** — normal implementation work.
 - **Plan** — inspect the task and prepare a plan before changing files. This uses the provider's plan mode.
 - **Debug** — reproduce the issue, gather evidence, find the root cause, make the smallest safe fix, and verify it.
-- **Swarm Lite** — break independent parts into roles, collect the results, and write one answer.
+- **Megathread** — run one feature through worker subthreads. See below.
 
-Swarm Lite is a workflow, not a new pool of workers. A provider uses subagents it already supports. Otherwise it works through the roles one after another in the current chat.
+Debug and Megathread run as normal build turns with that extra instruction. Plan keeps the provider's own plan mode.
 
-Debug and Swarm Lite run as normal build turns with that extra instruction. Plan keeps the provider's own plan mode.
+## Megathread
+
+A megathread is the boss of one feature. It splits the feature into [board](project-board.md) cards, hands each card to a worker subthread with its own worktree and model, has each branch reviewed, merges it into the feature branch, and runs one final verification. It does not write the feature code itself.
+
+To start, open a thread on the feature branch, select Megathread, and describe the feature. The megathread proposes the cards and a model for each one, and delegates nothing until you approve. You merge the feature branch into main yourself.
+
+To follow the workers, open the Board panel in the megathread. Its Workers list shows each worker's card, model, branch, status, and tokens spent, plus the feature total and the megathread's own share. Select a worker to open its thread. A card with a worker has a Worker link too.
+
+It is worth it for a feature with three or more independent cards that each touch several files. For less, the megathread says so and Build is cheaper.
+
+Stop on the megathread stops every worker. Progress is kept on the board, so the next message picks up from the cards. Worker worktrees stay until you accept the feature.
 
 ## Slash commands
 
@@ -21,8 +31,8 @@ Debug and Swarm Lite run as normal build turns with that extra instruction. Plan
 - `/default` — alias for Build
 - `/plan` — select Plan
 - `/debug` — select Debug
-- `/swarm` — select Swarm Lite
+- `/swarm` — select Megathread
 
 A command switches the mode only when it is the whole message, with no attachments or other composer context. Otherwise it is sent to the agent as normal text.
 
-Chats that already used Build or Plan keep that choice. Debug and Swarm Lite are saved with the chat the next time you select them.
+Chats that already used Build or Plan keep that choice. Debug and Megathread are saved with the chat the next time you select them.

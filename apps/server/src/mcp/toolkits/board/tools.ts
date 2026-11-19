@@ -1,5 +1,10 @@
 import {
+  NodeId,
+  OrchestratorMcpDelegatedTaskStatus,
   OrchestratorMcpFailure,
+  OrchestratorMcpTarget,
+  OrchestratorMcpTaskRole,
+  ThreadId,
   ProjectBoardBrief,
   ProjectBoardItem,
   ProjectBoardItemId,
@@ -15,6 +20,7 @@ import * as Crypto from "effect/Crypto";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as BoardService from "../../../projectBoard/BoardService.ts";
+import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
@@ -104,6 +110,8 @@ export const BoardToolkit = Toolkit.make(
       area: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
       externalRefs: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
       relatedItemIds: Schema.optional(Schema.Array(ProjectBoardItemId)),
+      role: Schema.optional(OrchestratorMcpTaskRole),
+      target: Schema.optional(OrchestratorMcpTarget),
     }),
     success: BoardMutateResult,
   }).annotate(Tool.Destructive, false),
@@ -167,4 +175,25 @@ export const BoardToolkit = Toolkit.make(
     parameters: Schema.Struct({ projectId, itemId: ProjectBoardItemId }),
     success: BoardMutateResult,
   }).annotate(Tool.Destructive, true),
+  Tool.make("board_dispatch", {
+    ...shared,
+    dependencies: [...dependencies, OrchestratorMcpService.OrchestratorMcpService],
+    description:
+      "Needs an agent running inside a T3 thread. Start a worker subthread of THIS thread for one board card. The worker gets its own worktree from this thread's current local commit and a prompt built from the card's brief; uncommitted edits are not copied. The card moves to inProgress and records the worker. role and target default to the ones stored on the card with board_upsert; without a target the worker inherits this thread's provider and model. A card without a brief is refused. Returns at once: the worker's completion wakes this thread, so end the turn instead of polling. Manage the worker with task_status and task_cancel.",
+    parameters: Schema.Struct({
+      itemId: ProjectBoardItemId,
+      role: Schema.optional(OrchestratorMcpTaskRole),
+      target: Schema.optional(OrchestratorMcpTarget),
+      redispatch: Schema.optional(Schema.Boolean),
+    }),
+    success: Schema.Struct({
+      projectId: ProjectId,
+      itemId: ProjectBoardItemId,
+      taskId: NodeId,
+      childThreadId: ThreadId,
+      status: OrchestratorMcpDelegatedTaskStatus,
+    }),
+  })
+    .annotate(Tool.Destructive, true)
+    .annotate(Tool.OpenWorld, true),
 );

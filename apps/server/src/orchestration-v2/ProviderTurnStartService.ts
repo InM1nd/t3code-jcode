@@ -971,7 +971,7 @@ export const layer: Layer.Layer<
             : `${workModeText}\n\n${composerText}`;
       const boardItems =
         turnContextPrompts && !bareProviderCommand
-          ? yield* turnBoardItems(projection.thread.projectId)
+          ? yield* turnBoardItems(projection.thread.projectId, projection.thread.lineage)
           : [];
       const userText =
         turnContextPrompts && !bareProviderCommand

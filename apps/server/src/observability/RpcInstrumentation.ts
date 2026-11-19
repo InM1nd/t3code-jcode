@@ -208,6 +208,7 @@ const RPC_AGGREGATES = {
   [BOARD_WS_METHODS.boardRestore]: "board",
   [BOARD_WS_METHODS.boardDelete]: "board",
   [BOARD_WS_METHODS.activityList]: "activity",
+  [BOARD_WS_METHODS.megathreadUsage]: "board",
   [WORK_MODE_WS_METHODS.get]: "workMode",
   [WORK_MODE_WS_METHODS.subscribe]: "workMode",
   [WORK_MODE_WS_METHODS.set]: "workMode",

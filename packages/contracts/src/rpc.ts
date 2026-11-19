@@ -21,6 +21,7 @@ import {
   BoardRestoreRpc,
   BoardSubscribeRpc,
   BoardUpsertRpc,
+  MegathreadUsageRpc,
   ProjectActivityListRpc,
 } from "./projectBoardRpc.ts";
 import {
@@ -1940,6 +1941,7 @@ export const WsRpcGroup = RpcGroup.make(
   BoardRestoreRpc,
   BoardDeleteRpc,
   ProjectActivityListRpc,
+  MegathreadUsageRpc,
 )
   .merge(LocalDomainsRpcGroup)
   .merge(WorkModeRpcGroup)

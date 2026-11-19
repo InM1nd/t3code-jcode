@@ -2661,7 +2661,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 type: "slash-command",
                 command: "swarm",
                 label: "/swarm",
-                description: "Switch this thread to Swarm Lite",
+                description: "Switch this thread to Megathread",
               },
               {
                 id: "slash:default",
