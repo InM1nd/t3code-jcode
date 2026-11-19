@@ -37,3 +37,9 @@ export const deleteBoardItem = createEnvironmentRpcCommand(connectionAtomRuntime
   label: "project-board:delete",
   tag: BOARD_WS_METHODS.boardDelete,
 });
+
+export const megathreadUsage = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
+  label: "megathread:usage",
+  tag: BOARD_WS_METHODS.megathreadUsage,
+  staleTimeMs: 5_000,
+});

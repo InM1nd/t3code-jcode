@@ -5,10 +5,17 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 
 import { EnvironmentAuthorizationError } from "./auth.ts";
-import { ProjectId, ThreadId, TrimmedNonEmptyString, TurnId } from "./baseSchemas.ts";
+import {
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+  TurnId,
+} from "./baseSchemas.ts";
 import { ProjectActivitySnapshot } from "./projectActivity.ts";
 import {
   ProjectBoardBrief,
+  ProjectBoardExecution,
   ProjectBoardItem,
   ProjectBoardItemId,
   ProjectBoardItemSource,
@@ -24,6 +31,7 @@ export const BOARD_WS_METHODS = {
   boardRestore: "board.restore",
   boardDelete: "board.delete",
   activityList: "projectActivity.list",
+  megathreadUsage: "megathread.usage",
 } as const;
 
 export class BoardServiceError extends Schema.TaggedError<BoardServiceError>()(
@@ -67,6 +75,7 @@ export const ProjectBoardUpsertInput = Schema.Struct({
   brief: Schema.optional(Schema.NullOr(ProjectBoardBrief)),
   source: Schema.optional(ProjectBoardItemSource),
   sourceThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  execution: Schema.optional(Schema.NullOr(ProjectBoardExecution)),
   linkedTurnIds: Schema.optional(Schema.Array(TurnId)),
   linkTurnId: Schema.optional(Schema.NullOr(TurnId)),
   area: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -124,5 +133,23 @@ export const BoardDeleteRpc = Rpc.make(BOARD_WS_METHODS.boardDelete, {
 export const ProjectActivityListRpc = Rpc.make(BOARD_WS_METHODS.activityList, {
   payload: ProjectBoardListInput,
   success: ProjectActivitySnapshot,
+  error: boardError,
+});
+
+/** Tokens a thread's provider turns reported. Input includes cached input. */
+export const MegathreadThreadUsage = Schema.Struct({
+  threadId: ThreadId,
+  turns: NonNegativeInt,
+  inputTokens: NonNegativeInt,
+  cachedInputTokens: NonNegativeInt,
+  outputTokens: NonNegativeInt,
+});
+export type MegathreadThreadUsage = typeof MegathreadThreadUsage.Type;
+
+export const MegathreadUsageRpc = Rpc.make(BOARD_WS_METHODS.megathreadUsage, {
+  payload: Schema.Struct({
+    threadIds: Schema.Array(ThreadId).check(Schema.isMaxLength(100)),
+  }),
+  success: Schema.Struct({ threads: Schema.Array(MegathreadThreadUsage) }),
   error: boardError,
 });
