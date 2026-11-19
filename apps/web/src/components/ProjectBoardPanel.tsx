@@ -212,7 +212,7 @@ export function ProjectBoardPanel(props: {
                 <span
                   key={status}
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                    "rounded px-1.5 py-0.5 text-3xs font-medium uppercase tracking-wide",
                     BOARD_STATUS_STYLES[status].chip,
                   )}
                 >
@@ -272,14 +272,14 @@ export function ProjectBoardPanel(props: {
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 pl-3">
                           {item.area ? (
-                            <span className="shrink-0 rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-px text-3xs font-medium text-muted-foreground">
                               {item.area}
                             </span>
                           ) : null}
                           <button
                             type="button"
                             className={cn(
-                              "shrink-0 cursor-pointer rounded px-1.5 py-px text-[10px] font-medium uppercase tracking-wide",
+                              "shrink-0 cursor-pointer rounded px-1.5 py-px text-3xs font-medium uppercase tracking-wide",
                               BOARD_STATUS_STYLES[item.status].chip,
                             )}
                             aria-label={`${projectBoardStatusLabel(item.status)}. Advance status.`}
@@ -318,7 +318,7 @@ export function ProjectBoardPanel(props: {
                           <span className="ml-auto flex items-center gap-1 opacity-0 group-hover/card:opacity-100">
                             <button
                               type="button"
-                              className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                              className="cursor-pointer rounded px-1.5 py-0.5 text-3xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                               onClick={() =>
                                 insertPrompt(
                                   isTandemDelegation(item)
@@ -331,7 +331,7 @@ export function ProjectBoardPanel(props: {
                             </button>
                             <button
                               type="button"
-                              className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                              className="cursor-pointer rounded px-1.5 py-0.5 text-3xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
                               onClick={() => {
                                 void archive({
                                   environmentId: props.environmentId,
