@@ -832,7 +832,10 @@ const layerDeviceStandardToolkitRegistration = toolkitRegistration(
   DeviceHandlers.layerStandard,
 );
 
-const layerBoardRegistration = toolkitRegistration(BoardToolkit, BoardHandlers.layer);
+// board_dispatch starts workers through OrchestratorMcpService.
+const layerBoardRegistration = toolkitRegistration(BoardToolkit, BoardHandlers.layer).pipe(
+  Layer.provide(OrchestratorMcpService.layer),
+);
 
 const layerDeviceScreenshotRegistration = imageToolRegistration(
   registerDeviceScreenshot(),
