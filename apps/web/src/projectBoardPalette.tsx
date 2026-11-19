@@ -1,7 +1,7 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectBoardItem } from "@t3tools/contracts";
 import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
-import { ListTodoIcon } from "lucide-react";
+import { ListTodoIcon, UsersRoundIcon } from "lucide-react";
 
 import type { CommandPaletteActionItem } from "./components/CommandPalette.logic";
 import { ITEM_ICON_CLASS } from "./components/CommandPalette.logic";
@@ -30,6 +30,18 @@ export function buildProjectBoardCommandItems(input: {
       run: async () => {
         if (!boardThreadRef) return;
         useRightPanelStore.getState().toggle(boardThreadRef, "board");
+      },
+    },
+    {
+      kind: "action",
+      value: "action:toggle-workers",
+      searchTerms: ["workers", "megathread", "subthreads", "subagents", "tokens"],
+      title: "Toggle workers",
+      disabled: boardThreadRef === null,
+      icon: <UsersRoundIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        if (!boardThreadRef) return;
+        useRightPanelStore.getState().toggle(boardThreadRef, "workers");
       },
     },
     {

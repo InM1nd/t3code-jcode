@@ -31,6 +31,7 @@ const RIGHT_PANEL_KINDS = [
   "pull-request",
   "pull-requests",
   "board",
+  "workers",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -87,7 +88,8 @@ export type RightPanelSurface =
     }
   /** The thread's linked pull requests, one singleton tab beside any number of `pull-request` tabs. */
   | { id: "pull-requests"; kind: "pull-requests" }
-  | { id: "board"; kind: "board" };
+  | { id: "board"; kind: "board" }
+  | { id: "workers"; kind: "workers" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v9 removed the "plan" surface kind (plans render inline in the transcript).
@@ -218,6 +220,8 @@ const singletonSurface = (
       return { id: "device", kind };
     case "board":
       return { id: "board", kind };
+    case "workers":
+      return { id: "workers", kind };
   }
 };
 
