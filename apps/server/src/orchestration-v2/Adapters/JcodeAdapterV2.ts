@@ -25,7 +25,7 @@ import {
   resolveJcodeLaunchProvider,
   resolveJcodeRuntimeModelId,
 } from "../../provider/acp/JcodeAcpSupport.ts";
-import { startJcodeSessionDaemon } from "../../provider/acp/JcodeSessionDaemon.ts";
+import { makeJcodeDaemonPool } from "../../provider/acp/JcodeDaemonPool.ts";
 import {
   clearJcodeMcpAuthFile,
   installJcodeMcpBridgeFiles,
@@ -137,12 +137,17 @@ function installThreadMcpBridge(input: {
 }
 
 function makeJcodeRuntime(options: JcodeAdapterV2Options) {
+  const daemons = makeJcodeDaemonPool({
+    spawner: options.childProcessSpawner,
+    fileSystem: options.fileSystem,
+    path: options.path,
+  });
   return (input: AcpAdapterV2RuntimeInput) =>
     Effect.gen(function* () {
       const provider = jcodeLaunchProvider(input, options.settings);
       if (provider === undefined) {
         return yield* new EffectAcpErrors.AcpTransportError({
-          detail: "Choose a Claude or Codex model for Jcode before starting a turn.",
+          detail: "Choose a model Jcode can route before starting a turn.",
           cause: "missing-jcode-provider",
         });
       }
@@ -155,43 +160,25 @@ function makeJcodeRuntime(options: JcodeAdapterV2Options) {
         });
       }
 
-      const directory = yield* options.fileSystem
-        .makeTempDirectoryScoped({ prefix: "jcode-session-" })
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new EffectAcpErrors.AcpTransportError({
-                detail: "Failed to create a Jcode session directory.",
-                cause,
-              }),
-          ),
-        );
-      const socketPath = options.path.join(directory, "daemon.sock");
-      yield* startJcodeSessionDaemon(
-        {
-          threadId: input.threadId ?? "jcode",
+      const socketPath = yield* daemons
+        .acquire({
           provider,
           model,
-          cwd: input.cwd,
-          socketPath,
           ...(options.settings.binaryPath ? { binaryPath: options.settings.binaryPath } : {}),
           ...(options.settings.providerProfile
             ? { providerProfile: options.settings.providerProfile }
             : {}),
           environment: options.environment,
-        },
-        options.childProcessSpawner,
-      ).pipe(
-        Effect.provideService(FileSystem.FileSystem, options.fileSystem),
-        Effect.provideService(Path.Path, options.path),
-        Effect.mapError(
-          (cause) =>
-            new EffectAcpErrors.AcpTransportError({
-              detail: cause.message,
-              cause,
-            }),
-        ),
-      );
+        })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new EffectAcpErrors.AcpTransportError({
+                detail: cause.message,
+                cause,
+              }),
+          ),
+        );
 
       return yield* makeJcodeAcpRuntime({
         cwd: input.cwd,

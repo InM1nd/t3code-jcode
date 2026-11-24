@@ -4,6 +4,7 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
+import { jcodeProviderIdForSubProvider } from "@t3tools/shared/jcodeInnerProvider";
 import { resolveSelectableModel } from "@t3tools/shared/model";
 import { useAtomValue } from "@effect/atom-react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
@@ -184,7 +185,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   onRequestClose?: () => void;
   onOpenProviderSetup?: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
-  onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
+  onInstanceModelChange: (
+    instanceId: ProviderInstanceId,
+    model: string,
+    extras?: { readonly jcodeProvider?: string },
+  ) => void;
 }) {
   const {
     keybindings: providedKeybindings,
@@ -622,7 +627,16 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         if (additive && onToggleModel) {
           onToggleModel(instanceId, resolvedModel);
         } else {
-          onInstanceModelChange(instanceId, resolvedModel);
+          const picked = options.find((model) => model.slug === resolvedModel);
+          const jcodeProvider =
+            entry.driverKind === "jcode"
+              ? jcodeProviderIdForSubProvider(picked?.subProvider)
+              : undefined;
+          onInstanceModelChange(
+            instanceId,
+            resolvedModel,
+            jcodeProvider ? { jcodeProvider } : undefined,
+          );
         }
       }
     },
@@ -905,7 +919,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           >
             {selectedEntry?.driverKind === "jcode" && !isSearching ? (
               <JcodeModelVariantControls
-                models={modelOptionsByInstance.get(selectedEntry.instanceId) ?? []}
+                models={visibleModels}
                 currentSlug={activeModelSlug}
                 onSelect={(slug) => handleModelSelect(slug, selectedEntry.instanceId)}
               />
