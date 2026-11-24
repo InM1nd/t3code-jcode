@@ -129,6 +129,14 @@ checkpoints but cannot roll back its conversation. The [checkpoint boundary](./o
 therefore rejects revert before touching files. Native permission and question option IDs must
 also survive normalization; a display label is not necessarily a valid reply.
 
+Claude's on-demand MCP servers ([`claudeMcpAuto.ts`](../../apps/server/src/provider/claudeMcpAuto.ts))
+must change servers only through the SDK's `strictMcpConfig`, `mcpServers`, and `setMcpServers`.
+`toggleMcpServer` looks per-session but writes `disabledMcpServers` into the user's
+`~/.claude.json`. `setMcpServers` replaces the whole dynamic set, so passing only the new server
+disconnects t3-code. Over HTTP the CLI applies it only after the `mcp_enable` call returns, sometimes
+only after the turn, so the handler must not await it. Other providers have no live equivalent;
+Cursor and Jcode cannot even filter their own MCP config at session start.
+
 ## Attachments and stored history
 
 Attachments live outside the project workspace. The

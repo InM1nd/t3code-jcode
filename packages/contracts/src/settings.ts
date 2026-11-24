@@ -704,6 +704,15 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    // Fork: see apps/server/src/provider/claudeMcpAuto.ts.
+    autoMcpServers: Schema.optionalKey(Schema.Boolean).pipe(
+      Schema.annotateKey({
+        title: "Load MCP servers on demand",
+        description:
+          "Start sessions with only the MCP servers this project uses. The agent turns on others when it needs them.",
+        providerSettingsForm: { control: "switch", clearWhenEmpty: "omit" },
+      }),
+    ),
   },
   {
     order: ["binaryPath", "homePath", "autoCompactWindow", "launchArgs"],
@@ -1660,6 +1669,7 @@ const ClaudeSettingsPatch = Schema.Struct({
   autoCompactWindow: Schema.optionalKey(
     TrimmedString.check(Schema.isPattern(CLAUDE_AUTO_COMPACT_WINDOW_PATTERN)),
   ),
+  autoMcpServers: Schema.optionalKey(Schema.Boolean),
 });
 
 const CursorSettingsPatch = Schema.Struct({

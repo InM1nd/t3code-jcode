@@ -56,6 +56,19 @@ for that message, open the menu next to the button and choose **Send with full
 history**. See [commands and skills](./composer.md#commands-and-skills) for using
 composer commands.
 
+## Load MCP servers on demand
+
+Every MCP server in your Claude configuration adds its tool list to the start of
+each session, even when the task never uses it. Turn on **Load MCP servers on
+demand** in the Claude provider settings to start sessions with only T3 Code's
+own tools plus the servers this project used in the last 30 days. When a task
+needs another server, the agent turns it on by itself and keeps working; T3 Code
+remembers it for the project's next sessions.
+
+The setting reads servers from your user, local, and approved project
+(`.mcp.json`) scopes. MCP servers bundled with Claude plugins and claude.ai
+connectors are not loaded while it is on. Turn it off to load everything again.
+
 ## Usage limits
 
 If your Claude subscription runs out of usage mid-turn, the thread shows which
