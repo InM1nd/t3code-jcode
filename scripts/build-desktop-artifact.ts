@@ -2798,7 +2798,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    // Fork: a stable self-signed identity for unsigned builds, so Squirrel.Mac
+    // accepts updates (it rejects adhoc signatures, which change every build).
+    const selfSignIdentity = yield* Config.String("TANDEM_MAC_SIGN_IDENTITY").pipe(Config.option);
     buildConfig.mac = {
+      ...(!signed && Option.isSome(selfSignIdentity) ? { identity: selfSignIdentity.value } : {}),
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
