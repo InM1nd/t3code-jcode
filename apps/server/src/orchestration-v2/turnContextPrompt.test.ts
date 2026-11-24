@@ -2,6 +2,7 @@ import { assert, it } from "@effect/vitest";
 import {
   ProjectBoardItemId,
   ThreadId,
+  TurnId,
   type DiscoveredLocalServer,
   type ProjectBoardItem,
 } from "@t3tools/contracts";
@@ -80,6 +81,39 @@ describe("turnContextPrompt", () => {
         getThreadTitle: () => Effect.die("no title"),
       });
       assert.strictEqual(unchanged, "ship it");
+    }),
+  );
+
+  it.effect("sends the board digest again only when a card changes", () =>
+    Effect.gen(function* () {
+      const card = (status: ProjectBoardItem["status"], linkedTurnIds: TurnId[] = []) =>
+        ({
+          id: ProjectBoardItemId.make("card-1"),
+          title: "Ship the prompt",
+          status,
+          source: "user",
+          linkedTurnIds,
+          createdAt: "2026-10-06T00:00:00.000Z",
+          updatedAt: "2026-10-06T00:00:00.000Z",
+        }) as ProjectBoardItem;
+      const turn = (threadId: string, boardItems: ProjectBoardItem[]) =>
+        applyTurnContext({
+          text: "ship it",
+          threadId: thread(threadId),
+          worktreePath: null,
+          branch: null,
+          boardItems,
+          portDiscovery: { scan: () => Effect.succeed([]) },
+          getThreadTitle: () => Effect.succeed(null),
+        });
+
+      assert.include(yield* turn("digest", [card("inProgress")]), "Project board digest");
+      assert.strictEqual(
+        yield* turn("digest", [card("inProgress", [TurnId.make("turn-1")])]),
+        "ship it",
+      );
+      assert.include(yield* turn("digest", [card("inReview")]), "Project board digest");
+      assert.include(yield* turn("digest-other", [card("inReview")]), "Project board digest");
     }),
   );
 

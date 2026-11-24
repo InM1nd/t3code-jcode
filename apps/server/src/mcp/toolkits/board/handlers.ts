@@ -7,7 +7,7 @@ import {
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
-import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
+import { findProjectBoardItem, formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 
 import * as BoardService from "../../../projectBoard/BoardService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -48,12 +48,25 @@ const latestCallerTurnId = (context: Caller) =>
     return latestBoardTurnId(records.providerTurns);
   });
 
-const slimItem = (item: ProjectBoardItem): ProjectBoardItem => ({
+export const slimItem = (item: ProjectBoardItem): ProjectBoardItem => ({
   ...item,
   notes: null,
   brief: null,
   latestHandoff: null,
   handoffHistory: [],
+});
+
+// Writes echo only the card's identity and status: the caller knows what it
+// wrote, and a card's notes and handoffs can run to thousands of tokens.
+const writeResult = (projectId: ProjectId, item: ProjectBoardItem) => ({
+  projectId,
+  item: slimItem(item),
+});
+
+// `latestHandoff` is the head of `handoffHistory`; a brief adds the two before it.
+export const briefItem = (item: ProjectBoardItem): ProjectBoardItem => ({
+  ...item,
+  handoffHistory: item.handoffHistory?.slice(1, 3) ?? [],
 });
 
 const activeCounts = (items: ReadonlyArray<ProjectBoardItem>) => {
@@ -110,7 +123,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
   board_get_brief: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
       const found = yield* readItem(input.projectId, input.itemId);
-      return { projectId: found.projectId, item: found.item };
+      return { projectId: found.projectId, item: briefItem(found.item) };
     }),
   ),
   board_upsert: McpToolAccess.writes((input) =>
@@ -119,12 +132,10 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
       const projectId = yield* boardProjectId(context, input.projectId);
       const board = yield* BoardService.BoardService;
       const crypto = yield* Crypto.Crypto;
-      const existing = input.itemId
-        ? (yield* board.list(projectId).pipe(Effect.mapError(boardError))).items.find(
-            (item) => item.id === input.itemId,
-          )
-        : undefined;
+      const items = (yield* board.list(projectId).pipe(Effect.mapError(boardError))).items;
+      const existing = input.itemId ? findProjectBoardItem(items, input.itemId) : undefined;
       const itemId =
+        existing?.id ??
         input.itemId ??
         ProjectBoardItemId.make(
           yield* crypto.randomUUIDv4.pipe(
@@ -152,7 +163,13 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
           ...(input.brief !== undefined ? { brief: input.brief } : {}),
           ...(input.area !== undefined ? { area: input.area } : {}),
           ...(input.externalRefs !== undefined ? { externalRefs: input.externalRefs } : {}),
-          ...(input.relatedItemIds !== undefined ? { relatedItemIds: input.relatedItemIds } : {}),
+          ...(input.relatedItemIds !== undefined
+            ? {
+                relatedItemIds: input.relatedItemIds.map(
+                  (id) => findProjectBoardItem(items, id)?.id ?? id,
+                ),
+              }
+            : {}),
           ...(existing
             ? {}
             : {
@@ -161,7 +178,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
               }),
         })
         .pipe(Effect.mapError(boardError));
-      return { projectId, item };
+      return writeResult(projectId, item);
     }),
   ),
   board_set_status: McpToolAccess.writes((input) =>
@@ -177,7 +194,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
           ...(linkTurnId !== undefined ? { linkTurnId } : {}),
         })
         .pipe(Effect.mapError(boardError));
-      return { projectId: found.projectId, item };
+      return writeResult(found.projectId, item);
     }),
   ),
   board_handoff: McpToolAccess.writes((input) =>
@@ -189,19 +206,18 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
           "thread_credential_required",
         );
       }
-      const projectId = yield* boardProjectId(context, input.projectId);
-      const board = yield* BoardService.BoardService;
-      const item = yield* board
+      const found = yield* readItem(input.projectId, input.itemId);
+      const item = yield* found.board
         .appendHandoff({
-          projectId,
-          itemId: input.itemId,
+          projectId: found.projectId,
+          itemId: found.item.id,
           sourceThreadId: context.caller.id,
           summary: input.summary,
           ...(input.decisions !== undefined ? { decisions: input.decisions } : {}),
           nextStep: input.nextStep,
         })
         .pipe(Effect.mapError(boardError));
-      return { projectId, item };
+      return writeResult(found.projectId, item);
     }),
   ),
   board_link_turn: McpToolAccess.writes((input) =>
@@ -222,7 +238,7 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
           linkTurnId,
         })
         .pipe(Effect.mapError(boardError));
-      return { projectId: found.projectId, item };
+      return writeResult(found.projectId, item);
     }),
   ),
   board_archive: McpToolAccess.writes((input) =>
@@ -262,7 +278,7 @@ const readItem = Effect.fn("mcp.board.readItem")(function* (
   const projectId = yield* boardProjectId(context, requestedProjectId);
   const board = yield* BoardService.BoardService;
   const snapshot = yield* board.list(projectId).pipe(Effect.mapError(boardError));
-  const item = snapshot.items.find((entry) => entry.id === itemId);
+  const item = findProjectBoardItem(snapshot.items, itemId);
   if (!item) {
     return yield* failure(`Board item '${itemId}' was not found.`);
   }
@@ -285,5 +301,5 @@ const mutate = (
     const item = yield* operation(found.board, found.projectId, found.item.id).pipe(
       Effect.mapError(boardError),
     );
-    return { projectId: found.projectId, item };
+    return writeResult(found.projectId, item);
   });

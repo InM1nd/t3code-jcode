@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { ProjectBoardItem, TurnId } from "@t3tools/contracts";
 
 import {
+  findProjectBoardItem,
   formatProjectBoardDigest,
   indexProjectBoardItemsByTurnId,
   PROJECT_BOARD_DIGEST_ITEM_LIMIT,
@@ -139,6 +140,28 @@ describe("formatProjectBoardDigest", () => {
     expect(digest).toContain("Current work");
     expect(digest).toContain("…and 6 more active items");
     expect(digest).not.toContain(`Backlog ${PROJECT_BOARD_DIGEST_ITEM_LIMIT + 4}`);
+  });
+});
+
+describe("short card ids", () => {
+  const id = (value: string) => value as ProjectBoardItem["id"];
+  const items = [
+    item({ id: id("b5b0f296-a144-4fd3-a3d1-df1ece0af896"), title: "Eco", status: "inProgress" }),
+    item({ id: id("4dbf110a-207b-4954-a0b2-3b3783fccaec"), title: "Energy A", status: "backlog" }),
+    item({ id: id("4dbf110a-ffff-4954-a0b2-3b3783fccaec"), title: "Energy B", status: "backlog" }),
+  ];
+
+  it("prints 8 characters unless another card shares them", () => {
+    const digest = formatProjectBoardDigest(items);
+    expect(digest).toContain("- [b5b0f296] Eco");
+    expect(digest).toContain("[4dbf110a-207b-4954-a0b2-3b3783fccaec] Energy A");
+  });
+
+  it("finds a card by full id or a unique short id", () => {
+    expect(findProjectBoardItem(items, "b5b0f296")?.title).toBe("Eco");
+    expect(findProjectBoardItem(items, "b5b0f296-a144-4fd3-a3d1-df1ece0af896")?.title).toBe("Eco");
+    expect(findProjectBoardItem(items, "4dbf110a")).toBeUndefined();
+    expect(findProjectBoardItem(items, "b5b0")).toBeUndefined();
   });
 });
 
