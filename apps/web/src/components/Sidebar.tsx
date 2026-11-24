@@ -67,7 +67,6 @@ import {
   CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
-  ChevronDownIcon,
   CircleDashedIcon,
   ClockIcon,
   EyeIcon,
@@ -130,11 +129,7 @@ import {
   projectGroupsSpanEnvironments,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
-import {
-  legacyProjectCwdPreferenceKey,
-  resolveProjectExpanded,
-  useUiStateStore,
-} from "../uiStateStore";
+import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import {
   getThreadKeysToDeselectAfterDelete,
   useThreadSelectionStore,
@@ -253,8 +248,16 @@ import {
 } from "./ThreadStatusIndicators";
 import { resolveSnoozePresets, snoozeWakeLabel, type SnoozePreset } from "./Sidebar.snooze";
 import { ProjectFavicon, type ProjectFaviconProject } from "./ProjectFavicon";
+import { SidebarProjectHeader } from "./SidebarProjectHeader";
+import { useSidebarActiveProjects, type SidebarActiveProjectBlock } from "./sidebarProjectBlocks";
 import { ThreadSearchMatchExcerpt } from "./ThreadSearchMatch";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
+import {
+  inferJcodeInnerProviderId,
+  readJcodeProviderOption,
+  resolveJcodeInnerProvider,
+} from "@t3tools/shared/jcodeInnerProvider";
+import { JcodeIcon } from "./chat/JcodeIcon";
 import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelLabel } from "./chat/providerIconUtils";
 import {
@@ -392,18 +395,28 @@ function SidebarProviderStack(props: {
     currentEntry,
     props.providerEntryByInstanceId.values(),
   );
+  const harnessSource =
+    currentEntry.driverKind === "jcode"
+      ? (resolveJcodeInnerProvider(readJcodeProviderOption(props.thread.modelSelection.options)) ??
+        resolveJcodeInnerProvider(inferJcodeInnerProviderId(props.thread.modelSelection.model)))
+      : null;
   const current = (
-    <ProviderInstanceIcon
-      driverKind={currentEntry.driverKind}
-      displayName={currentEntry.displayName}
-      accentColor={currentEntry.accentColor}
-      acpRegistryAgentId={currentEntry.acpRegistryAgentId}
-      acpRegistryIconUrl={currentEntry.acpRegistryIconUrl}
-      showBadge={showInstanceBadge}
-      // Glyph dims, badge stays saturated; offset matches the composer trigger.
-      iconClassName="size-3.5 opacity-60"
-      badgeClassName="right-[-0.1875rem] bottom-[-0.1875rem] h-3 min-w-3 px-0.5 text-5xs"
-    />
+    <span className="relative inline-flex">
+      <ProviderInstanceIcon
+        driverKind={harnessSource?.driverKind ?? currentEntry.driverKind}
+        displayName={harnessSource?.label ?? currentEntry.displayName}
+        accentColor={currentEntry.accentColor}
+        acpRegistryAgentId={currentEntry.acpRegistryAgentId}
+        acpRegistryIconUrl={currentEntry.acpRegistryIconUrl}
+        showBadge={showInstanceBadge && harnessSource === null}
+        // Glyph dims, badge stays saturated; offset matches the composer trigger.
+        iconClassName="size-3.5 opacity-60"
+        badgeClassName="right-[-0.1875rem] bottom-[-0.1875rem] h-3 min-w-3 px-0.5 text-5xs"
+      />
+      {harnessSource ? (
+        <JcodeIcon className="pointer-events-none absolute -right-1 -bottom-0.5 size-2 rounded-full bg-background" />
+      ) : null}
+    </span>
   );
   if (stack.length === 1) {
     return <span className="inline-flex shrink-0 items-center">{current}</span>;
@@ -462,6 +475,11 @@ function SidebarThreadTooltip({
   terminalProcessCount: number;
 }) {
   const driverKind = providerEntry?.driverKind ?? null;
+  const harnessSource =
+    driverKind === "jcode"
+      ? (resolveJcodeInnerProvider(readJcodeProviderOption(thread.modelSelection.options)) ??
+        resolveJcodeInnerProvider(inferJcodeInnerProviderId(thread.modelSelection.model)))
+      : null;
   const previousProviderNames = thread.providerInstanceHistory
     .filter((instanceId) => instanceId !== modelInstanceId)
     .map((instanceId) => providerEntryByInstanceId.get(instanceId)?.displayName ?? instanceId);
@@ -510,9 +528,12 @@ function SidebarThreadTooltip({
         {driverKind ? (
           <div className="flex min-w-0 items-center gap-2">
             <ProviderInstanceIcon
-              driverKind={driverKind}
+              driverKind={harnessSource?.driverKind ?? driverKind}
               displayName={
-                providerEntry?.displayName ?? thread.runtime?.providerName ?? modelInstanceId
+                harnessSource?.label ??
+                providerEntry?.displayName ??
+                thread.runtime?.providerName ??
+                modelInstanceId
               }
               accentColor={providerEntry?.accentColor}
               acpRegistryAgentId={providerEntry?.acpRegistryAgentId}
@@ -524,9 +545,11 @@ function SidebarThreadTooltip({
               iconClassName="size-3 shrink-0 grayscale opacity-60"
             />
             <div className="min-w-0 truncate text-foreground/75">
-              {showInstanceBadge && providerEntry
-                ? `${modelLabel} · ${providerEntry.displayName}`
-                : modelLabel}
+              {harnessSource
+                ? `${modelLabel} · ${harnessSource.label} via Jcode`
+                : showInstanceBadge && providerEntry
+                  ? `${modelLabel} · ${providerEntry.displayName}`
+                  : modelLabel}
             </div>
           </div>
         ) : null}
@@ -2372,14 +2395,6 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   );
 });
 
-function projectExpansionPreferenceKeys(project: SidebarProjectSnapshot): string[] {
-  return [
-    project.projectKey,
-    ...project.memberProjects.map((member) => member.physicalProjectKey),
-    ...project.memberProjects.map((member) => legacyProjectCwdPreferenceKey(member.workspaceRoot)),
-  ];
-}
-
 export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
@@ -2571,24 +2586,6 @@ export default function Sidebar() {
         ),
       ),
     [projectGroups],
-  );
-  const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
-  const setProjectExpanded = useUiStateStore((store) => store.setProjectExpanded);
-  const projectGroupByMemberKey = useMemo(() => {
-    const groups = new Map<string, SidebarProjectSnapshot>();
-    for (const group of projectGroups) {
-      for (const member of group.memberProjects) {
-        groups.set(`${member.environmentId}:${member.id}`, group);
-      }
-    }
-    return groups;
-  }, [projectGroups]);
-  const isProjectGroupExpanded = useCallback(
-    (group: SidebarProjectSnapshot | undefined) =>
-      group === undefined || projectGroups.length < 2
-        ? true
-        : resolveProjectExpanded(projectExpandedById, projectExpansionPreferenceKeys(group)),
-    [projectExpandedById, projectGroups.length],
   );
 
   const nowMinute = useNowMinute();
@@ -3057,17 +3054,23 @@ export default function Sidebar() {
     return routeThread === undefined ? EMPTY_THREADS : [routeThread];
   }, [routeThreadKey, workingShelfExpanded, workingThreads]);
 
+  // Fork: Active rows in their grouped, collapse-filtered order.
+  const activeProjectLayout = useSidebarActiveProjects(
+    projectGroups,
+    activeThreads,
+    workingThreads,
+  );
   const orderedThreads = useMemo(
     () => [
       ...pinnedThreads,
-      ...activeThreads,
+      ...activeProjectLayout.rows,
       ...visibleWorkingThreads,
       ...visibleSnoozedThreads,
       ...renderedSettledThreads,
     ],
     [
       pinnedThreads,
-      activeThreads,
+      activeProjectLayout.rows,
       visibleWorkingThreads,
       visibleSnoozedThreads,
       renderedSettledThreads,
@@ -3782,20 +3785,6 @@ export default function Sidebar() {
   // Include every visible row in the measured order. Older servers disable
   // pickup on their rows without changing where those rows render.
   const sidebarListItems = useMemo((): readonly SidebarListItem[] => {
-    const projectName = (thread: EnvironmentThreadShell) =>
-      projectDisplayNameByKey.get(`${thread.environmentId}:${thread.projectId}`) ?? "";
-    const byProject = (list: readonly EnvironmentThreadShell[]) =>
-      projectGroups.length < 2
-        ? list
-        : [...list].sort((left, right) => projectName(left).localeCompare(projectName(right)));
-    const shownThreads = (list: readonly EnvironmentThreadShell[], section: SidebarSection) =>
-      section === "pinned"
-        ? list
-        : list.filter((thread) =>
-            isProjectGroupExpanded(
-              projectGroupByMemberKey.get(`${thread.environmentId}:${thread.projectId}`),
-            ),
-          );
     const rowsOf = (
       list: readonly EnvironmentThreadShell[],
       section: SidebarSection,
@@ -3815,33 +3804,22 @@ export default function Sidebar() {
       return [];
     }
     const items: SidebarListItem[] = [{ kind: "marker", marker: "pinned-header" }];
-    const pinnedRows = rowsOf(shownThreads(pinnedThreads, "pinned"), "pinned");
+    const pinnedRows = rowsOf(pinnedThreads, "pinned");
     items.push(...pinnedRows);
     items.push({ kind: "marker", marker: "pinned-divider" });
-    const activeRows = rowsOf(byProject(shownThreads(activeThreads, "active")), "active");
+    const activeRows = rowsOf(activeProjectLayout.rows, "active");
     items.push({ kind: "marker", marker: "active-placeholder" });
     items.push(...activeRows);
-    const workingRows = rowsOf(
-      byProject(shownThreads(visibleWorkingThreads, "working")),
-      "working",
-    );
-    if (workingRows.length > 0) {
+    if (workingThreads.length > 0) {
       items.push({ kind: "marker", marker: "working-header" });
-      items.push(...workingRows);
+      items.push(...rowsOf(visibleWorkingThreads, "working"));
     }
-    const snoozedRows = rowsOf(
-      byProject(shownThreads(visibleSnoozedThreads, "snoozed")),
-      "snoozed",
-    );
-    if (snoozedRows.length > 0) {
+    if (snoozedThreads.length > 0) {
       items.push({ kind: "marker", marker: "snoozed-header" });
-      items.push(...snoozedRows);
+      items.push(...rowsOf(visibleSnoozedThreads, "snoozed"));
     }
     items.push({ kind: "marker", marker: "settled-header" });
-    const settledRows = rowsOf(
-      byProject(shownThreads(renderedSettledThreads, "settled")),
-      "settled",
-    );
+    const settledRows = rowsOf(renderedSettledThreads, "settled");
     items.push({ kind: "marker", marker: "settled-placeholder" });
     items.push(...settledRows);
     return items;
@@ -3852,10 +3830,7 @@ export default function Sidebar() {
     settledThreads.length,
     snoozedThreads.length,
     visibleSnoozedThreads,
-    isProjectGroupExpanded,
-    projectDisplayNameByKey,
-    projectGroupByMemberKey,
-    projectGroups.length,
+    activeProjectLayout,
     visibleWorkingThreads,
     workingThreads.length,
   ]);
@@ -5433,51 +5408,33 @@ export default function Sidebar() {
                           onDraftContextMenu={handleDraftContextMenu}
                         />,
                       ];
-                      let previousProjectKey: string | null = null;
-                      let previousSection: SidebarSection | null = null;
+                      let trailingProjectHeadersShown = false;
+                      const pushProjectHeaders = (
+                        blocks: ReadonlyArray<SidebarActiveProjectBlock> = [],
+                      ) => {
+                        for (const block of blocks) {
+                          items.push(
+                            <SidebarProjectHeader
+                              key={`project-${block.projectKey}`}
+                              {...activeProjectLayout.header(block)}
+                            />,
+                          );
+                        }
+                      };
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
-                          const thread = threadByKey.get(item.key)!;
-                          const projectKey = `${thread.environmentId}:${thread.projectId}`;
-                          if (
-                            projectGroups.length > 1 &&
-                            item.section !== "pinned" &&
-                            (projectKey !== previousProjectKey || item.section !== previousSection)
-                          ) {
-                            const group = projectGroupByMemberKey.get(projectKey);
-                            items.push(
-                              <li
-                                key={`project-${item.section}-${projectKey}`}
-                                className="list-none"
-                              >
-                                <button
-                                  type="button"
-                                  data-thread-selection-safe
-                                  aria-expanded
-                                  className="mt-2 mb-0.5 flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                                  onClick={() => {
-                                    if (!group) return;
-                                    setProjectExpanded(
-                                      projectExpansionPreferenceKeys(group),
-                                      false,
-                                    );
-                                  }}
-                                >
-                                  <ChevronDownIcon aria-hidden className="size-3 shrink-0" />
-                                  <FolderIcon aria-hidden className="size-3.5 shrink-0" />
-                                  <span className="min-w-0 flex-1 truncate">
-                                    {projectDisplayNameByKey.get(
-                                      `${thread.environmentId}:${thread.projectId}`,
-                                    ) ?? "Project"}
-                                  </span>
-                                </button>
-                              </li>,
-                            );
-                          }
-                          previousProjectKey = projectKey;
-                          previousSection = item.section;
-                          items.push(renderThreadRow(thread, item.section));
+                          pushProjectHeaders(activeProjectLayout.headersBefore.get(item.key));
+                          items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           continue;
+                        }
+                        if (
+                          !trailingProjectHeadersShown &&
+                          (item.marker === "working-header" ||
+                            item.marker === "snoozed-header" ||
+                            item.marker === "settled-header")
+                        ) {
+                          trailingProjectHeadersShown = true;
+                          pushProjectHeaders(activeProjectLayout.trailingHeaders);
                         }
                         switch (item.marker) {
                           case "pinned-header":
@@ -5501,56 +5458,6 @@ export default function Sidebar() {
                                 isDropTarget={dragTargetSection === "active"}
                               />,
                             );
-                            if (projectGroups.length > 1) {
-                              for (const group of projectGroups) {
-                                if (isProjectGroupExpanded(group)) continue;
-                                const memberKeys = new Set(
-                                  group.memberProjects.map(
-                                    (member) => `${member.environmentId}:${member.id}`,
-                                  ),
-                                );
-                                const count = [
-                                  ...activeThreads,
-                                  ...workingThreads,
-                                  ...snoozedThreads,
-                                  ...settledThreads,
-                                ].filter((thread) =>
-                                  memberKeys.has(`${thread.environmentId}:${thread.projectId}`),
-                                ).length;
-                                if (count === 0) continue;
-                                items.push(
-                                  <li
-                                    key={`project-collapsed-${group.projectKey}`}
-                                    className="list-none"
-                                  >
-                                    <button
-                                      type="button"
-                                      data-thread-selection-safe
-                                      aria-expanded={false}
-                                      className="mt-2 mb-0.5 flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                                      onClick={() =>
-                                        setProjectExpanded(
-                                          projectExpansionPreferenceKeys(group),
-                                          true,
-                                        )
-                                      }
-                                    >
-                                      <ChevronDownIcon
-                                        aria-hidden
-                                        className="size-3 shrink-0 -rotate-90"
-                                      />
-                                      <FolderIcon aria-hidden className="size-3.5 shrink-0" />
-                                      <span className="min-w-0 flex-1 truncate">
-                                        {group.displayName}
-                                      </span>
-                                      <span className="shrink-0 tabular-nums text-sidebar-muted-foreground/65">
-                                        {count}
-                                      </span>
-                                    </button>
-                                  </li>,
-                                );
-                              }
-                            }
                             break;
                           case "active-placeholder":
                             items.push(

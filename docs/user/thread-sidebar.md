@@ -89,6 +89,12 @@ or **Settled** to drag a parked thread back into either live section. Each drop 
 **Move up** and **Move down** are also available in the thread menu. The server
 saves the order, so it survives a refresh and appears on your other connected devices.
 
+On web and desktop, when the sidebar shows more than one project, active threads group under a
+header for each project, in your project sort order. Click a header to collapse that project: it
+stays in its place with a thread count and a dot while one of its threads is working. Collapsing
+hides only the project's active threads. Pinned threads and the **Working**, **Snoozed**, and
+**Settled** shelves stay as one list, and each row shows its project.
+
 On web and desktop, the list also animates section changes made with thread actions such as
 **Pin**, **Settle**, and **Snooze**. These transitions respect your system's reduced-motion
 preference. While dragging, rows follow the insertion gap without replaying a second transition
