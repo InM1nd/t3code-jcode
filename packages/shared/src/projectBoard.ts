@@ -11,6 +11,28 @@ export const PROJECT_BOARD_DIGEST_ITEM_LIMIT = 20;
 const PROJECT_BOARD_HANDOFF_HISTORY_LIMIT = 10;
 const PROJECT_BOARD_EXTERNAL_REF_LIMIT = 10;
 const PROJECT_BOARD_RELATED_ITEM_LIMIT = 20;
+const PROJECT_BOARD_SHORT_ID_LENGTH = 8;
+
+/**
+ * Finds a card by its full id or by the short id the digest prints. A short id
+ * must be at least 8 characters and match exactly one card.
+ */
+export function findProjectBoardItem<T extends { readonly id: string }>(
+  items: ReadonlyArray<T>,
+  id: string,
+): T | undefined {
+  const exact = items.find((item) => item.id === id);
+  if (exact || id.length < PROJECT_BOARD_SHORT_ID_LENGTH) return exact;
+  const matches = items.filter((item) => item.id.startsWith(id));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+/** The id the digest prints: its first 8 characters, unless another card shares them. */
+function projectBoardShortId(items: ReadonlyArray<ProjectBoardItem>, id: string): string {
+  const prefix = id.slice(0, PROJECT_BOARD_SHORT_ID_LENGTH);
+  const shared = items.filter((item) => item.id.startsWith(prefix)).length > 1;
+  return shared ? id : prefix;
+}
 
 export function mergeProjectBoardLinkedTurnIds(input: {
   existing: ReadonlyArray<TurnId> | undefined;
@@ -159,7 +181,7 @@ export function formatProjectBoardDigest(items: ReadonlyArray<ProjectBoardItem>)
     const turnCount = item.linkedTurnIds?.length ?? 0;
     const turnSuffix =
       turnCount > 0 ? ` · ${turnCount} linked turn${turnCount === 1 ? "" : "s"}` : "";
-    return `- [${item.id}] ${item.title}${turnSuffix}`;
+    return `- [${projectBoardShortId(items, item.id)}] ${item.title}${turnSuffix}`;
   };
 
   const appendSection = (status: ProjectBoardItemStatus, sectionItems: ProjectBoardItem[]) => {

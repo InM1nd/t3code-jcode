@@ -119,6 +119,26 @@ function formatActivePortsPromptBlock(
   ].join("\n");
 }
 
+const lastBoardDigestKeyByThread = new Map<ThreadId, string>();
+
+/**
+ * The digest stays in the provider's history, so a thread only gets it again
+ * when a card is added, removed, renamed, or changes status. Linked-turn counts
+ * move every turn and are left out of the key. A server restart sends it once
+ * more; agents can always call `board_digest` for a fresh copy.
+ */
+function shouldSendBoardDigest(
+  threadId: ThreadId,
+  activeItems: ReadonlyArray<ProjectBoardItem>,
+): boolean {
+  const key = activeItems
+    .map((item) => `${item.id}\t${item.status}\t${item.area ?? ""}\t${item.title}`)
+    .join("\n");
+  if (lastBoardDigestKeyByThread.get(threadId) === key) return false;
+  lastBoardDigestKeyByThread.set(threadId, key);
+  return true;
+}
+
 function prependBlock(input: string, block: string | null): string {
   if (!block) return input;
   const trimmed = input.trim();
@@ -157,7 +177,7 @@ export function applyTurnContext(input: {
         )
       : input.text;
     const activeBoardItems = (input.boardItems ?? []).filter((item) => !item.archivedAt);
-    if (activeBoardItems.length > 0) {
+    if (activeBoardItems.length > 0 && shouldSendBoardDigest(input.threadId, activeBoardItems)) {
       text = prependBlock(text, formatProjectBoardDigest(input.boardItems ?? []));
     }
     if (!text.trim()) return text;

@@ -90,7 +90,8 @@ export const BoardToolkit = Toolkit.make(
     .annotate(Tool.Destructive, false),
   Tool.make("board_get_brief", {
     ...shared,
-    description: "Read one project board card, including its brief and latest handoff.",
+    description:
+      "Read one project board card, including its brief, latest handoff, and the two handoffs before it.",
     parameters: Schema.Struct({ projectId, itemId: ProjectBoardItemId }),
     success: BoardMutateResult,
   })
