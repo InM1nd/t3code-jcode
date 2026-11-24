@@ -40,8 +40,10 @@ export interface ClaudeModelCatalog {
 }
 
 /**
- * The fetched catalog drops context and speed on models that still accept them.
- * Keep both selectable: 1M is the `[1m]` suffix, and speed is Claude fast mode.
+ * The fetched catalog drops the context choice on models that still accept it.
+ * Keep 1M selectable as the `[1m]` suffix. Speed (fast mode) stays only where
+ * the catalog lists it: elsewhere it is not a real control, and adding it made
+ * every query send `fastMode: false`.
  */
 function forkClaudeModelControls(entry: ClaudeCatalogModel): ClaudeCatalogModel {
   const descriptors = [...(entry.model.capabilities?.optionDescriptors ?? [])];
@@ -51,41 +53,33 @@ function forkClaudeModelControls(entry: ClaudeCatalogModel): ClaudeCatalogModel 
   if (!hasEffort) return entry;
 
   const needsContext = !descriptors.some((descriptor) => descriptor.id === "contextWindow");
-  const needsSpeed = !descriptors.some((descriptor) => descriptor.id === "fastMode");
-  if (!needsContext && !needsSpeed) return entry;
+  if (!needsContext) return entry;
 
-  let runtime = entry.runtime;
-  if (needsContext) {
-    descriptors.push({
-      id: "contextWindow",
-      label: "Context",
-      type: "select",
-      options: [
-        { id: "200k", label: "200k", isDefault: true },
-        { id: "1m", label: "1M" },
-      ],
-    });
-    const { fixedContextWindowTokens: _fixedContextWindowTokens, ...rest } = runtime;
-    runtime = {
-      ...rest,
-      modelSuffixes: {
-        ...rest.modelSuffixes,
-        contextWindow: {
-          ...rest.modelSuffixes?.contextWindow,
-          "1m": rest.modelSuffixes?.contextWindow?.["1m"] ?? "[1m]",
-        },
+  descriptors.push({
+    id: "contextWindow",
+    label: "Context",
+    type: "select",
+    options: [
+      { id: "200k", label: "200k", isDefault: true },
+      { id: "1m", label: "1M" },
+    ],
+  });
+  const { fixedContextWindowTokens: _fixedContextWindowTokens, ...rest } = entry.runtime;
+  const runtime = {
+    ...rest,
+    modelSuffixes: {
+      ...rest.modelSuffixes,
+      contextWindow: {
+        ...rest.modelSuffixes?.contextWindow,
+        "1m": rest.modelSuffixes?.contextWindow?.["1m"] ?? "[1m]",
       },
-      contextWindowTokens: {
-        "200k": 200_000,
-        "1m": 1_000_000,
-        ...rest.contextWindowTokens,
-      },
-    };
-  }
-  if (needsSpeed) {
-    descriptors.push({ id: "fastMode", label: "Speed", type: "boolean" });
-  }
-
+    },
+    contextWindowTokens: {
+      "200k": 200_000,
+      "1m": 1_000_000,
+      ...rest.contextWindowTokens,
+    },
+  };
   return {
     ...entry,
     runtime,
