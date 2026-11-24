@@ -114,6 +114,7 @@ import {
 import type { ServerProviderShape } from "../../provider/ServerProvider.ts";
 import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
 import { T3_CODE_ORCHESTRATION_INSTRUCTIONS } from "../../provider/T3OrchestrationInstructions.ts";
+import * as ClaudeMcpAuto from "../../provider/claudeMcpAuto.ts";
 import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts";
 import { mcpToolPresentation, normalizeMcpText } from "../../provider/McpToolPresentation.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
@@ -333,6 +334,7 @@ export interface ClaudeAgentSdkQuerySession {
   ) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly interrupt: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly close: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
+  readonly setMcpServers?: ClaudeQuery["setMcpServers"];
 }
 
 type ClaudeQueryStreamExit = Exit.Exit<void, ClaudeAgentSdkQueryRunnerError>;
@@ -724,6 +726,7 @@ export const layerQueryRunner: Layer.Layer<
               }),
             ),
           ),
+          setMcpServers: (servers) => queryRuntime.setMcpServers(servers),
         } satisfies ClaudeAgentSdkQuerySession;
       }),
       forkSession: Effect.fn("ClaudeAgentSdkQueryRunner.forkSession")(function* (
@@ -7141,6 +7144,16 @@ export function makeClaudeAdapterV2(
             onUserDialog,
             supportedDialogKinds: ["resume_return"],
           });
+          Object.assign(
+            queryOptions,
+            ClaudeMcpAuto.applyClaudeMcpAuto(queryOptions, {
+              enabled: adapterOptions.settings.autoMcpServers === true,
+              threadId: turnInput.threadId,
+              projectId: turnInput.appThread.projectId,
+              cwd: turnInput.runtimePolicy.cwd,
+              stateDir: path.dirname(attachmentsDir),
+            }),
+          );
           const querySession = yield* queryRunner
             .open({
               threadId: turnInput.threadId,
@@ -7164,6 +7177,7 @@ export function makeClaudeAdapterV2(
                   : Effect.void,
               ),
             );
+          ClaudeMcpAuto.attachClaudeMcpAutoQuery(turnInput.threadId, querySession.setMcpServers);
           // Marked only after a successful open: a failed create must not
           // leave the runtime believing the native session exists, or the
           // retry would resume a session that was never created.

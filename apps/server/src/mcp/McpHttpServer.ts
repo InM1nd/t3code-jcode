@@ -51,6 +51,8 @@ import * as PullRequestsHandlers from "./toolkits/pullRequests/handlers.ts";
 import { PullRequestsToolkit } from "./toolkits/pullRequests/tools.ts";
 import * as BoardHandlers from "./toolkits/board/handlers.ts";
 import { BoardToolkit } from "./toolkits/board/tools.ts";
+import * as ClaudeMcpHandlers from "./toolkits/claudeMcp/handlers.ts";
+import { ClaudeMcpToolkit } from "./toolkits/claudeMcp/tools.ts";
 import * as DeviceHandlers from "./toolkits/device/handlers.ts";
 import {
   DeviceScreenshotTool,
@@ -861,6 +863,7 @@ export const layer = Layer.mergeAll(
   layerAttachmentRegistration,
   layerProjectRegistration,
   layerBoardRegistration,
+  toolkitRegistration(ClaudeMcpToolkit, ClaudeMcpHandlers.layer),
   layerEnvironmentRegistration,
   layerPreviewControlsRegistration,
   layerWorktreeToolkitRegistration,
