@@ -230,7 +230,7 @@ jobs:
   # split files by recorded duration (apps/server/src/testUtils/weightedShardSequencer.ts).
   test_server:
     name: Test Server ${{ matrix.shard }}
-    runs-on: ubuntu-latest # blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04 # blacksmith-4vcpu-ubuntu-2404; Playwright has no ubuntu-26.04 (ubuntu-latest) build
     timeout-minutes: 10
     strategy:
       fail-fast: false

@@ -302,7 +302,7 @@ jobs:
     name: Release server tests ${{ matrix.shard }}
     needs: [preflight]
     if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
-    runs-on: ubuntu-latest # blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04 # blacksmith-8vcpu-ubuntu-2404; Playwright has no ubuntu-26.04 (ubuntu-latest) build
     timeout-minutes: 10
     strategy:
       fail-fast: false
