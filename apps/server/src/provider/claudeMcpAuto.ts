@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off globalDate:off - reads the Claude CLI config files synchronously while a query opens, and is called from SDK callbacks outside the Effect runtime.
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as nodePath from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import type {
   McpServerConfig,
@@ -34,7 +34,7 @@ type Profile = Record<string, LearnedServers>;
 
 const readJson = (file: string): unknown => {
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
+    return JSON.parse(NodeFS.readFileSync(file, "utf8"));
   } catch {
     return undefined;
   }
@@ -55,14 +55,14 @@ const asNames = (value: unknown): ReadonlyArray<string> =>
  * read, so the caller leaves the session alone.
  */
 export function readClaudeMcpServers(configDir: string, cwd: string): McpServers | null {
-  const config = readJson(nodePath.join(configDir, ".claude.json"));
+  const config = readJson(NodePath.join(configDir, ".claude.json"));
   if (config === undefined) return null;
   const root = asRecord(config);
   const project = asRecord(asRecord(root.projects)[cwd]);
   const approved = new Set(asNames(project.enabledMcpjsonServers));
   const rejected = new Set(asNames(project.disabledMcpjsonServers));
   const projectServers = Object.fromEntries(
-    Object.entries(asRecord(asRecord(readJson(nodePath.join(cwd, ".mcp.json"))).mcpServers)).filter(
+    Object.entries(asRecord(asRecord(readJson(NodePath.join(cwd, ".mcp.json"))).mcpServers)).filter(
       ([name]) =>
         !rejected.has(name) && (project.enableAllProjectMcpServers === true || approved.has(name)),
     ),
@@ -125,10 +125,10 @@ export function applyClaudeMcpAuto<Options extends ClaudeQueryOptions>(
   sessions.delete(input.threadId);
   const base = options.mcpServers;
   if (!input.enabled || input.cwd === null || base?.[T3_SERVER] === undefined) return options;
-  const configDir = options.env?.CLAUDE_CONFIG_DIR || os.homedir();
+  const configDir = options.env?.CLAUDE_CONFIG_DIR || NodeOS.homedir();
   const available = readClaudeMcpServers(configDir, input.cwd);
   if (available === null) return options;
-  const profilePath = nodePath.join(input.stateDir, "claude-mcp-auto.json");
+  const profilePath = NodePath.join(input.stateDir, "claude-mcp-auto.json");
   const start = selectLearnedServers(
     available,
     readProfile(profilePath)[input.projectId] ?? {},
@@ -205,8 +205,8 @@ export function enableClaudeMcpServer(
   const profile = readProfile(session.profilePath);
   profile[session.projectId] = { ...profile[session.projectId], [name]: Date.now() };
   try {
-    fs.mkdirSync(nodePath.dirname(session.profilePath), { recursive: true });
-    fs.writeFileSync(session.profilePath, JSON.stringify(profile, null, 2));
+    NodeFS.mkdirSync(NodePath.dirname(session.profilePath), { recursive: true });
+    NodeFS.writeFileSync(session.profilePath, JSON.stringify(profile, null, 2));
   } catch {
     // Learning is best effort; the server is enabled for this session either way.
   }

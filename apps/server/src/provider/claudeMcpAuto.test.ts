@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - fixtures are real Claude config files in a temp dir.
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as nodePath from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
@@ -17,11 +17,11 @@ import {
 const stdio = (command: string) => ({ type: "stdio" as const, command, args: [] });
 
 function fixture() {
-  const root = fs.mkdtempSync(nodePath.join(os.tmpdir(), "claude-mcp-auto-"));
-  const cwd = nodePath.join(root, "repo");
-  fs.mkdirSync(cwd);
-  fs.writeFileSync(
-    nodePath.join(root, ".claude.json"),
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "claude-mcp-auto-"));
+  const cwd = NodePath.join(root, "repo");
+  NodeFS.mkdirSync(cwd);
+  NodeFS.writeFileSync(
+    NodePath.join(root, ".claude.json"),
     JSON.stringify({
       mcpServers: { playwright: stdio("pw"), serena: stdio("serena"), "t3-code": stdio("x") },
       projects: {
@@ -33,8 +33,8 @@ function fixture() {
       },
     }),
   );
-  fs.writeFileSync(
-    nodePath.join(cwd, ".mcp.json"),
+  NodeFS.writeFileSync(
+    NodePath.join(cwd, ".mcp.json"),
     JSON.stringify({ mcpServers: { approved: stdio("ok"), unapproved: stdio("repo-script") } }),
   );
   return { root, cwd };
@@ -48,7 +48,7 @@ describe("claudeMcpAuto", () => {
       "local",
       "playwright",
     ]);
-    expect(readClaudeMcpServers(nodePath.join(root, "missing"), cwd)).toBeNull();
+    expect(readClaudeMcpServers(NodePath.join(root, "missing"), cwd)).toBeNull();
   });
 
   it("starts with servers enabled within the last 30 days", () => {
