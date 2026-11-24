@@ -172,6 +172,8 @@ overrides:
   "@react-navigation/core": 7.21.13
   # Staged desktop installs have no lockfile; pin the version the node-pty patch targets.
   node-pty: 1.2.0-beta.15
+  # Lockfile-free release installs would drift past the version the menu patch targets.
+  "@react-native-menu/menu": 2.0.0
   # The dbus-next patch drops usocket from the package, but pnpm resolves from the
   # registry manifest, so the edge has to be cut here as well.
   "dbus-next>usocket": "-"
