@@ -1122,9 +1122,12 @@ describe("UsageService", () => {
       }).pipe(Effect.scoped),
   );
 
-  it.live("reports saved usage of a removed directory only for windows it reaches", () =>
+  it.effect("reports saved usage of a removed directory only for windows it reaches", () =>
     Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-08-12T00:00:00Z"));
       const { transcript, settings, home } = yield* setup;
+      // Saved usage is pruned after the retention window, so pin "now" near the write.
+      yield* TestClock.setTime(Date.parse("2026-08-15T00:00:00Z"));
       yield* Effect.promise(async () => {
         await NodeFSP.writeFile(transcript, claudeLine(1, 5));
         const lastWrite = Date.parse("2026-08-01T10:00:00Z") / 1000;
@@ -1142,8 +1145,6 @@ describe("UsageService", () => {
       assert.deepStrictEqual(reached.buckets, first.buckets);
       assert.strictEqual(reached.sources[0]?.status, "ok");
 
-      // A missing source cannot claim this directory from another environment
-      // that still reads it, so it adds nothing to a window after its last write.
       const later = yield* service.readSummary({
         timeZone: "UTC",
         sinceDay: UsageDay.make("2026-08-10"),
@@ -1152,7 +1153,7 @@ describe("UsageService", () => {
       assert.deepStrictEqual(later.buckets, []);
       assert.strictEqual(later.sources[0]?.status, "missing");
       assert.strictEqual(later.sources[0]?.scannedFiles, 0);
-    }).pipe(Effect.scoped),
+    }),
   );
 
   it.live("does not share an in-flight scan after custom prices change", () =>
