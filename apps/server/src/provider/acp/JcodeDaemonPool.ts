@@ -32,7 +32,7 @@ interface Entry {
   refs: number;
 }
 
-export function jcodeDaemonPoolKey(input: PoolInput): string {
+function jcodeDaemonPoolKey(input: PoolInput): string {
   return JSON.stringify([
     input.binaryPath?.trim() || "jcode",
     input.provider,
