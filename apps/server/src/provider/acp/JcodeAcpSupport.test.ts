@@ -18,7 +18,7 @@ describe("resolveJcodeAcpProvider", () => {
         model: "gpt-5.5",
         options: [{ id: "jcodeProvider", value: "cursor" }],
       }),
-    ).toBeUndefined();
+    ).toBe("cursor");
   });
 });
 
@@ -46,6 +46,17 @@ describe("resolveJcodeLaunchProvider", () => {
         settingsProvider: "  ",
       }),
     ).toBe("openai");
+    expect(
+      resolveJcodeLaunchProvider({
+        modelSelection: { instanceId: "jcode" as never, model: "composer-2.5" },
+        settingsProvider: "openai",
+      }),
+    ).toBe("openai");
+    expect(
+      resolveJcodeLaunchProvider({
+        modelSelection: { instanceId: "jcode" as never, model: "composer-2.5" },
+      }),
+    ).toBe("cursor");
     expect(
       resolveJcodeLaunchProvider({
         modelSelection: { instanceId: "jcode" as never, model: "my-router" },

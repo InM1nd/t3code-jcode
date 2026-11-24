@@ -40,17 +40,19 @@ jcode version
 jcode acp --help
 ```
 
-The model picker chooses the model for the thread. Optional Jcode settings
-(**Binary path**, **Model**, **Jcode provider**, **Provider profile**) are the
-fallback when the thread has not picked one. Claude and Codex can come from
-the model selection. Any other backend, including Cursor, comes from **Jcode
-provider**.
+Pick the model the usual way, then press **Jcode** beside the model picker.
+The model stays that provider — Claude, Codex, Cursor, Grok, OpenCode, or
+Antigravity — and the turn runs through Jcode. The provider icon stays, with
+a Jcode mark, and the button reads which backend is routed. Press it again
+to run the same model directly. Optional Jcode settings (**Binary path**,
+**Model**, **Jcode provider**, **Provider profile**) are the fallback when
+the thread has not picked one.
 
 ## Enable in Tandem
 
 1. Open Tandem.
 2. Open provider settings and ensure a **Jcode** instance is enabled (or add one).
-3. Create/select a thread and pick **Jcode** in the provider picker. When the catalog includes another reasoning or speed variant of that model, those choices appear above the search field. Picking one selects that model before the session starts.
+3. Create/select a thread, pick the model, then press **Jcode** beside the model picker. The provider icon stays, with a Jcode mark. Press it again before the first message to run that model directly.
 4. Send a prompt. File edits should show up in Tandem diffs/checkpoints like other providers.
 
 ## Diagnostics
@@ -68,7 +70,7 @@ provider**.
 ## Limits
 
 - One session per thread
-- A thread with a known provider gets its own daemon, so another Jcode client cannot retarget it. See [Jcode model routing](jcode-model-routing.md)
+- Threads with the same provider and model share one Tandem-owned daemon, and another Jcode client cannot retarget it. See [Jcode model routing](jcode-model-routing.md)
 - jcode’s ACP surface may change across releases
 
 ## See also

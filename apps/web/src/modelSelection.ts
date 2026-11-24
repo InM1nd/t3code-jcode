@@ -305,6 +305,11 @@ export function resolveAppModelSelectionForInstance(
   if (resolvedSelection) {
     return resolvedSelection;
   }
+  // Fork: Jcode routes to other backends and its `model list` lags their
+  // catalogs, so keep the slug picked for that backend instead of its default.
+  const jcodeSelection =
+    entry.driverKind === "jcode" ? normalizeCustomModelSlug(selectedModel) : null;
+  if (jcodeSelection) return jcodeSelection;
   if (
     resolutionOptions?.preserveUnavailableSelection &&
     (entry.driverKind === "opencode" || entry.driverKind === "antigravity")

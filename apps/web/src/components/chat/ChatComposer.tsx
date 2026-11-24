@@ -56,6 +56,13 @@ import {
 } from "@t3tools/client-runtime/text-paste";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { folderDropTarget, resolveDroppedFolderPath } from "./folderDrop";
+import {
+  inferJcodeInnerProviderId,
+  jcodeProviderForDriverKind,
+  readJcodeProviderOption,
+  resolveJcodeInnerProvider,
+  withJcodeProviderOption,
+} from "@t3tools/shared/jcodeInnerProvider";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
 import {
@@ -264,6 +271,7 @@ import {
 } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
+import { JcodeHarnessToggle } from "./JcodeHarnessToggle";
 import { WorkModeControl } from "./WorkModeControl";
 import { workModeFromSlashCommand } from "@t3tools/shared/workMode";
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
@@ -1646,7 +1654,7 @@ export interface ChatComposerProps {
   onProviderModelSelect: (
     instanceId: ProviderInstanceId,
     model: string,
-    options?: { focusComposer?: boolean },
+    options?: { focusComposer?: boolean; jcodeProvider?: string },
   ) => void;
   onOpenProviderSetup: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
@@ -2301,8 +2309,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     interactionMode: requestedInteractionMode,
   });
   const selectedModelSelection = useMemo<ModelSelection>(
-    () => createModelSelection(selectedInstanceId, selectedModel, selectedModelOptionsForDispatch),
-    [selectedInstanceId, selectedModel, selectedModelOptionsForDispatch],
+    () =>
+      withJcodeProviderOption(
+        createModelSelection(selectedInstanceId, selectedModel, selectedModelOptionsForDispatch),
+        readJcodeProviderOption(composerModelOptions?.[selectedInstanceId]),
+      ),
+    [composerModelOptions, selectedInstanceId, selectedModel, selectedModelOptionsForDispatch],
   );
   const selectedModelForPicker = selectedModel;
   // Instance-keyed option list so the picker can show each configured
@@ -5408,6 +5420,69 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hiddenRestingBlockIds = restingBlockDefs
     .slice(restingBlockDefs.length - restingHiddenBlockCount)
     .map((def) => def.id);
+  const jcodeHarnessEntry =
+    providerInstanceEntries.find(
+      (entry) => entry.driverKind === "jcode" && entry.enabled && entry.isDefault,
+    ) ??
+    providerInstanceEntries.find((entry) => entry.driverKind === "jcode" && entry.enabled) ??
+    providerInstanceEntries.find((entry) => entry.driverKind === "jcode") ??
+    null;
+  const storedJcodeProvider = readJcodeProviderOption(composerModelOptions?.[selectedInstanceId]);
+  const jcodeHarnessSource =
+    selectedProvider === "jcode"
+      ? (resolveJcodeInnerProvider(storedJcodeProvider) ??
+        resolveJcodeInnerProvider(inferJcodeInnerProviderId(selectedModel)))
+      : jcodeProviderForDriverKind(selectedProvider);
+  const jcodeHarnessOn = selectedProvider === "jcode" && jcodeHarnessSource !== null;
+  const jcodeHarnessSourceEntry =
+    jcodeHarnessSource === null
+      ? null
+      : (providerInstanceEntries.find(
+          (entry) =>
+            entry.driverKind === jcodeHarnessSource.driverKind && entry.enabled && entry.isDefault,
+        ) ??
+        providerInstanceEntries.find(
+          (entry) => entry.driverKind === jcodeHarnessSource.driverKind && entry.enabled,
+        ) ??
+        null);
+  const pickerInstanceEntries =
+    selectedProvider === "jcode" && jcodeHarnessSource === null
+      ? providerInstanceEntries
+      : providerInstanceEntries.filter((entry) => entry.driverKind !== "jcode");
+  const pickerActiveInstanceId =
+    jcodeHarnessOn && jcodeHarnessSourceEntry && !providerCatalogPending
+      ? jcodeHarnessSourceEntry.instanceId
+      : providerCatalogPending
+        ? (activeThreadModelSelection?.instanceId ?? selectedInstanceId)
+        : selectedInstanceId;
+  const pickerLockedProvider =
+    lockedProvider === "jcode" && jcodeHarnessSource
+      ? jcodeHarnessSource.driverKind
+      : lockedProvider;
+  const jcodeHarnessDetail = !jcodeHarnessEntry?.enabled
+    ? "Enable Jcode to run the selected model through it"
+    : jcodeHarnessSource === null
+      ? "Jcode cannot route this provider"
+      : jcodeHarnessOn
+        ? `${jcodeHarnessSource.label} through Jcode`
+        : `Run ${jcodeHarnessSource.label} through Jcode`;
+  const toggleJcodeHarness = () => {
+    if (!jcodeHarnessEntry?.enabled || !jcodeHarnessSource || multipleModelSelections !== null) {
+      return;
+    }
+    if (jcodeHarnessOn) {
+      if (!jcodeHarnessSourceEntry) return;
+      onProviderModelSelect(jcodeHarnessSourceEntry.instanceId, selectedModel, {
+        focusComposer: false,
+      });
+      return;
+    }
+    onProviderModelSelect(jcodeHarnessEntry.instanceId, selectedModel, {
+      focusComposer: false,
+      jcodeProvider: jcodeHarnessSource.id,
+    });
+  };
+
   const composerControls = showProviderUnavailable ? (
     <ComposerControl
       type="button"
@@ -5473,19 +5548,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               },
             }
           : {})}
-        activeInstanceId={
-          providerCatalogPending
-            ? (activeThreadModelSelection?.instanceId ?? selectedInstanceId)
-            : selectedInstanceId
-        }
+        activeInstanceId={pickerActiveInstanceId}
+        showJcodeHarness={jcodeHarnessOn}
         model={
           providerCatalogPending
             ? (activeThreadModelSelection?.model ?? selectedModelForPickerWithCustomFallback)
             : selectedModelForPickerWithCustomFallback
         }
-        lockedProvider={lockedProvider}
+        lockedProvider={pickerLockedProvider}
         lockedContinuationGroupKey={lockedContinuationGroupKey}
-        instanceEntries={providerInstanceEntries}
+        instanceEntries={pickerInstanceEntries}
         keybindings={keybindings}
         modelOptionsByInstance={modelOptionsByInstance}
         size={composerControlsCollapsed ? "xs" : "sm"}
@@ -5516,12 +5588,39 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           : {})}
         onOpenChange={setIsComposerModelPickerOpen}
         getModelDisabledReason={getModelDisabledReason}
-        onInstanceModelChange={(instanceId, model) => {
+        onInstanceModelChange={(instanceId, model, extras) => {
           setMultipleModelSelections(null);
-          onProviderModelSelect(instanceId, model);
+          const entry = providerInstanceEntries.find((item) => item.instanceId === instanceId);
+          const routedProvider = jcodeProviderForDriverKind(entry?.driverKind);
+          if (jcodeHarnessOn && jcodeHarnessEntry?.enabled && routedProvider) {
+            onProviderModelSelect(jcodeHarnessEntry.instanceId, model, {
+              jcodeProvider: routedProvider.id,
+            });
+            return;
+          }
+          onProviderModelSelect(
+            instanceId,
+            model,
+            extras?.jcodeProvider ? { jcodeProvider: extras.jcodeProvider } : undefined,
+          );
         }}
         onOpenProviderSetup={onOpenProviderSetup}
       />
+      {jcodeHarnessEntry ? (
+        <JcodeHarnessToggle
+          pressed={jcodeHarnessOn}
+          disabled={
+            !jcodeHarnessEntry.enabled ||
+            jcodeHarnessSource === null ||
+            multipleModelSelections !== null ||
+            providerCatalogPending ||
+            isSendBusy
+          }
+          size={composerControlsCollapsed ? "xs" : "sm"}
+          detail={jcodeHarnessDetail}
+          onToggle={toggleJcodeHarness}
+        />
+      ) : null}
 
       <>
         {restingBlockDefs.map((def, index) => {

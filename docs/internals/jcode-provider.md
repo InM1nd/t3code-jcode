@@ -24,17 +24,18 @@ Confirmed against `jcode v0.75.0`: ACP over stdio uses newline-delimited JSON-RP
 | `jcode api-bridge` + `@1jehuang/jcode-sdk` | Parallel architecture; revisit if ACP is insufficient |
 | TUI stdout parsing                         | Fragile; forbidden for MVP                            |
 
-Session startup uses two owned child processes and a dedicated socket:
+Session startup attaches an owned ACP child to a pooled daemon socket:
 
 ```text
-<binaryPath|jcode> serve --no-selfdev -p <provider> -m <exact-model-slug> --socket <session-socket>
-<binaryPath|jcode> [--quiet] acp [-C <cwd>] [-m <exact-model-slug>] [--provider-profile <name>] [-p <provider>] --socket <session-socket>
+<binaryPath|jcode> serve --no-selfdev -p <provider> -m <exact-model-slug> --socket <pool-socket>
+<binaryPath|jcode> [--quiet] acp [-C <cwd>] [-m <exact-model-slug>] [--provider-profile <name>] [-p <provider>] --socket <pool-socket>
 ```
 
-Process `cwd` and ACP `session/new.cwd` both use the T3 thread/worktree path
-(`AcpSessionRuntime` already passes `options.cwd` into `session/new`).
+The ACP process `cwd` and ACP `session/new.cwd` use the T3 thread/worktree path
+(`AcpSessionRuntime` already passes `options.cwd` into `session/new`). The daemon
+runs in its own temporary directory, never a project.
 
-## Isolation (per-session daemon)
+## Isolation (daemon per provider and model)
 
 jcode ACP is “backed by the Jcode daemon”. Findings from local probes on
 `jcode v0.75.0`:
@@ -43,18 +44,27 @@ jcode ACP is “backed by the Jcode daemon”. Findings from local probes on
 2. jcode **rejects** ACP `authenticate` (`Unsupported ACP method`). T3’s
    `AcpSessionRuntime` therefore supports `skipAuthenticate: true` for this
    driver only.
-3. When a provider is known, T3 starts one scoped `jcode serve` daemon for
-   that provider session, bound to a short temporary socket. The ACP subprocess
-   connects to that same socket. This prevents an ambient daemon from silently
-   supplying a different provider or model. Without a provider, the turn
-   fails and the session does not get that socket.
-4. T3 removes only its session socket and stops only the child handle it
-   spawned. It never searches for or kills Jcode processes by name.
+3. When a provider is known, the session attaches to a T3-owned `jcode serve`
+   daemon for that binary, provider, exact model, and provider profile
+   (`JcodeDaemonPool.ts`), bound to a short temporary socket. Sessions with the
+   same route share it; the last one to close stops it. This prevents an
+   ambient daemon from silently supplying a different provider or model.
+   Without a provider, the turn fails and the session does not get a socket.
+   Sharing is per route because a daemon serves only its `serve -m` model: a
+   second client asking for another model still gets the daemon's. Everything
+   else is per ACP session, including cwd and the `.jcode/mcp.json` it loads, so
+   each thread keeps its own t3-code credential. Measured on 5 parallel
+   sessions: ~1.05 GB shared versus ~3.3 GB with a daemon each.
+4. T3 removes only its pool sockets and stops only the child handles it
+   spawned. It never searches for or kills Jcode processes by name. A daemon
+   that exits drops out of the pool and takes its sessions' transports with
+   it; the next session start spawns a new one.
 5. Prompting without configured model credentials fails with a clear
    “no usable provider” error until `jcode login`.
    Thread sessions start the private daemon only when a provider is known
-   (Claude or Codex on the model selection, or any non-empty Jcode provider
-   setting). Short text generation (titles, commit messages, pull-request
+   (Claude, Codex, Cursor, Grok, OpenCode, or Antigravity on the model
+   selection, or any non-empty Jcode provider setting). Short text generation
+   (titles, commit messages, pull-request
    text) does not start that daemon; it uses the ambient jcode daemon.
 6. Non-empty ACP `session/new.mcpServers` is rejected (`ACP mcpServers are not
 supported yet`). Configure MCP in `~/.jcode/mcp.json` or project-local
@@ -70,9 +80,9 @@ this provider`). Provider and model selection are applied only at daemon
    provider verification relies on the isolated daemon argv plus the matching
    socket as the binding invariant. Do not invent an ACP provider field.
 
-MVP guarantee: a provider session with a known provider owns an isolated
-daemon created with that provider, the exact model slug, and that thread’s
-worktree cwd. Daemon startup always includes `--no-selfdev`. Do not auto-start
+Guarantee: a provider session with a known provider runs on a T3-owned daemon
+created with that provider and the exact model slug, in a session bound to that
+thread’s worktree cwd. Daemon startup always includes `--no-selfdev`. Do not auto-start
 swarm. Text generation is outside this guarantee.
 
 ## Out of scope (MVP)
