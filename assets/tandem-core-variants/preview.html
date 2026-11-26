@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tandem — Точная векторная иконка и варианты ядра</title>
+    <style>
+      :root {
+        --bg: #0b0c0f;
+        --card: #13151a;
+        --card-border: #22262f;
+        --text: #f0f2f5;
+        --text-muted: #8e94a0;
+        --accent-orange: #ff3811;
+        --accent-green: #10e850;
+        --accent-blue: #12a8ff;
+        --accent-yellow: #ffc812;
+        --accent-purple: #ba41ff;
+        --accent-cyan: #00f0ff;
+        --accent-pink: #ff2e93;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        padding: 40px 24px 80px;
+        line-height: 1.5;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgba(255, 56, 17, 0.15);
+        color: #ff5533;
+        border: 1px solid rgba(255, 56, 17, 0.3);
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+      }
+      h1 {
+        font-size: 34px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        margin-bottom: 8px;
+      }
+      p.lead {
+        color: var(--text-muted);
+        font-size: 16px;
+        max-width: 820px;
+      }
+
+      h2 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 44px 0 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      h2 .num {
+        background: #1f232c;
+        color: var(--text);
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 6px;
+      }
+
+      .comparison-banner {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 32px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .comparison-banner img {
+        width: 100%;
+        max-width: 860px;
+        border-radius: 12px;
+        border: 1px solid #282c35;
+      }
+      .comparison-labels {
+        display: flex;
+        justify-content: space-around;
+        width: 100%;
+        max-width: 860px;
+        margin-top: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #a4aab7;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 20px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .card .preview-box {
+        width: 100%;
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #060708;
+        border-radius: 12px;
+        margin-bottom: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        position: relative;
+      }
+      .card .preview-box.checker {
+        background: repeating-conic-gradient(#14171d 0% 25%, #0d0f13 0% 50%) 50% / 16px 16px;
+      }
+      .card img,
+      .card svg {
+        width: 82%;
+        height: 82%;
+        object-fit: contain;
+      }
+      .card .info {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .card .name {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .card .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .card .filename {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        margin-top: 4px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="badge">Pixel-Exact Vector Icon</div>
+        <h1>Идентичный плоский вектор оригинального знака Tandem</h1>
+        <p class="lead">
+          Векторный контур снят непосредственно с оригинального референсного изображения: форма
+          петли (outer + hole) и центральное ядро точно соответствуют геометрии оригинала, без
+          лишних псевдо-3D градиентов.
+        </p>
+      </header>
+
+      <!-- Side-by-side comparison -->
+      <h2><span class="num">01</span> Сравнение: Оригинал vs Векторная плоская иконка</h2>
+      <div class="comparison-banner">
+        <img src="side-by-side-comparison.png" alt="Comparison: Original vs Flat Vector" />
+        <div class="comparison-labels">
+          <span>← 1. Растровый оригинал (1254×1254)</span>
+          <span>2. Точная плоская векторная копия →</span>
+        </div>
+      </div>
+
+      <!-- Flat SVG Variants -->
+      <h2><span class="num">02</span> Плоские векторные SVG-иконки (по цветам ядра)</h2>
+      <div class="grid">
+        <div class="card">
+          <div class="preview-box">
+            <img src="tandem-flat-orange.svg" alt="Flat Orange" />
+          </div>
+          <div class="info">
+            <span class="name">Оригинал (Orange)</span>
+            <span class="dot" style="background: var(--accent-orange)"></span>
+          </div>
+          <div class="filename">tandem-flat-orange.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box">
+            <img src="tandem-flat-green.svg" alt="Flat Green" />
+          </div>
+          <div class="info">
+            <span class="name">Зелёный (Green)</span>
+            <span class="dot" style="background: var(--accent-green)"></span>
+          </div>
+          <div class="filename">tandem-flat-green.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box">
+            <img src="tandem-flat-blue.svg" alt="Flat Blue" />
+          </div>
+          <div class="info">
+            <span class="name">Синий (Blue)</span>
+            <span class="dot" style="background: var(--accent-blue)"></span>
+          </div>
+          <div class="filename">tandem-flat-blue.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box">
+            <img src="tandem-flat-yellow.svg" alt="Flat Yellow" />
+          </div>
+          <div class="info">
+            <span class="name">Жёлтый (Yellow)</span>
+            <span class="dot" style="background: var(--accent-yellow)"></span>
+          </div>
+          <div class="filename">tandem-flat-yellow.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box">
+            <img src="tandem-flat-purple.svg" alt="Flat Purple" />
+          </div>
+          <div class="info">
+            <span class="name">Фиолетовый (Purple)</span>
+            <span class="dot" style="background: var(--accent-purple)"></span>
+          </div>
+          <div class="filename">tandem-flat-purple.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box">
+            <img src="tandem-flat-cyan.svg" alt="Flat Cyan" />
+          </div>
+          <div class="info">
+            <span class="name">Бирюзовый (Cyan)</span>
+            <span class="dot" style="background: var(--accent-cyan)"></span>
+          </div>
+          <div class="filename">tandem-flat-cyan.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box">
+            <img src="tandem-flat-pink.svg" alt="Flat Pink" />
+          </div>
+          <div class="info">
+            <span class="name">Розовый (Pink)</span>
+            <span class="dot" style="background: var(--accent-pink)"></span>
+          </div>
+          <div class="filename">tandem-flat-pink.svg</div>
+        </div>
+      </div>
+
+      <!-- Transparent Background Versions -->
+      <h2><span class="num">03</span> Версии на прозрачном фоне (чистый знак без подложки)</h2>
+      <div class="grid">
+        <div class="card">
+          <div class="preview-box checker">
+            <img src="tandem-flat-transparent-orange.svg" alt="Transparent Orange" />
+          </div>
+          <div class="info">
+            <span class="name">Orange (No BG)</span>
+            <span class="dot" style="background: var(--accent-orange)"></span>
+          </div>
+          <div class="filename">tandem-flat-transparent-orange.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box checker">
+            <img src="tandem-flat-transparent-green.svg" alt="Transparent Green" />
+          </div>
+          <div class="info">
+            <span class="name">Green (No BG)</span>
+            <span class="dot" style="background: var(--accent-green)"></span>
+          </div>
+          <div class="filename">tandem-flat-transparent-green.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box checker">
+            <img src="tandem-flat-transparent-blue.svg" alt="Transparent Blue" />
+          </div>
+          <div class="info">
+            <span class="name">Blue (No BG)</span>
+            <span class="dot" style="background: var(--accent-blue)"></span>
+          </div>
+          <div class="filename">tandem-flat-transparent-blue.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box checker">
+            <img src="tandem-flat-transparent-yellow.svg" alt="Transparent Yellow" />
+          </div>
+          <div class="info">
+            <span class="name">Yellow (No BG)</span>
+            <span class="dot" style="background: var(--accent-yellow)"></span>
+          </div>
+          <div class="filename">tandem-flat-transparent-yellow.svg</div>
+        </div>
+
+        <div class="card">
+          <div class="preview-box checker">
+            <img src="tandem-flat-transparent-purple.svg" alt="Transparent Purple" />
+          </div>
+          <div class="info">
+            <span class="name">Purple (No BG)</span>
+            <span class="dot" style="background: var(--accent-purple)"></span>
+          </div>
+          <div class="filename">tandem-flat-transparent-purple.svg</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,185 @@
+import json
+import math
+
+def create_lottie(core_color_rgb=[1.0, 0.22, 0.07], glow_color_rgb=[1.0, 0.22, 0.07]):
+    # Lottie uses 0.0 - 1.0 for RGB colors!
+    
+    # 60fps, 180 frames = 3.0s loop
+    # Ease in-out keyframes helper
+    kf_glow_scale = [
+        {"t": 0, "s": [100, 100, 100], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 90, "s": [128, 128, 100], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 180, "s": [100, 100, 100]}
+    ]
+    kf_glow_opacity = [
+        {"t": 0, "s": [55], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 90, "s": [90], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 180, "s": [55]}
+    ]
+    
+    kf_core_scale = [
+        {"t": 0, "s": [100, 100, 100], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 90, "s": [105, 105, 100], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 180, "s": [100, 100, 100]}
+    ]
+    
+    kf_core_pos = [
+        {"t": 0, "s": [256, 256, 0], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 90, "s": [256, 253, 0], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+        {"t": 180, "s": [256, 256, 0]}
+    ]
+
+    lottie = {
+        "v": "5.7.4",
+        "fr": 60,
+        "ip": 0,
+        "op": 180,
+        "w": 512,
+        "h": 512,
+        "nm": "Tandem Icon Animation",
+        "ddd": 0,
+        "assets": [],
+        "layers": [
+            # 1. Specular highlight
+            {
+                "ddd": 0,
+                "ind": 1,
+                "ty": 4, # shape layer
+                "nm": "Core Highlight",
+                "sr": 1,
+                "ks": {
+                    "o": {"a": 0, "k": 95},
+                    "r": {"a": 0, "k": -25},
+                    "p": {"a": 1, "k": [
+                        {"t": 0, "s": [240, 240, 0], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+                        {"t": 90, "s": [240, 237, 0], "i": {"x": [0.4], "y": [1.0]}, "o": {"x": [0.4], "y": [0.0]}},
+                        {"t": 180, "s": [240, 240, 0]}
+                    ]},
+                    "a": {"a": 0, "k": [0, 0, 0]},
+                    "s": {"a": 0, "k": [100, 100, 100]}
+                },
+                "shapes": [
+                    {
+                        "ty": "gr",
+                        "it": [
+                            {"d": 1, "ty": "el", "s": {"a": 0, "k": [28, 20]}, "p": {"a": 0, "k": [0, 0]}, "nm": "Highlight Ellipse"},
+                            {"ty": "fl", "c": {"a": 0, "k": [1, 1, 1, 1]}, "o": {"a": 0, "k": 100}, "nm": "Fill"},
+                            {"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]}, "s": {"a": 0, "k": [100, 100]}, "r": {"a": 0, "k": 0}, "o": {"a": 0, "k": 100}}
+                        ],
+                        "nm": "Highlight Group"
+                    }
+                ]
+            },
+            # 2. Core Body
+            {
+                "ddd": 0,
+                "ind": 2,
+                "ty": 4,
+                "nm": "Core Sphere",
+                "sr": 1,
+                "ks": {
+                    "o": {"a": 0, "k": 100},
+                    "r": {"a": 0, "k": 0},
+                    "p": {"a": 1, "k": kf_core_pos},
+                    "a": {"a": 0, "k": [0, 0, 0]},
+                    "s": {"a": 1, "k": kf_core_scale}
+                },
+                "shapes": [
+                    {
+                        "ty": "gr",
+                        "it": [
+                            {"d": 1, "ty": "el", "s": {"a": 0, "k": [88, 88]}, "p": {"a": 0, "k": [0, 0]}, "nm": "Core Circle"},
+                            {"ty": "fl", "c": {"a": 0, "k": [core_color_rgb[0], core_color_rgb[1], core_color_rgb[2], 1]}, "o": {"a": 0, "k": 100}, "nm": "Core Fill"},
+                            {"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]}, "s": {"a": 0, "k": [100, 100]}, "r": {"a": 0, "k": 0}, "o": {"a": 0, "k": 100}}
+                        ],
+                        "nm": "Sphere Group"
+                    }
+                ]
+            },
+            # 3. Core Glow
+            {
+                "ddd": 0,
+                "ind": 3,
+                "ty": 4,
+                "nm": "Core Glow",
+                "sr": 1,
+                "ks": {
+                    "o": {"a": 1, "k": kf_glow_opacity},
+                    "r": {"a": 0, "k": 0},
+                    "p": {"a": 1, "k": kf_core_pos},
+                    "a": {"a": 0, "k": [0, 0, 0]},
+                    "s": {"a": 1, "k": kf_glow_scale}
+                },
+                "shapes": [
+                    {
+                        "ty": "gr",
+                        "it": [
+                            {"d": 1, "ty": "el", "s": {"a": 0, "k": [164, 164]}, "p": {"a": 0, "k": [0, 0]}, "nm": "Glow Circle"},
+                            {"ty": "fl", "c": {"a": 0, "k": [glow_color_rgb[0], glow_color_rgb[1], glow_color_rgb[2], 1]}, "o": {"a": 0, "k": 100}, "nm": "Glow Fill"},
+                            {"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]}, "s": {"a": 0, "k": [100, 100]}, "r": {"a": 0, "k": 0}, "o": {"a": 0, "k": 100}}
+                        ],
+                        "nm": "Glow Group"
+                    }
+                ]
+            },
+            # 4. Ribbon Structure Layer
+            {
+                "ddd": 0,
+                "ind": 4,
+                "ty": 4,
+                "nm": "Ribbon Band",
+                "sr": 1,
+                "ks": {
+                    "o": {"a": 0, "k": 100},
+                    "r": {"a": 0, "k": -42},
+                    "p": {"a": 0, "k": [256, 256, 0]},
+                    "a": {"a": 0, "k": [0, 0, 0]},
+                    "s": {"a": 0, "k": [100, 100, 100]}
+                },
+                "shapes": [
+                    {
+                        "ty": "gr",
+                        "it": [
+                            {"d": 1, "ty": "el", "s": {"a": 0, "k": [312, 168]}, "p": {"a": 0, "k": [0, 0]}, "nm": "Ribbon Outer Oval"},
+                            {"ty": "st", "c": {"a": 0, "k": [0.94, 0.95, 0.96, 1]}, "w": {"a": 0, "k": 48}, "o": {"a": 0, "k": 100}, "nm": "Ribbon Stroke"},
+                            {"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]}, "s": {"a": 0, "k": [100, 100]}, "r": {"a": 0, "k": 0}, "o": {"a": 0, "k": 100}}
+                        ],
+                        "nm": "Outer Loop"
+                    }
+                ]
+            },
+            # 5. Background Squircle
+            {
+                "ddd": 0,
+                "ind": 5,
+                "ty": 4,
+                "nm": "Background Container",
+                "sr": 1,
+                "ks": {
+                    "o": {"a": 0, "k": 100},
+                    "r": {"a": 0, "k": 0},
+                    "p": {"a": 0, "k": [256, 256, 0]},
+                    "a": {"a": 0, "k": [0, 0, 0]},
+                    "s": {"a": 0, "k": [100, 100, 100]}
+                },
+                "shapes": [
+                    {
+                        "ty": "gr",
+                        "it": [
+                            {"d": 1, "ty": "rc", "s": {"a": 0, "k": [464, 464]}, "p": {"a": 0, "k": [0, 0]}, "r": {"a": 0, "k": 104}, "nm": "Squircle Rect"},
+                            {"ty": "fl", "c": {"a": 0, "k": [0.05, 0.05, 0.06, 1]}, "o": {"a": 0, "k": 100}, "nm": "Background Fill"},
+                            {"ty": "st", "c": {"a": 0, "k": [0.15, 0.16, 0.18, 1]}, "w": {"a": 0, "k": 2}, "o": {"a": 0, "k": 100}, "nm": "Border"},
+                            {"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]}, "s": {"a": 0, "k": [100, 100]}, "r": {"a": 0, "k": 0}, "o": {"a": 0, "k": 100}}
+                        ],
+                        "nm": "Container Group"
+                    }
+                ]
+            }
+        ]
+    }
+    return lottie
+
+with open("assets/tandem-core-variants/tandem-animation.json", "w", encoding="utf-8") as f:
+    json.dump(create_lottie(), f, indent=2)
+
+print("Generated assets/tandem-core-variants/tandem-animation.json successfully!")
