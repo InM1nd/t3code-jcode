@@ -12,9 +12,13 @@ const mocks = vi.hoisted(() => ({
   } as LocalDomainList,
 }));
 
-vi.mock("~/localDomainsState", () => ({
-  localDomainsEnvironment: { list: () => null, unpublish: {} },
-}));
+vi.mock("~/localDomainsState", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/localDomainsState")>();
+  return {
+    ...actual,
+    localDomainsEnvironment: { list: () => null, unpublish: {} },
+  };
+});
 vi.mock("~/state/query", () => ({
   useEnvironmentQuery: () => ({ data: mocks.domains, error: null, refresh: vi.fn() }),
 }));

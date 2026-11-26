@@ -49,6 +49,17 @@ function suggestedLocalDomain(port: number): string {
   return `local-${port}.localhost`;
 }
 
+/** Keeps each domain and each port uniquely bound when publishing or renaming. */
+export function upsertLocalDomainBinding(
+  domains: ReadonlyArray<LocalDomainBinding>,
+  next: LocalDomainBinding,
+): ReadonlyArray<LocalDomainBinding> {
+  return [
+    ...domains.filter((binding) => binding.domain !== next.domain && binding.port !== next.port),
+    next,
+  ];
+}
+
 /** Explicitly migrates v1 persisted `.tandem` bindings to `.localhost`. */
 export function migratePersistedLocalDomain(value: string): string | null {
   const normalized = value.trim().toLowerCase();
@@ -220,10 +231,12 @@ export class LocalDomains extends Context.Service<
         Effect.flatMap(decodeState),
         Effect.catchCause(() => Effect.succeed({ version: 2 as const, domains: [] })),
       );
-      let domains = loaded.domains.flatMap(({ domain, port }) => {
+      let domains: ReadonlyArray<LocalDomainBinding> = loaded.domains.reduce<
+        ReadonlyArray<LocalDomainBinding>
+      >((acc, { domain, port }) => {
         const migrated = migratePersistedLocalDomain(domain);
-        return migrated ? [{ domain: migrated, port }] : [];
-      });
+        return migrated ? upsertLocalDomainBinding(acc, { domain: migrated, port }) : acc;
+      }, []);
       let proxy: NodeHttp.Server | null = null;
       let proxyError: string | null = null;
       const mutex = yield* Semaphore.make(1);
@@ -293,10 +306,7 @@ export class LocalDomains extends Context.Service<
                 message: "Use a name such as shop or shop.localhost.",
               });
             }
-            const next = [
-              ...domains.filter((binding) => binding.domain !== domain),
-              { domain, port: input.port },
-            ];
+            const next = upsertLocalDomainBinding(domains, { domain, port: input.port });
             yield* ensureProxy();
             yield* persist(next);
             domains = next;

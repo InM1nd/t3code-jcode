@@ -6,7 +6,7 @@ export const LOCAL_DOMAINS_WS_METHODS = {
   unpublish: "localDomains.unpublish",
 } as const;
 
-// ponytail: portless .localhost needs a proven platform-specific privileged listener; add it only after a separately verified desktop implementation.
+/** Default nonprivileged loopback proxy port; packaged macOS desktop may forward port 80 here. */
 export const LOCAL_DOMAIN_PROXY_PORT = 7777;
 
 export const LocalDomainBinding = Schema.Struct({

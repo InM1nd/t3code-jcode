@@ -163,12 +163,73 @@ layer("reconcileTerminalSessionsWithControl", (it) => {
       assert.deepStrictEqual(terminateCalls, []);
     }),
   );
+
+  it.effect("drops a row without signaling when process identity lookup fails", () =>
+    Effect.gen(function* () {
+      yield* runMigrations();
+      yield* runForkMigrations();
+      const repository = yield* TerminalSessionRegistryRepository;
+      yield* repository.upsert(row);
+
+      const { control, terminateCalls } = makeFakeProcessControl({
+        [row.serverPid]: false,
+        [row.pid]: true,
+      });
+      const unknownControl: TerminalSessionProcessControl = {
+        ...control,
+        identify: () => "unknown",
+      };
+
+      yield* reconcileTerminalSessionsWithControl(unknownControl);
+
+      const rows = yield* repository.list();
+      assert.deepStrictEqual(rows, []);
+      assert.deepStrictEqual(terminateCalls, []);
+    }),
+  );
+
+  it.effect("skips SIGKILL if the pid is reused during the SIGTERM grace window", () =>
+    Effect.gen(function* () {
+      yield* runMigrations();
+      yield* runForkMigrations();
+      const repository = yield* TerminalSessionRegistryRepository;
+      yield* repository.upsert(row);
+
+      const { control, terminateCalls } = makeFakeProcessControl({
+        [row.serverPid]: false,
+        [row.pid]: true,
+      });
+      let identifyCalls = 0;
+      const racingControl: TerminalSessionProcessControl = {
+        ...control,
+        identify: () => {
+          identifyCalls += 1;
+          return identifyCalls === 1 ? "same" : "reused";
+        },
+      };
+
+      const fiber = yield* reconcileTerminalSessionsWithControl(racingControl).pipe(
+        Effect.forkScoped,
+      );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+      yield* Fiber.join(fiber);
+
+      const rows = yield* repository.list();
+      assert.deepStrictEqual(rows, []);
+      assert.deepStrictEqual(terminateCalls, [{ pid: row.pid, signal: "SIGTERM" }]);
+    }).pipe(Effect.provide(TestClock.layer())),
+  );
 });
 
-it.effect("classifies a later process start as pid reuse", () =>
+it.effect("classifies a start outside the spawn window as pid reuse", () =>
   Effect.sync(() => {
     assert.strictEqual(
       classifyProcessStart(Date.parse("2026-01-01T00:02:00.000Z"), "2026-01-01T00:00:00.000Z"),
+      "reused",
+    );
+    assert.strictEqual(
+      classifyProcessStart(Date.parse("2025-12-31T23:00:00.000Z"), "2026-01-01T00:00:00.000Z"),
       "reused",
     );
     assert.strictEqual(

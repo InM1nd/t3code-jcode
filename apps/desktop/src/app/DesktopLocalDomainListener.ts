@@ -28,11 +28,17 @@ export class DesktopLocalDomainListener extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopLocalDomainListener") {}
 
+type WaitForReadyResult =
+  | { readonly ok: true; readonly child: NodeChildProcess.ChildProcess }
+  | { readonly ok: false; readonly detail: string | null };
+
 const waitForReady = (binaryPath: string) =>
-  Effect.callback<NodeChildProcess.ChildProcess | null>((resume) => {
+  Effect.callback<WaitForReadyResult>((resume) => {
     let child: NodeChildProcess.ChildProcess | undefined;
     let settled = false;
-    const finish = (result: NodeChildProcess.ChildProcess | null) => {
+    let stdoutBuffer = "";
+    let stderrBuffer = "";
+    const finish = (result: WaitForReadyResult) => {
       if (settled) return;
       settled = true;
       resume(Effect.succeed(result));
@@ -46,23 +52,45 @@ const waitForReady = (binaryPath: string) =>
           stdio: ["ignore", "pipe", "pipe"],
         },
       );
-    } catch {
-      finish(null);
+    } catch (error) {
+      finish({
+        ok: false,
+        detail: error instanceof Error ? error.message : String(error),
+      });
       return Effect.void;
     }
 
     child.stdout?.on("data", (chunk: Buffer) => {
-      if (child && chunk.toString("utf8").includes("ready\n")) finish(child);
+      if (settled || !child) return;
+      stdoutBuffer += chunk.toString("utf8");
+      if (stdoutBuffer.includes("ready\n")) {
+        finish({ ok: true, child });
+      }
     });
-    child.once("error", () => finish(null));
-    child.once("exit", () => finish(null));
+    child.stderr?.on("data", (chunk: Buffer) => {
+      if (stderrBuffer.length < 1_024) {
+        stderrBuffer += chunk.toString("utf8");
+      }
+    });
+    child.once("error", (error) => finish({ ok: false, detail: error.message }));
+    child.once("exit", (code, signal) =>
+      finish({
+        ok: false,
+        detail:
+          stderrBuffer.trim() ||
+          `exited (${code !== null ? `code ${code}` : `signal ${signal ?? "unknown"}`})`,
+      }),
+    );
 
     return Effect.sync(() => {
       if (!settled) child?.kill("SIGTERM");
     });
   }).pipe(
     Effect.timeout(LOCAL_DOMAIN_LISTENER_READY_TIMEOUT_MS),
-    Effect.orElseSucceed(() => null),
+    Effect.orElseSucceed((): WaitForReadyResult => ({
+      ok: false,
+      detail: "timed out waiting for ready",
+    })),
   );
 
 export const layer = Layer.effect(
@@ -91,14 +119,17 @@ export const layer = Layer.effect(
       }
 
       const started = yield* waitForReady(binaryPath);
-      if (started === null) {
-        yield* Effect.logWarning("Could not claim local domain port 80; using port 7777.");
+      if (!started.ok) {
+        yield* Effect.logWarning(
+          "Could not claim local domain port 80; using port 7777.",
+          started.detail ? { detail: started.detail } : {},
+        );
         return;
       }
 
-      child = started;
+      child = started.child;
       ready = true;
-      started.once("exit", () => {
+      started.child.once("exit", () => {
         ready = false;
         child = undefined;
       });

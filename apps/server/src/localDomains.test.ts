@@ -10,6 +10,7 @@ import {
   normalizeLocalDomain,
   portListenError,
   resolveLocalDomainPublicPort,
+  upsertLocalDomainBinding,
 } from "./localDomains.ts";
 
 const servers: NodeHttp.Server[] = [];
@@ -65,6 +66,20 @@ describe("local domains", () => {
     expect(normalizeLocalDomain("shop.other.localhost")).toBeNull();
     expect(normalizeLocalDomain("shop.tandem")).toBeNull();
     expect(migratePersistedLocalDomain("Shop.tandem")).toBe("shop.localhost");
+  });
+
+  it("replaces an existing port binding when renaming and moves a domain when reassigned", () => {
+    const initial = [
+      { domain: "shop.localhost", port: 5173 },
+      { domain: "api.localhost", port: 3000 },
+    ];
+    expect(upsertLocalDomainBinding(initial, { domain: "store.localhost", port: 5173 })).toEqual([
+      { domain: "api.localhost", port: 3000 },
+      { domain: "store.localhost", port: 5173 },
+    ]);
+    expect(upsertLocalDomainBinding(initial, { domain: "shop.localhost", port: 3000 })).toEqual([
+      { domain: "shop.localhost", port: 3000 },
+    ]);
   });
 
   it("uses a nonprivileged proxy port and reports occupied ports uniformly", () => {

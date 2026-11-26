@@ -1,4 +1,4 @@
-import { LOCAL_DOMAINS_WS_METHODS } from "@t3tools/contracts";
+import { LOCAL_DOMAIN_PROXY_PORT, LOCAL_DOMAINS_WS_METHODS } from "@t3tools/contracts";
 import {
   createAtomCommandScheduler,
   createEnvironmentRpcCommand,
@@ -6,6 +6,11 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 
 import { connectionAtomRuntime } from "./connection/runtime";
+
+export function formatLocalDomainUrl(domain: string, proxyPort?: number): string {
+  const port = proxyPort ?? LOCAL_DOMAIN_PROXY_PORT;
+  return port === 80 ? `http://${domain}` : `http://${domain}:${port}`;
+}
 
 const mutationScheduler = createAtomCommandScheduler();
 

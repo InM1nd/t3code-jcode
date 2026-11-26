@@ -28,12 +28,12 @@ import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { TerminalSessionRegistryRepository } from "../persistence/TerminalSessionRegistry.ts";
 
 const RECONCILE_KILL_GRACE_MS = 1_000;
-/** The shell starts, then the row is written. A later start is a reused pid. */
+/** The shell starts, then the row is written. A start outside this window is a different process. */
 const PROCESS_START_SLACK_MS = 60_000;
 
 export type OrphanProcessIdentity = "same" | "reused" | "unknown";
 
-/** A pid that started well after the row was written belongs to someone else. */
+/** A pid whose start time falls outside the recorded spawn window belongs to someone else. */
 export function classifyProcessStart(
   processStartedAtMs: number | null,
   recordedStartedAt: string,
@@ -42,7 +42,7 @@ export function classifyProcessStart(
   if (processStartedAtMs === null) return "unknown";
   const recorded = Date.parse(recordedStartedAt);
   if (Number.isNaN(recorded)) return "unknown";
-  return processStartedAtMs <= recorded + slackMs ? "same" : "reused";
+  return Math.abs(processStartedAtMs - recorded) <= slackMs ? "same" : "reused";
 }
 
 /** Posix signals the process group. Windows has no groups, so taskkill walks the tree. */
@@ -108,6 +108,7 @@ function readProcessStartMs(pid: number, platform: NodeJS.Platform): number | nu
   }
   const result = NodeChildProcess.spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
     encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C", LC_TIME: "C" },
   });
   if (result.status !== 0) return null;
   const started = Date.parse(result.stdout.trim());
@@ -146,13 +147,14 @@ function makeDefaultProcessControl(platform: NodeJS.Platform): TerminalSessionPr
 
 /**
  * Reconcile one registry row: leave it alone if another live server owns
- * it, drop it if the target is already dead, otherwise kill (SIGTERM ->
- * grace -> SIGKILL) and drop it.
+ * it, drop it if the target is already dead or its process start identity
+ * cannot be verified, otherwise kill (SIGTERM -> grace -> re-verify -> SIGKILL)
+ * and drop it.
  *
  * A row whose `serverPid` is this process was written by a previous boot
  * that reused the pid (PID 1 under Docker or a supervisor). This boot does
- * not own it. A terminal pid that started after the row was written has
- * been reused; drop the row instead of signaling that new process group.
+ * not own it. If the terminal pid's start time mismatches or cannot be read,
+ * fail closed: drop the stale row without signaling that process group.
  */
 function reconcileRow(
   row: { threadId: string; terminalId: string; pid: number; serverPid: number; startedAt: string },
@@ -171,14 +173,17 @@ function reconcileRow(
       return;
     }
 
-    if (processControl.identify(row.pid, row.startedAt) === "reused") {
+    if (processControl.identify(row.pid, row.startedAt) !== "same") {
       yield* registry.removeByKey(key).pipe(Effect.ignoreCause({ log: true }));
       return;
     }
 
     yield* processControl.terminate(row.pid, "SIGTERM");
     yield* Effect.sleep(RECONCILE_KILL_GRACE_MS);
-    if (processControl.isAlive(row.pid)) {
+    if (
+      processControl.isAlive(row.pid) &&
+      processControl.identify(row.pid, row.startedAt) === "same"
+    ) {
       yield* processControl.terminate(row.pid, "SIGKILL");
     }
     yield* registry.removeByKey(key).pipe(Effect.ignoreCause({ log: true }));

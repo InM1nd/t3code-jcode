@@ -1,12 +1,8 @@
-import {
-  LOCAL_DOMAIN_PROXY_PORT,
-  type DiscoveredLocalServer,
-  type EnvironmentId,
-} from "@t3tools/contracts";
-import { useEffect, useState } from "react";
+import type { DiscoveredLocalServer, EnvironmentId } from "@t3tools/contracts";
+import { useState } from "react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
-import { localDomainsEnvironment } from "~/localDomainsState";
+import { formatLocalDomainUrl, localDomainsEnvironment } from "~/localDomainsState";
 import { readLocalApi } from "~/localApi";
 import { useEnvironmentQuery } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -28,23 +24,23 @@ export function LocalDomainsPortControls({
   const publish = useAtomCommand(localDomainsEnvironment.publish, { reportFailure: true });
   const unpublish = useAtomCommand(localDomainsEnvironment.unpublish, { reportFailure: true });
   const domain = localDomains.data?.domains.find((binding) => binding.port === server.port);
-  const [domainDraft, setDomainDraft] = useState(domain?.domain ?? `local-${server.port}`);
-  useEffect(() => {
-    setDomainDraft(domain?.domain ?? `local-${server.port}`);
-  }, [domain?.domain, server.port]);
+  const defaultDraft = domain?.domain ?? `local-${server.port}`;
+  const [draftOverride, setDraftOverride] = useState<{
+    readonly base: string;
+    readonly value: string;
+  } | null>(null);
+  const domainDraft = draftOverride?.base === defaultDraft ? draftOverride.value : defaultDraft;
   if (localDomains.data?.supported === false) return null;
   if (localDomains.error) return <span className="text-destructive">{localDomains.error}</span>;
   if (localDomains.data?.supported !== true) return null;
-  const localUrl = domain
-    ? `http://${domain.domain}:${localDomains.data.proxyPort ?? LOCAL_DOMAIN_PROXY_PORT}`
-    : "";
+  const localUrl = domain ? formatLocalDomainUrl(domain.domain, localDomains.data.proxyPort) : "";
   return (
     <div className="flex w-full items-center gap-2 border-t border-border/40 pt-2">
       <Input
         aria-label={`Local domain for port ${server.port}`}
         className="max-w-64"
         value={domainDraft}
-        onChange={(event) => setDomainDraft(event.target.value)}
+        onChange={(event) => setDraftOverride({ base: defaultDraft, value: event.target.value })}
       />
       <Button
         size="sm"

@@ -7,9 +7,13 @@ const mocks = vi.hoisted(() => ({
   domains: { domains: [], supported: true, proxyError: null } as LocalDomainList,
 }));
 
-vi.mock("~/localDomainsState", () => ({
-  localDomainsEnvironment: { list: () => null, publish: {}, unpublish: {} },
-}));
+vi.mock("~/localDomainsState", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/localDomainsState")>();
+  return {
+    ...actual,
+    localDomainsEnvironment: { list: () => null, publish: {}, unpublish: {} },
+  };
+});
 vi.mock("~/state/query", () => ({
   useEnvironmentQuery: () => ({
     data: mocks.domains,
@@ -21,10 +25,18 @@ vi.mock("~/state/query", () => ({
 vi.mock("~/state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("~/localApi", () => ({ readLocalApi: () => undefined }));
 
+import { formatLocalDomainUrl } from "~/localDomainsState";
 import { LocalDomainsPortControls } from "./LocalDomainsPortControls";
 
 describe("LocalDomainsPortControls", () => {
+  it("formats port 80 URLs without an explicit port and preserves non-80 ports", () => {
+    expect(formatLocalDomainUrl("shop.localhost", 80)).toBe("http://shop.localhost");
+    expect(formatLocalDomainUrl("shop.localhost", 7777)).toBe("http://shop.localhost:7777");
+    expect(formatLocalDomainUrl("shop.localhost")).toBe("http://shop.localhost:7777");
+  });
+
   it("proposes a name without publishing it", () => {
+    mocks.domains = { domains: [], supported: true, proxyError: null };
     const html = renderToStaticMarkup(
       <LocalDomainsPortControls
         environmentId={environmentId}

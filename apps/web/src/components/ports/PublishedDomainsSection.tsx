@@ -1,8 +1,8 @@
-import { LOCAL_DOMAIN_PROXY_PORT, type EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { Globe2 } from "lucide-react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
-import { localDomainsEnvironment } from "~/localDomainsState";
+import { formatLocalDomainUrl, localDomainsEnvironment } from "~/localDomainsState";
 import { useEnvironmentQuery } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
 
@@ -21,7 +21,6 @@ export function PublishedDomainsSection({
   );
   const unpublish = useAtomCommand(localDomainsEnvironment.unpublish, { reportFailure: true });
   const activePortSet = new Set(activePorts);
-  const proxyPort = localDomains.data?.proxyPort ?? LOCAL_DOMAIN_PROXY_PORT;
   const stoppedDomains =
     localDomains.data?.supported === true
       ? localDomains.data.domains.filter((domain) => !activePortSet.has(domain.port))
@@ -37,7 +36,7 @@ export function PublishedDomainsSection({
       </div>
       <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70 bg-background">
         {stoppedDomains.map((domain) => {
-          const url = `http://${domain.domain}:${proxyPort}`;
+          const url = formatLocalDomainUrl(domain.domain, localDomains.data?.proxyPort);
           return (
             <div
               key={domain.domain}
