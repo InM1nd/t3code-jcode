@@ -14,7 +14,7 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
@@ -196,5 +196,6 @@ export const BoardToolkit = Toolkit.make(
     }),
   })
     .annotate(Tool.Destructive, true)
-    .annotate(Tool.OpenWorld, true),
+    .annotate(Tool.OpenWorld, true)
+    .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients),
 );

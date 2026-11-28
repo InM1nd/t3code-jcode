@@ -1,6 +1,6 @@
 import { OrchestratorMcpFailure, TrimmedNonEmptyString } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/ai";
+import { McpSchema, Tool, Toolkit } from "effect/ai";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import { CLAUDE_MCP_ENABLE_TOOL } from "../../../provider/fork/claudeMcpAuto.ts";
@@ -22,5 +22,6 @@ export const ClaudeMcpToolkit = Toolkit.make(
     ],
   })
     .annotate(Tool.Readonly, false)
-    .annotate(Tool.Destructive, false),
+    .annotate(Tool.Destructive, false)
+    .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients),
 );
