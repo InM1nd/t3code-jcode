@@ -1,16 +1,6 @@
 /**
- * Fork schema changes live in `fork_sql_migrations`, never in
- * `effect_sql_migrations`. Upstream compares migration ids only, and this
- * fork already recorded ids 41 and 44 under the name
- * `ProjectionProjectsBoardItems`. Those rows would make a V2 startup skip
- * `041_AuthSessionClientConnection` and `044_ClearAutomaticProjectModelDefaults`.
- *
- * `repairDivergentUpstreamMigrations` runs before `runMigrations`. The upstream
- * runner warns when recorded names disagree, and it will not re-run an id it
- * has already stored, so the repair has to apply those two migrations and
- * rewrite the names first. `runForkMigrations` then records that repair and
- * adds the board column. Migration 3 copies that JSON into `fork_board_items`
- * once and leaves the column in place.
+ * Fork schema changes live in `fork_sql_migrations`, never in `effect_sql_migrations`.
+ * Run `repairDivergentUpstreamMigrations` before `runMigrations` so upstream ids 41/44 are not skipped.
  */
 
 import { ProjectBoardItem } from "@t3tools/contracts";
@@ -199,6 +189,32 @@ const addTerminalSessionRegistry = Effect.gen(function* () {
       PRIMARY KEY (thread_id, terminal_id)
     )
   `;
+});
+
+const LATEST_FORK_MIGRATION_ID = 5;
+
+export const hasPendingForkMigrations = Effect.fn("hasPendingForkMigrations")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const upstreamLedger = yield* sql<{
+    readonly name: string;
+  }>`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'effect_sql_migrations'`;
+  if (upstreamLedger.length > 0) {
+    const divergent = yield* sql<{ readonly migration_id: number }>`
+      SELECT migration_id
+      FROM effect_sql_migrations
+      WHERE migration_id IN (41, 44)
+        AND name = ${DIVERGENT_UPSTREAM_NAME}
+    `;
+    if (divergent.length > 0) return true;
+  }
+  const forkLedger = yield* sql<{
+    readonly name: string;
+  }>`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${FORK_MIGRATIONS_TABLE}`;
+  if (forkLedger.length === 0) return true;
+  const rows = yield* sql<{ readonly latestId: number | null }>`
+    SELECT MAX(migration_id) AS latestId FROM fork_sql_migrations
+  `;
+  return (rows[0]?.latestId ?? 0) < LATEST_FORK_MIGRATION_ID;
 });
 
 const run = Migrator.make({});

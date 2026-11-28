@@ -1,7 +1,7 @@
 import type { DiscoveredLocalServer, EnvironmentId } from "@t3tools/contracts";
 import { useState } from "react";
 
-import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { namedClipboardTarget, useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { formatLocalDomainUrl, localDomainsEnvironment } from "~/localDomainsState";
 import { readLocalApi } from "~/localApi";
 import { useEnvironmentQuery } from "~/state/query";
@@ -17,7 +17,7 @@ export function LocalDomainsPortControls({
   server: DiscoveredLocalServer;
   environmentId: EnvironmentId;
 }) {
-  const { copyToClipboard } = useCopyToClipboard({ target: "URL" });
+  const { copyToClipboard } = useCopyToClipboard({ target: namedClipboardTarget("URL") });
   const localDomains = useEnvironmentQuery(
     localDomainsEnvironment.list({ environmentId, input: {} }),
   );

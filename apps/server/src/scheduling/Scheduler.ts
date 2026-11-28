@@ -6,9 +6,8 @@ import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 
-import { forkParked } from "../serverActivation.ts";
+import { forkParked, withoutParentSpan } from "../serverActivation.ts";
 
-/** Sources load due work from their durable state; registration owns its execution lifetime. */
 export class Scheduler extends Context.Service<
   Scheduler,
   {
@@ -21,14 +20,15 @@ export class Scheduler extends Context.Service<
 
 const make = Effect.gen(function* () {
   const sources = yield* Ref.make(new Map<symbol, Effect.Effect<void>>());
-  const register: Scheduler["Service"]["register"] = Effect.fn("Scheduler.register")(function* <
-    E,
-    R,
-  >(name: string, runDueWork: Effect.Effect<void, E, R>) {
+  const register: Scheduler["Service"]["register"] = Effect.fnUntraced(function* <E, R>(
+    name: string,
+    runDueWork: Effect.Effect<void, E, R>,
+  ) {
     const scope = yield* Effect.scope;
     const context = yield* Effect.context<R>();
     const permit = yield* Semaphore.make(1);
     const run = runDueWork.pipe(
+      withoutParentSpan,
       Effect.provideContext(context),
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
@@ -55,8 +55,6 @@ const make = Effect.gen(function* () {
   const tick = Ref.get(sources).pipe(
     Effect.flatMap((current) => Effect.forEach(current.values(), (run) => run, { discard: true })),
   );
-  // One clock for all due-work sources. A slow source cannot block another
-  // source or overlap itself, and no extra missed-tick backlog is queued.
   yield* forkParked(Effect.sleep("5 seconds").pipe(Effect.andThen(tick), Effect.forever));
   return Scheduler.of({ register });
 });

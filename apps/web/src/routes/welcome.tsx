@@ -5,12 +5,12 @@ import * as Schema from "effect/Schema";
 import * as Option from "effect/Option";
 
 import { NoProjectsHero } from "../components/NoProjectsHero";
-import { WelcomeWizard } from "../components/onboarding/WelcomeWizard";
+import { WelcomePage } from "../components/onboarding/WelcomePage";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 
 const decodeEnvironmentId = Schema.decodeOption(EnvironmentId);
 
-/** Onboarding overlays the workspace. Visiting /welcome reopens setup. */
 export const Route = createFileRoute("/welcome")({
   beforeLoad: ({ context }) => {
     const { authGateState } = context;
@@ -22,41 +22,47 @@ export const Route = createFileRoute("/welcome")({
 });
 
 function WelcomeRouteView() {
-  const { authGateState } = Route.useRouteContext();
   const navigate = useNavigate();
   const hash = useLocation({ select: (location) => location.hash });
-  const resumeEnvironmentId = hash.startsWith("agents:")
-    ? Option.getOrUndefined(decodeEnvironmentId(hash.slice("agents:".length)))
-    : undefined;
-  // The root shell can remount this pending outlet after the location changes.
-  // Never reopen setup while the destination route is still loading.
+  const reviewProjects = hash.startsWith("projects:");
+  // Sign-in and project import shortcuts carry the computer they were opened for.
+  const resumeEnvironmentId =
+    hash.startsWith("agents:") || reviewProjects
+      ? Option.getOrUndefined(decodeEnvironmentId(hash.slice(hash.indexOf(":") + 1)))
+      : undefined;
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const { environments, isReady } = useEnvironments();
+  // Trust the id only once the catalog has it.
+  const waitingForCatalog =
+    !isReady && (resumeEnvironmentId !== undefined || primaryEnvironmentId === null);
+  const resumeKnown =
+    resumeEnvironmentId !== undefined &&
+    environments.some((environment) => environment.environmentId === resumeEnvironmentId);
+  // An import shortcut must never silently switch to a different computer.
+  const environmentId =
+    (resumeKnown ? resumeEnvironmentId : undefined) ??
+    (reviewProjects ? null : primaryEnvironmentId);
+  // The root can remount this pending outlet after navigation; do not reopen setup.
   const isWelcomeRoute = useLocation({ select: (location) => location.pathname === "/welcome" });
   const [dismissed, setDismissed] = useState(false);
   const openNewThread = useNewThreadHandler();
-  // An authenticated gate means a primary server is serving this app —
-  // desktop, `npx t3`, or a dev server — and that server is "this machine"
-  // no matter what hostname the browser used. Only hosted-static has no
-  // local server to offer.
-  const localAvailable = authGateState.status === "authenticated";
+  if (waitingForCatalog) return null;
+  if (environmentId === null || !isWelcomeRoute || dismissed) return <NoProjectsHero />;
   return (
-    <>
-      <NoProjectsHero />
-      {isWelcomeRoute && !dismissed ? (
-        <WelcomeWizard
-          localAvailable={localAvailable}
-          resumeEnvironmentId={resumeEnvironmentId}
-          onDone={async (projectRef) => {
-            setDismissed(true);
-            if (projectRef !== undefined) {
-              await openNewThread(projectRef, { replace: true }).catch(() =>
-                navigate({ to: "/", replace: true }),
-              );
-              return;
-            }
-            await navigate({ to: "/", replace: true });
-          }}
-        />
-      ) : null}
-    </>
+    <WelcomePage
+      key={environmentId}
+      environmentId={environmentId}
+      reviewProjects={reviewProjects}
+      onDone={async (projectRef) => {
+        setDismissed(true);
+        if (projectRef !== undefined) {
+          await openNewThread(projectRef, { replace: true }).catch(() =>
+            navigate({ to: "/", replace: true }),
+          );
+          return;
+        }
+        await navigate({ to: "/", replace: true });
+      }}
+    />
   );
 }

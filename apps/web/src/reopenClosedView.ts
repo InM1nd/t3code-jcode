@@ -2,30 +2,25 @@ import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 import type { OpenPreviewMutation } from "./browser/openFileInPreview";
 import type { ClosedView, ClosedViewEntry } from "./closedViewStore";
-import type { PullRequestListPreferences } from "./components/pullRequest/pullRequestListPreferences";
 import { openPreviewSession } from "./components/preview/openPreviewSession";
 import {
+  rightPanelHostRef,
   type RightPanelSurface,
+  selectThreadRightPanelState,
   type ThreadRightPanelState,
   useRightPanelStore,
 } from "./rightPanelStore";
 
 export interface ReopenOwnerState {
-  /** False when the entry's environment is not in the catalog. */
   environmentKnown: boolean;
   catalogReady: boolean;
-  /** Whether the owning thread or draft still exists locally. */
   ownerExists: boolean;
-  /** A live shell that lacks the thread means it was deleted; a cached one may just be stale. */
+  /** False only for a side chat tab whose thread is gone from the shell. */
+  sideChatExists: boolean;
   shellLive: boolean;
   panel: ThreadRightPanelState;
 }
 
-/**
- * Picks the history entry the next reopen press restores, newest first. Entries whose
- * environment is gone or whose tab is already open are dropped. A thread missing from a
- * live shell is skipped but kept; anything not yet knowable stops the scan with no restore.
- */
 export function planNextReopen(
   entries: readonly ClosedViewEntry[],
   ownerState: (entry: ClosedViewEntry) => ReopenOwnerState,
@@ -38,7 +33,7 @@ export function planNextReopen(
       drop.push(entry);
       continue;
     }
-    if (!owner.ownerExists) {
+    if (!owner.ownerExists || !owner.sideChatExists) {
       if (owner.shellLive) continue;
       break;
     }
@@ -57,43 +52,39 @@ export function planNextReopen(
   return { drop, restore: null };
 }
 
-type PullRequestsSearchLike = Partial<PullRequestListPreferences> & {
-  repository?: string;
-  number?: number;
-  selectedProjectId?: ProjectId;
-  selectedHost?: string;
-  selectedEnvironmentId?: EnvironmentId;
-};
-
-/** Selects the restored pull request on the Pull Requests page, keeping the list filters. */
-export function pullRequestsSearchForRestore<S extends PullRequestsSearchLike>(
-  previous: S,
+export function pullRequestsSearchForRestore<S extends object>(
+  preferences: S,
   selected: RightPanelSurface | null,
-): S & PullRequestListPreferences {
-  const {
-    repository: _repository,
-    number: _number,
-    selectedProjectId: _projectId,
-    selectedHost: _host,
-    selectedEnvironmentId: _environmentId,
-    ...filters
-  } = previous;
+) {
+  if (selected?.kind !== "pull-request") return preferences;
   return {
-    ...filters,
-    involvement: previous.involvement ?? "all",
-    state: previous.state ?? "open",
-    ...(selected?.kind === "pull-request"
-      ? {
-          repository: selected.repository,
-          number: selected.number,
-          selectedProjectId: selected.projectId as ProjectId,
-          ...(selected.host === undefined ? {} : { selectedHost: selected.host }),
-          ...(selected.environmentId === undefined
-            ? {}
-            : { selectedEnvironmentId: selected.environmentId as EnvironmentId }),
-        }
-      : {}),
-  } as S & PullRequestListPreferences;
+    ...preferences,
+    repository: selected.repository,
+    number: selected.number,
+    selectedProjectId: selected.projectId as ProjectId,
+    ...(selected.host === undefined ? {} : { selectedHost: selected.host }),
+    ...(selected.environmentId === undefined
+      ? {}
+      : { selectedEnvironmentId: selected.environmentId as EnvironmentId }),
+  };
+}
+
+export function issuesSearchForRestore<S extends object>(
+  preferences: S,
+  selected: RightPanelSurface | null,
+) {
+  if (selected?.kind !== "issue") return preferences;
+  return {
+    ...preferences,
+    ...(selected.environmentId === undefined
+      ? {}
+      : { selectedEnvironmentId: selected.environmentId as EnvironmentId }),
+    selectedProjectId: selected.projectId as ProjectId,
+    ...(selected.host === undefined ? {} : { selectedHost: selected.host }),
+    tracker: selected.tracker,
+    scope: selected.scope,
+    key: selected.key,
+  };
 }
 
 export async function reopenClosedView(
@@ -114,6 +105,10 @@ export async function reopenClosedView(
       ...(url === undefined ? {} : { url }),
       ...(view.snapshot.viewport === undefined ? {} : { viewport: view.snapshot.viewport }),
       ...(view.snapshot.profileId === undefined ? {} : { profileId: view.snapshot.profileId }),
+      ...(view.snapshot.zoomFactor === undefined ? {} : { zoomFactor: view.snapshot.zoomFactor }),
+      ...(view.snapshot.colorScheme === undefined
+        ? {}
+        : { colorScheme: view.snapshot.colorScheme }),
     });
     if (result._tag === "Failure") return false;
     panels.openBrowser(ref, result.value.tabId);
@@ -132,8 +127,24 @@ export async function reopenClosedView(
       break;
     case "file":
       if (surface.attachment) panels.openAttachment(ref, surface.attachment);
-      else panels.openFile(ref, surface.relativePath, surface.revealLine ?? undefined);
+      else {
+        panels.openFile(ref, surface.relativePath, surface.revealLine ?? undefined);
+        if (typeof surface.folderTrail === "string") {
+          panels.navigateFolder(ref, surface.id, surface.relativePath, surface.folderTrail);
+        }
+      }
       break;
+    case "files": {
+      const rootAlreadyExists = selectThreadRightPanelState(
+        panels.byThreadKey,
+        rightPanelHostRef(ref),
+      ).surfaces.some((current) => current.kind === "files");
+      panels.open(ref, "files");
+      if (!rootAlreadyExists && typeof surface.folderTrail === "string") {
+        panels.navigateFolder(ref, surface.id, "", surface.folderTrail);
+      }
+      break;
+    }
     case "device":
       if (surface.target) {
         panels.openDevice(ref, surface.target);
@@ -142,6 +153,15 @@ export async function reopenClosedView(
       break;
     case "pull-request":
       panels.openPullRequest(ref, surface);
+      break;
+    case "issue":
+      panels.openIssue(ref, surface);
+      break;
+    case "thread":
+      panels.openThread(ref, surface.threadId);
+      break;
+    case "linked-thread":
+      panels.openLinkedThread(ref, surface);
       break;
     default:
       panels.open(ref, surface.kind);

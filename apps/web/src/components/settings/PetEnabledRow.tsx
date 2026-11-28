@@ -3,10 +3,11 @@ import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import { useClientSettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
 import { Switch } from "../ui/switch";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 
 /** Fork-owned toggle for the floating companion. Off until the user opts in. */
 export function PetEnabledRow() {
+  const searchableSetting = useSearchableSetting();
   const petEnabled = useClientSettings((settings) => settings.petEnabled);
   const updateSettings = useUpdatePrimarySettings();
 
@@ -17,7 +18,7 @@ export function PetEnabledRow() {
       resetAction={
         petEnabled !== DEFAULT_CLIENT_SETTINGS.petEnabled ? (
           <SettingResetButton
-            label="companion pet"
+            ariaLabel="Reset companion pet to default"
             onClick={() => updateSettings({ petEnabled: DEFAULT_CLIENT_SETTINGS.petEnabled })}
           />
         ) : null

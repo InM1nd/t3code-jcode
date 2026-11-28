@@ -19,16 +19,23 @@ export function normalizeSearchQuery(
     : trimmed.toLowerCase();
 }
 
-export function scoreSubsequenceMatch(value: string, query: string): number | null {
+export function scoreSubsequenceMatch(
+  value: string,
+  query: string,
+  options?: { ignorePosition?: boolean },
+): number | null {
   if (!query) return 0;
 
   let queryIndex = 0;
+  let queryCodePoint = query.codePointAt(0);
   let firstMatchIndex = -1;
   let previousMatchIndex = -1;
   let gapPenalty = 0;
 
-  for (let valueIndex = 0; valueIndex < value.length; valueIndex += 1) {
-    if (value[valueIndex] !== query[queryIndex]) {
+  for (let valueIndex = 0, valueStep = 1; valueIndex < value.length; valueIndex += valueStep) {
+    const valueCodePoint = value.codePointAt(valueIndex)!;
+    valueStep = valueCodePoint > 0xffff ? 2 : 1;
+    if (valueCodePoint !== queryCodePoint) {
       continue;
     }
 
@@ -39,13 +46,17 @@ export function scoreSubsequenceMatch(value: string, query: string): number | nu
       gapPenalty += valueIndex - previousMatchIndex - 1;
     }
 
-    previousMatchIndex = valueIndex;
-    queryIndex += 1;
+    previousMatchIndex = valueIndex + valueStep - 1;
+    queryIndex += valueStep;
     if (queryIndex === query.length) {
-      const spanPenalty = valueIndex - firstMatchIndex + 1 - query.length;
+      const spanPenalty = previousMatchIndex - firstMatchIndex + 1 - query.length;
+      if (options?.ignorePosition) {
+        return gapPenalty * 3 + spanPenalty;
+      }
       const lengthPenalty = Math.min(64, value.length - query.length);
       return firstMatchIndex * 2 + gapPenalty * 3 + spanPenalty + lengthPenalty;
     }
+    queryCodePoint = query.codePointAt(queryIndex);
   }
 
   return null;
@@ -77,12 +88,7 @@ function findBoundaryMatchIndex(
   return bestIndex;
 }
 
-/**
- * Scores how well `value` matches `query` using tiered match strategies.
- *
- * **Expects pre-normalized inputs**: both `value` and `query` must already be
- * trimmed and lowercased (e.g. via {@link normalizeSearchQuery}).
- */
+/** value and query must already be trimmed and lowercased. */
 export function scoreQueryMatch(input: {
   value: string;
   query: string;
@@ -92,8 +98,11 @@ export function scoreQueryMatch(input: {
   includesBase?: number;
   fuzzyBase?: number;
   boundaryMarkers?: readonly string[];
+  ignorePosition?: boolean;
 }): number | null {
   const { value, query } = input;
+  const ignorePosition = input.ignorePosition === true;
+  const penalty = ignorePosition ? 0 : lengthPenalty(value, query);
 
   if (!value || !query) {
     return null;
@@ -104,7 +113,7 @@ export function scoreQueryMatch(input: {
   }
 
   if (input.prefixBase !== undefined && value.startsWith(query)) {
-    return input.prefixBase + lengthPenalty(value, query);
+    return input.prefixBase + penalty;
   }
 
   if (input.boundaryBase !== undefined) {
@@ -114,19 +123,19 @@ export function scoreQueryMatch(input: {
       input.boundaryMarkers ?? [" ", "-", "_", "/"],
     );
     if (boundaryIndex !== null) {
-      return input.boundaryBase + boundaryIndex * 2 + lengthPenalty(value, query);
+      return input.boundaryBase + (ignorePosition ? 0 : boundaryIndex * 2) + penalty;
     }
   }
 
   if (input.includesBase !== undefined) {
     const includesIndex = value.indexOf(query);
     if (includesIndex !== -1) {
-      return input.includesBase + includesIndex * 2 + lengthPenalty(value, query);
+      return input.includesBase + (ignorePosition ? 0 : includesIndex * 2) + penalty;
     }
   }
 
   if (input.fuzzyBase !== undefined) {
-    const fuzzyScore = scoreSubsequenceMatch(value, query);
+    const fuzzyScore = scoreSubsequenceMatch(value, query, { ignorePosition });
     if (fuzzyScore !== null) {
       return input.fuzzyBase + fuzzyScore;
     }

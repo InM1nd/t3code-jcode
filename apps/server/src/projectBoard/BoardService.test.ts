@@ -1,4 +1,5 @@
 import { assert, it } from "@effect/vitest";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   EventId,
@@ -22,6 +23,7 @@ import * as BoardService from "./BoardService.ts";
 const layer = BoardService.layer.pipe(
   Layer.provideMerge(ProjectStore.layer),
   Layer.provideMerge(NodeSqliteClient.layer({ filename: ":memory:" })),
+  Layer.provideMerge(NodeCrypto.layer),
   Layer.provideMerge(NodeServices.layer),
 );
 

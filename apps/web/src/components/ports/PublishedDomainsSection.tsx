@@ -1,7 +1,7 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import { Globe2 } from "lucide-react";
 
-import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { namedClipboardTarget, useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { formatLocalDomainUrl, localDomainsEnvironment } from "~/localDomainsState";
 import { useEnvironmentQuery } from "~/state/query";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -15,7 +15,7 @@ export function PublishedDomainsSection({
   environmentId: EnvironmentId;
   activePorts: ReadonlyArray<number>;
 }) {
-  const { copyToClipboard } = useCopyToClipboard({ target: "URL" });
+  const { copyToClipboard } = useCopyToClipboard({ target: namedClipboardTarget("URL") });
   const localDomains = useEnvironmentQuery(
     localDomainsEnvironment.list({ environmentId, input: {} }),
   );

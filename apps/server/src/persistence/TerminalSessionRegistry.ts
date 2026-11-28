@@ -17,15 +17,8 @@ import {
 } from "./Errors.ts";
 
 /**
- * TerminalSessionRegistryRepository - Repository interface for the live-PTY
- * pid registry.
- *
- * A row is a mirror of `TerminalManager`'s in-memory session state, written
- * so a crashed/killed `apps/server` process can be reconciled on the next
- * boot instead of leaking the OS process it spawned. See
- * `apps/server/src/terminal/TerminalSessionReconciliation.ts` for the reader.
- *
- * @module TerminalSessionRegistryRepository
+ * Live-PTY PID registry mirroring `TerminalManager` state so crashed servers can
+ * reconcile orphaned OS processes on next boot (see `TerminalSessionReconciliation.ts`).
  */
 
 export const TerminalSessionRegistryRow = Schema.Struct({
@@ -192,7 +185,7 @@ const make = Effect.gen(function* () {
         // one stale row must not block reconciliation for every other session.
         Effect.forEach(rows, (row) =>
           decodeRow(row).pipe(
-            Effect.map(Option.some),
+            Effect.asSome,
             Effect.catch((cause) =>
               Effect.logWarning("terminal.session.registry.row-skipped", {
                 threadId: row.threadId,

@@ -13,9 +13,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("~/state/environments", () => ({
   useEnvironments: () => ({ environments: mocks.environments }),
+  usePrimaryEnvironmentId: () => envId,
 }));
 vi.mock("~/state/entities", () => ({
-  useActiveEnvironmentId: () => envId,
   useEnvironmentThreadRefs: () => mocks.threadRefs,
   useThreadShell: () => ({ title: "Landing redesign" }),
 }));

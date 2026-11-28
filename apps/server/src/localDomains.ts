@@ -17,7 +17,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 
-import { writeFileStringAtomically } from "./atomicWrite.ts";
+import { writeFileStringAtomically } from "@t3tools/shared/atomicWrite";
 import * as ServerConfig from "./config.ts";
 
 const STATE_FILE = "local-domains.json";
@@ -170,7 +170,7 @@ export function portListenError(port: number, cause: NodeJS.ErrnoException): Loc
   if (cause.code === "EADDRINUSE") {
     return new LocalDomainError({
       reason: "portUnavailable",
-      message: `Port ${port} is already in use — another app, or another T3 Code environment on this machine, may already be running the local domain proxy.`,
+      message: `Port ${port} is already in use. Another app, or another T3 Code environment on this machine, may already be running the local domain proxy.`,
     });
   }
   if (cause.code === "EACCES") {

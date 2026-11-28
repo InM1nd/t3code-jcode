@@ -15,7 +15,7 @@ import {
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -26,7 +26,7 @@ const dependencies = [
   McpInvocationContext.McpInvocationContext,
   ThreadManagementService.ThreadManagementService,
   BoardService.BoardService,
-  Crypto.Crypto,
+  SecureRandom.SecureRandom,
 ];
 
 const BoardListResult = Schema.Struct({
@@ -191,7 +191,7 @@ export const BoardToolkit = Toolkit.make(
       projectId: ProjectId,
       itemId: ProjectBoardItemId,
       taskId: NodeId,
-      childThreadId: ThreadId,
+      childThreadId: Schema.NullOr(ThreadId),
       status: OrchestratorMcpDelegatedTaskStatus,
     }),
   })

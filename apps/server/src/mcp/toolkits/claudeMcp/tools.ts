@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/ai";
 
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
-import { CLAUDE_MCP_ENABLE_TOOL } from "../../../provider/claudeMcpAuto.ts";
+import { CLAUDE_MCP_ENABLE_TOOL } from "../../../provider/fork/claudeMcpAuto.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 export const ClaudeMcpToolkit = Toolkit.make(

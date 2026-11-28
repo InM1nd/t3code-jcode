@@ -1,12 +1,16 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import { LOCAL_DOMAIN_PROXY_PORT } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Scope from "effect/Scope";
+import * as Stream from "effect/Stream";
 
 import * as DesktopConfig from "./DesktopConfig.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -116,16 +120,17 @@ setInterval(() => {}, 1000);
           }).pipe(Effect.provide(makeListenerLayer(tempDir)), Scope.provide(scope));
           assert.strictEqual(port, 80);
 
+          const watcherReady = yield* Deferred.make<void>();
+          const stopped = yield* fs
+            .watch(tempDir, { onReady: () => Deferred.doneUnsafe(watcherReady, Exit.void) })
+            .pipe(
+              Stream.filterEffect(() => fs.exists(markerPath)),
+              Stream.runHead,
+              Effect.forkScoped,
+            );
+          yield* Deferred.await(watcherReady);
           yield* Scope.close(scope, Exit.void);
-          let stopped = false;
-          for (let attempt = 0; attempt < 40; attempt += 1) {
-            if (yield* fs.exists(markerPath)) {
-              stopped = true;
-              break;
-            }
-            yield* Effect.sleep("25 millis");
-          }
-          assert.isTrue(stopped);
+          assert.isTrue(Option.isSome(yield* Fiber.join(stopped)));
         }),
       ).pipe(Effect.provide(NodeServices.layer)),
   );

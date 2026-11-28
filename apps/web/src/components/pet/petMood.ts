@@ -13,14 +13,19 @@ export type PetBaseMood = Exclude<PetMood, "happy">;
 export function derivePetBaseMood(status: SidebarThreadStatus | null): PetBaseMood {
   if (status === null) return "idle";
   switch (status) {
+    case "preparing":
     case "working":
     case "waiting":
     case "approval":
     case "input":
+    case "request":
       return "thinking";
     case "failed":
     case "limited":
       return "sad";
+    case "connecting":
+    case "reconnecting":
+    case "offline":
     case "ready":
       return "idle";
   }

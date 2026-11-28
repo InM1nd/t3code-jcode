@@ -1,21 +1,6 @@
 /**
- * TerminalSessionReconciliation - Startup cleanup for orphaned PTY processes.
- *
- * `TerminalManager` (./Manager.ts) tracks live PTY sessions only in memory.
- * A non-graceful `apps/server` exit (crash, `SIGKILL`, forced update) wipes
- * that state while the OS process it spawned (e.g. `next dev`) keeps
- * running, untracked, leaking RAM across restarts. `TerminalManager` mirrors
- * its spawn/exit transitions into `terminal_session_registry`
- * (../persistence/TerminalSessionRegistry.ts) so this module can walk that
- * registry on the next boot and reap anything the previous boot left behind.
- *
- * A registry row can never be reattached to — `node-pty` has no way to
- * adopt a PTY it did not spawn, so there is no output stream to resume.
- * Every live row found here is therefore terminated unconditionally; the
- * user restarts the underlying script by hand. This is preferred over
- * leaving a still-owned thread's row running untracked, which would let
- * `Manager.ts` spawn a second dev server on top of the orphaned first one
- * the next time that thread's terminal is opened.
+ * Startup reaper for orphaned PTY processes tracked in `terminal_session_registry`.
+ * `node-pty` cannot reattach across restarts, so surviving rows from dead boots are killed.
  */
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- pid start time and taskkill are synchronous probes; Effect's ChildProcess is async.
 import * as NodeChildProcess from "node:child_process";
@@ -23,7 +8,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import { TerminalSessionRegistryRepository } from "../persistence/TerminalSessionRegistry.ts";
 
@@ -146,15 +131,8 @@ function makeDefaultProcessControl(platform: NodeJS.Platform): TerminalSessionPr
 }
 
 /**
- * Reconcile one registry row: leave it alone if another live server owns
- * it, drop it if the target is already dead or its process start identity
- * cannot be verified, otherwise kill (SIGTERM -> grace -> re-verify -> SIGKILL)
- * and drop it.
- *
- * A row whose `serverPid` is this process was written by a previous boot
- * that reused the pid (PID 1 under Docker or a supervisor). This boot does
- * not own it. If the terminal pid's start time mismatches or cannot be read,
- * fail closed: drop the stale row without signaling that process group.
+ * Keep rows owned by another live server; fail closed if start-time identity cannot be verified.
+ * Rows matching our own PID come from a reused previous boot; kill (SIGTERM -> SIGKILL) and drop.
  */
 function reconcileRow(
   row: { threadId: string; terminalId: string; pid: number; serverPid: number; startedAt: string },
@@ -188,38 +166,37 @@ function reconcileRow(
     }
     yield* registry.removeByKey(key).pipe(Effect.ignoreCause({ log: true }));
   }).pipe(
-    Effect.catchCause((cause) =>
-      Cause.hasInterrupts(cause)
-        ? Effect.failCause(cause)
-        : Effect.logWarning("failed to reconcile orphaned terminal session", { cause }),
+    Effect.catchCauseIf(
+      (cause) => !Cause.hasInterrupts(cause),
+      (cause) => Effect.logWarning("failed to reconcile orphaned terminal session", { cause }),
     ),
   );
 }
 
-export function reconcileTerminalSessionsWithControl(
-  processControl: TerminalSessionProcessControl,
-): Effect.Effect<void, never, TerminalSessionRegistryRepository> {
-  return Effect.gen(function* () {
+export const reconcileTerminalSessionsWithControl = Effect.fn(
+  "reconcileTerminalSessionsWithControl",
+)(
+  function* (
+    processControl: TerminalSessionProcessControl,
+  ): Effect.fn.Return<void, never, TerminalSessionRegistryRepository> {
     const registry = yield* TerminalSessionRegistryRepository;
     const rows = yield* registry.list().pipe(Effect.orElseSucceed(() => []));
     yield* Effect.forEach(rows, (row) => reconcileRow(row, registry, processControl), {
       concurrency: "unbounded",
       discard: true,
     });
-  }).pipe(
-    Effect.catchCause((cause) =>
-      Cause.hasInterrupts(cause)
-        ? Effect.failCause(cause)
-        : Effect.logWarning("terminal session startup reconciliation failed", { cause }),
-    ),
-  );
-}
+  },
+  Effect.catchCauseIf(
+    (cause) => !Cause.hasInterrupts(cause),
+    (cause) => Effect.logWarning("terminal session startup reconciliation failed", { cause }),
+  ),
+);
 
 export const reconcileTerminalSessions: Effect.Effect<
   void,
   never,
   TerminalSessionRegistryRepository
 > = Effect.gen(function* () {
-  const platform = yield* HostProcessPlatform;
+  const platform = yield* HostProcess.Platform;
   yield* reconcileTerminalSessionsWithControl(makeDefaultProcessControl(platform));
 });

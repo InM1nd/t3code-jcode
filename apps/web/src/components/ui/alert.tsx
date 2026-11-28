@@ -10,7 +10,6 @@ const alertVariants = cva("relative rounded-xl border px-3.5 py-3 text-card-fore
     variant: "default",
   },
   variants: {
-    // "glass" floats the alert over content; alert-glass tints from data-variant.
     surface: {
       default: "",
       glass: "alert-glass",
@@ -88,7 +87,7 @@ function Alert({
     >
       <div
         className={cn(
-          "flex gap-2",
+          "flex flex-wrap gap-2",
           controlAlignment === "first-line" ? "items-start" : "items-center",
           controlAlignment === "first-line" &&
             action.length > 0 &&
@@ -108,12 +107,14 @@ function Alert({
           </div>
         )}
         {content.length > 0 && (
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">{content}</div>
+          <div className="flex min-w-0 grow basis-[min(10rem,calc(100%-1.5rem))] flex-col gap-0.5">
+            {content}
+          </div>
         )}
         {action.length > 0 && (
           <div
             className={cn(
-              "flex shrink-0 items-center",
+              "ml-auto flex shrink-0 items-center",
               controlAlignment === "first-line" ? "h-lh self-start" : "self-center",
             )}
           >

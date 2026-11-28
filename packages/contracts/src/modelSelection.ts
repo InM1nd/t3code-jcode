@@ -6,13 +6,6 @@ import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderOptionSelections } from "./model.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 
-/**
- * Selection of a model on a configured provider instance.
- *
- * `instanceId` is the routing key. The provider driver, credentials,
- * environment, and continuation identity are resolved by the provider
- * instance registry rather than encoded into the selection itself.
- */
 const ModelSelectionWire = Schema.Struct({
   instanceId: ProviderInstanceId,
   model: TrimmedNonEmptyString,
@@ -23,14 +16,10 @@ const ModelSelectionSource = Schema.Struct({
   provider: Schema.optional(Schema.Unknown),
   instanceId: Schema.optional(Schema.Unknown),
   model: Schema.Unknown,
-  options: Schema.optional(Schema.Unknown),
+  // Keep decoding array or object forms; advertised MCP JSON Schema uses the object map.
+  options: Schema.optional(Schema.NullOr(ProviderOptionSelections)),
 });
 
-/**
- * The decoder still accepts the historical `{ provider, model }` shape while
- * V1 persistence remains readable. Runtime code only receives the canonical
- * instance-based representation.
- */
 export const ModelSelection = ModelSelectionSource.pipe(
   Schema.decodeTo(
     ModelSelectionWire,
@@ -46,7 +35,7 @@ export const ModelSelection = ModelSelectionSource.pipe(
           instanceId: instanceIdSource,
           model: raw.model,
         };
-        if (raw.options !== undefined) base.options = raw.options;
+        if (raw.options !== undefined && raw.options !== null) base.options = raw.options;
         return Effect.succeed(base as typeof ModelSelectionWire.Encoded);
       },
       encode: (value) => {
@@ -55,7 +44,7 @@ export const ModelSelection = ModelSelectionSource.pipe(
           model: value.model,
         };
         if (value.options !== undefined) base.options = value.options;
-        return Effect.succeed(base as typeof ModelSelectionSource.Encoded);
+        return Effect.succeed(base as typeof ModelSelectionSource.Type);
       },
     }),
   ),

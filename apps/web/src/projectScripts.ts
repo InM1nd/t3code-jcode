@@ -2,8 +2,11 @@ import {
   MAX_SCRIPT_ID_LENGTH,
   SCRIPT_RUN_COMMAND_PATTERN,
   type KeybindingCommand,
+  type ProjectId,
   type ProjectScript,
 } from "@t3tools/contracts";
+import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import { resolveProjectScripts } from "@t3tools/shared/projectScripts";
 import * as Schema from "effect/Schema";
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 
@@ -14,6 +17,7 @@ export interface ProjectScriptInput {
   readonly runOnWorktreeCreate: ProjectScript["runOnWorktreeCreate"];
   readonly waitForSetup: boolean;
   readonly runOnSettle: boolean;
+  readonly stopOnSettle?: boolean;
   readonly previewUrl: Exclude<ProjectScript["previewUrl"], undefined> | null;
   readonly autoOpenPreview: boolean;
 }
@@ -27,6 +31,7 @@ export function buildProjectScript(id: string, input: ProjectScriptInput): Proje
     runOnWorktreeCreate: input.runOnWorktreeCreate,
     ...(input.runOnWorktreeCreate && input.waitForSetup ? { async: false } : {}),
     ...(input.runOnSettle ? { runOnSettle: true } : {}),
+    ...(input.stopOnSettle ? { stopOnSettle: true } : {}),
     ...(input.previewUrl === null
       ? {}
       : {
@@ -36,10 +41,6 @@ export function buildProjectScript(id: string, input: ProjectScriptInput): Proje
   };
 }
 
-/**
- * A project runs at most one setup script and one settle script, so saving a
- * script that claims either role takes it from the script that held it.
- */
 export function releaseClaimedRoles(
   script: ProjectScript,
   saved: ProjectScriptInput,
@@ -69,7 +70,6 @@ function normalizeScriptId(value: string): string {
   return cleaned.slice(0, MAX_SCRIPT_ID_LENGTH).replace(/-+$/g, "") || "script";
 }
 
-/** Legacy script IDs may not support shortcuts; keep those scripts usable without one. */
 export function commandForProjectScript(scriptId: string): KeybindingCommand | null {
   const command = `script.${scriptId}.run`;
   return isScriptRunCommand(command) ? command : null;
@@ -82,6 +82,20 @@ export function projectScriptIdFromCommand(command: string): string | null {
   }
   const [prefix, , suffix] = SCRIPT_RUN_COMMAND_PATTERN.parts;
   return trimmed.slice(prefix.literal.length, -suffix.literal.length);
+}
+
+/** Shortcuts are keyed by script id per environment, so new ids must avoid every project's. */
+export function projectScriptIdsInEnvironment(
+  settings: UnifiedSettings,
+  environmentProjects: ReadonlyArray<{ id: ProjectId; scripts: readonly ProjectScript[] }>,
+): string[] {
+  return [
+    ...settings.defaultProjectScripts,
+    ...Object.values(settings.projectSettingsOverrides).flatMap(
+      (entry) => entry.defaultProjectScripts ?? [],
+    ),
+    ...environmentProjects.flatMap((project) => resolveProjectScripts(settings, project)),
+  ].map((script) => script.id);
 }
 
 export function nextProjectScriptId(name: string, existingIds: Iterable<string>): string {
@@ -102,7 +116,6 @@ export function nextProjectScriptId(name: string, existingIds: Iterable<string>)
     suffix += 1;
   }
 
-  // This last-resort fallback only triggers after exhausting thousands of suffixes.
   return `${baseId}-${Date.now()}`.slice(0, MAX_SCRIPT_ID_LENGTH);
 }
 

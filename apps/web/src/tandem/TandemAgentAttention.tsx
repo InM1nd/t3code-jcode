@@ -30,17 +30,12 @@ type AgentEntry = Omit<TandemAgentAttentionThread, "archivedAt" | "updatedAt"> &
   readonly threadId: ThreadId;
 };
 
-function agentState(
-  thread: Pick<
-    EnvironmentThreadShell,
-    "hasPendingApprovals" | "hasPendingUserInput" | "runtime" | "latestRun"
-  >,
-): TandemAgentState {
+function agentState(thread: EnvironmentThreadShell): TandemAgentState {
   const status = resolveSidebarThreadStatus(thread);
   if (status === "approval") return "permission";
-  if (status === "input") return "question";
+  if (status === "input" || status === "request") return "question";
   if (status === "failed" || status === "limited") return "error";
-  if (status === "working") return "working";
+  if (status === "working" || status === "preparing") return "working";
   if (status === "waiting") return "monitoring";
   return thread.latestRun?.status === "completed" ? "completed" : "ready";
 }

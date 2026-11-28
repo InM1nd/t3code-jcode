@@ -17,10 +17,9 @@ import {
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
@@ -72,7 +71,7 @@ export class BoardService extends Context.Service<
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const projects = yield* ProjectStore.ProjectStoreV2;
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const changes = yield* PubSub.unbounded<ProjectId>();
   const writeLock = yield* Semaphore.make(1);
   const exclusively = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -84,13 +83,11 @@ const make = Effect.gen(function* () {
     projects.get(projectId).pipe(
       Effect.mapError(() => new BoardServiceError({ message: "Could not read the project." })),
       Effect.flatMap((project) =>
-        Option.match(project, {
-          onNone: () =>
-            Effect.fail(
-              new BoardServiceError({ message: `Project '${projectId}' was not found.` }),
-            ),
-          onSome: (row) => Effect.succeed(row),
-        }),
+        Effect.fromOption(project).pipe(
+          Effect.mapError(
+            () => new BoardServiceError({ message: `Project '${projectId}' was not found.` }),
+          ),
+        ),
       ),
     );
 
@@ -124,13 +121,9 @@ const make = Effect.gen(function* () {
       Effect.map((rows) => Number(rows[0]?.next_position ?? 0)),
     );
 
-  const writeItem = (projectId: ProjectId, item: ProjectBoardItemShape, position: number | null) =>
-    Effect.gen(function* () {
-      const json = yield* encodeItem(item).pipe(
-        Effect.mapError(
-          () => new BoardServiceError({ message: "Could not save the project board card." }),
-        ),
-      );
+  const writeItem = Effect.fn("writeItem")(
+    function* (projectId: ProjectId, item: ProjectBoardItemShape, position: number | null) {
+      const json = yield* encodeItem(item);
       const statement =
         position === null
           ? sql`
@@ -154,12 +147,12 @@ const make = Effect.gen(function* () {
               ${json}
             )
           `;
-      yield* statement.pipe(
-        Effect.mapError(
-          () => new BoardServiceError({ message: "Could not save the project board card." }),
-        ),
-      );
-    });
+      yield* statement;
+    },
+    Effect.mapError(
+      () => new BoardServiceError({ message: "Could not save the project board card." }),
+    ),
+  );
 
   const requireItem = (projectId: ProjectId, itemId: ProjectBoardItemShape["id"]) =>
     readItems(projectId).pipe(
@@ -253,11 +246,13 @@ const make = Effect.gen(function* () {
         const existing = yield* requireItem(input.projectId, input.itemId);
         const occurredAt = yield* nowIso;
         const handoffId = ProjectBoardHandoffId.make(
-          yield* crypto.randomUUIDv4.pipe(
-            Effect.mapError(
-              () => new BoardServiceError({ message: "Could not save the board handoff." }),
+          yield* random
+            .uuidV4()
+            .pipe(
+              Effect.mapError(
+                () => new BoardServiceError({ message: "Could not save the board handoff." }),
+              ),
             ),
-          ),
         );
         const handoff = {
           id: handoffId,

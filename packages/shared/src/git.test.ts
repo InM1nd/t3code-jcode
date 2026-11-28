@@ -1,3 +1,4 @@
+import { SourceControlProviderKind } from "@t3tools/contracts";
 import type { VcsStatusRemoteResult, VcsStatusResult } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -6,10 +7,13 @@ import {
   formatGeneratedBranchName,
   buildTemporaryWorktreeBranchName,
   flattenTemporaryWorktreeBranchName,
+  isBareGitConfig,
   isTemporaryWorktreeBranch,
   normalizeGitRemoteUrl,
-  parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
+  parseGitRemoteRepository,
   parseOriginUrlFromGitConfig,
+  resolveAutoFeatureBranchName,
+  sanitizeFeatureBranchName,
   WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
 
@@ -23,6 +27,28 @@ describe("normalizeGitRemoteUrl", () => {
     );
     expect(normalizeGitRemoteUrl("ssh://git@github.com/T3Tools/T3Code")).toBe(
       "github.com/t3tools/t3code",
+    );
+    expect(normalizeGitRemoteUrl("https://github.com/T3Tools/T3Code.git?view=compact")).toBe(
+      "github.com/t3tools/t3code",
+    );
+    expect(normalizeGitRemoteUrl("https://github.com/T3Tools/T3Code.git#section")).toBe(
+      "github.com/t3tools/t3code",
+    );
+    expect(normalizeGitRemoteUrl("https://code.example.test/team/%C3%84pp.git")).toBe(
+      normalizeGitRemoteUrl("git@code.example.test:team/Äpp.git"),
+    );
+    expect(normalizeGitRemoteUrl("ssh://git@code.example.test/owner/repo.git.git")).toBe(
+      normalizeGitRemoteUrl("git@code.example.test:owner/repo.git.git"),
+    );
+  });
+
+  it.each([
+    "git@[2001:db8::1]:team/repo.git",
+    "[2001:db8::1]:team/repo.git",
+    "git@[2001:DB8:0::1]:team/repo.git",
+  ])("canonicalizes an IPv6 SCP remote like its SSH URL: %s", (remote) => {
+    expect(normalizeGitRemoteUrl(remote)).toBe(
+      normalizeGitRemoteUrl("ssh://git@[2001:db8::1]/team/repo.git"),
     );
   });
 
@@ -51,38 +77,131 @@ describe("normalizeGitRemoteUrl", () => {
     expect(normalizeGitRemoteUrl("deploy@bitbucket.org:workspace/repo.git")).toBe(
       "bitbucket.org/workspace/repo",
     );
-  });
-
-  it("gives an Azure DevOps repository the same key over SSH as over HTTPS", () => {
-    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/T3Tools/Platform/T3Code")).toBe(
-      "dev.azure.com/t3tools/platform/_git/t3code",
+    expect(normalizeGitRemoteUrl("code.example.test:team/repo.git")).toBe(
+      "code.example.test/team/repo",
     );
-    expect(normalizeGitRemoteUrl("ssh://git@ssh.dev.azure.com:22/v3/T3Tools/Platform/T3Code")).toBe(
-      "dev.azure.com/t3tools/platform/_git/t3code",
+    expect(normalizeGitRemoteUrl("git@code.example.test:/team/repo.git")).toBe(
+      "code.example.test/team/repo",
     );
-    expect(
-      normalizeGitRemoteUrl("https://T3Tools@dev.azure.com/T3Tools/Platform/_git/T3Code"),
-    ).toBe("dev.azure.com/t3tools/platform/_git/t3code");
-  });
-
-  it("puts the organization back in the host on the name dev.azure.com replaced", () => {
-    expect(
-      normalizeGitRemoteUrl("T3Tools@vs-ssh.visualstudio.com:v3/T3Tools/Platform/T3Code"),
-    ).toBe("t3tools.visualstudio.com/platform/_git/t3code");
-    expect(normalizeGitRemoteUrl("https://T3Tools.visualstudio.com/Platform/_git/T3Code")).toBe(
-      "t3tools.visualstudio.com/platform/_git/t3code",
+    expect(normalizeGitRemoteUrl("C:/repos/project")).toBe("c:/repos/project");
+    expect(normalizeGitRemoteUrl("git@x:team/project.git")).toBe("x/team/project");
+    expect(normalizeGitRemoteUrl("alice+ci@github.com:Owner/Repo.git")).toBe(
+      "github.com/owner/repo",
+    );
+    expect(normalizeGitRemoteUrl("alice@corp.com@github.com:Owner/Repo.git")).toBe(
+      "github.com/owner/repo",
     );
   });
 
-  it("leaves an Azure SSH host it cannot read as the path it was given", () => {
-    // Not `v3`, and not four segments: rewriting either would invent a repository that the web
-    // spelling has no name for, so the remote stands as it arrived.
-    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v4/T3Tools/Platform/T3Code")).toBe(
-      "ssh.dev.azure.com/v4/t3tools/platform/t3code",
+  it("keys an SCP-like remote with spaces in its path like its URL spelling", () => {
+    expect(normalizeGitRemoteUrl("git@forge.example:team/My Repo.git")).toBe(
+      normalizeGitRemoteUrl("ssh://git@forge.example/team/My Repo.git"),
     );
-    expect(normalizeGitRemoteUrl("git@ssh.dev.azure.com:v3/T3Tools/T3Code")).toBe(
-      "ssh.dev.azure.com/v3/t3tools/t3code",
+    expect(normalizeGitRemoteUrl("forge.example:team/My Repo.git")).toBe(
+      "forge.example/team/my%20repo",
     );
+  });
+
+  it("keys a one-segment URL remote by what names the repository", () => {
+    expect(normalizeGitRemoteUrl("https://deploy:s3cr3ttok@git.example.com/Repo.git")).toBe(
+      "https://git.example.com/repo",
+    );
+    expect(normalizeGitRemoteUrl("https://alice@corp.com:s3cr3ttok@git.example.com/repo.git")).toBe(
+      "https://git.example.com/repo",
+    );
+    expect(normalizeGitRemoteUrl("https://0123abcd@git.example.com/repo.git?key=0123abcd#x")).toBe(
+      "https://git.example.com/repo",
+    );
+    expect(normalizeGitRemoteUrl("ftp://deploy:s3cr3ttok@git.example.com/team/repo.git")).toBe(
+      "ftp://git.example.com/team/repo",
+    );
+    expect(normalizeGitRemoteUrl("ssh://git:s3cr3ttok@git.example.com:2222/repo.git")).toBe(
+      "ssh://git@git.example.com:2222/repo",
+    );
+    expect(normalizeGitRemoteUrl("ssh://alice@corp.com:s3cr3ttok@git.example.com/repo.git")).toBe(
+      "ssh://alice@corp.com@git.example.com/repo",
+    );
+    expect(normalizeGitRemoteUrl("ssh://git@git.example.com/repo.git")).toBe(
+      "ssh://git@git.example.com/repo",
+    );
+    expect(normalizeGitRemoteUrl("https://git.example.com/repo.git")).toBe(
+      "https://git.example.com/repo",
+    );
+    expect(normalizeGitRemoteUrl("https://git.example.com/repo@v2.git")).toBe(
+      "https://git.example.com/repo@v2",
+    );
+    expect(normalizeGitRemoteUrl("/srv/git/Repo.git")).toBe("/srv/git/repo");
+  });
+});
+
+describe("parseGitRemoteRepository", () => {
+  it("drops an encoded .git suffix like a literal one", () => {
+    expect(parseGitRemoteRepository("ssh://git@gitlab.com/team/repo%2Egit")).toEqual({
+      host: "gitlab.com",
+      path: "team/repo",
+    });
+    // A non-bare repository's `.git` directory names the checkout it sits in.
+    for (const remote of [
+      "ssh://me@myserver/home/me/project/.git",
+      "ssh://me@myserver/home/me/project/%2Egit/",
+    ]) {
+      expect(parseGitRemoteRepository(remote)).toEqual({
+        host: "myserver",
+        path: "home/me/project",
+      });
+    }
+  });
+});
+
+describe("isBareGitConfig", () => {
+  it("reads Git's numeric booleans without accepting invalid or overflowing values", () => {
+    for (const value of [
+      "true",
+      "yes",
+      "on",
+      "1",
+      "2",
+      "-1",
+      "+1",
+      "01",
+      "0x10",
+      "1k",
+      "1m",
+      "1g",
+      "2147483647",
+      "-2147483648",
+    ]) {
+      expect(isBareGitConfig(`[core]\nbare = ${value}\n`), value).toBe(true);
+    }
+    for (const value of [
+      "false",
+      "no",
+      "off",
+      "0",
+      "-0",
+      "00",
+      "0x0",
+      "0k",
+      "08",
+      "1.5",
+      "2no",
+      "2g",
+      "2147483648",
+      "-2147483649",
+    ]) {
+      expect(isBareGitConfig(`[core]\nbare = ${value}\n`), value).toBe(false);
+    }
+    expect(isBareGitConfig("[core]\nbare = 2\nbare = 0\n")).toBe(false);
+    expect(isBareGitConfig("[core]\nbare = false\nbare = -2\n")).toBe(true);
+  });
+
+  it("reads continued bare values after comments and at end of input", () => {
+    const config = ["[core] bare = false # ignored backslash \\", 'bare = "tr\\', 'ue"'].join("\n");
+
+    expect(isBareGitConfig(config)).toBe(true);
+    expect(isBareGitConfig("[core]\nbare = tr\\\nue\\")).toBe(true);
+    expect(isBareGitConfig('[core]\nbare = "true\\')).toBe(false);
+    expect(isBareGitConfig('[core]\nbare = "true\\\n')).toBe(false);
   });
 });
 
@@ -111,13 +230,26 @@ describe("parseOriginUrlFromGitConfig", () => {
     expect(
       parseOriginUrlFromGitConfig('[remote "origin"]\n\turl = "git@github.com:acme/repo.git"\n'),
     ).toBe("git@github.com:acme/repo.git");
+    for (const newline of ["\n", "\r\n"]) {
+      for (const comment of ["#", ";"]) {
+        const config = [
+          '[remote "upstream"]',
+          `url = https://github.com/other/repo.git ${comment} ignored backslash \\`,
+          '[remote "origin"]',
+          `url = https://github.com/acme/repo.git ${comment} ignored backslash \\`,
+          `${comment} ignored backslash \\`,
+          '[remote "fork"]',
+          "url = https://github.com/me/repo.git",
+        ].join(newline);
+        expect(parseOriginUrlFromGitConfig(config)).toBe("https://github.com/acme/repo.git");
+      }
+    }
   });
 
   it("accepts legacy dotted headers, header comments, and line continuations", () => {
     expect(parseOriginUrlFromGitConfig("[remote.origin]\n\turl = git@github.com:a/b.git\n")).toBe(
       "git@github.com:a/b.git",
     );
-    // Git folds the dotted form to lowercase but keeps quoted names as written.
     expect(parseOriginUrlFromGitConfig("[remote.Origin]\n\turl = git@github.com:a/b.git\n")).toBe(
       "git@github.com:a/b.git",
     );
@@ -133,51 +265,59 @@ describe("parseOriginUrlFromGitConfig", () => {
       parseOriginUrlFromGitConfig(
         '[remote "origin"]\n\turl = https://github.com/acme/\\\n\t\trepo.git\n',
       ),
-    ).toBe("https://github.com/acme/repo.git");
+    ).toBe("https://github.com/acme/\t\trepo.git");
   });
 
-  it("falls back to the first remote when there is no origin", () => {
-    const config = [
-      '[remote "upstream"]',
-      "\turl = https://github.com/acme/repo.git",
-      '[remote "fork"]',
-      "\turl = https://github.com/me/repo.git",
-    ].join("\n");
-    expect(parseOriginUrlFromGitConfig(config)).toBe("https://github.com/acme/repo.git");
+  it.each(["\u2028", "\u2029"])(
+    "preserves Unicode line separators in remote urls: %j",
+    (separator) => {
+      const url = `ssh://git@forge.example/org/first${separator}last.git${separator}`;
+      for (const gap of ["\n", "\r\n", " "]) {
+        expect(parseOriginUrlFromGitConfig(`[remote "origin"]${gap}url = ${url}\n`)).toBe(url);
+        expect(parseOriginUrlFromGitConfig(`[remote "origin"]${gap}url = "${url}"\n`)).toBe(url);
+      }
+    },
+  );
+
+  // A quadratic trim blocks for tens of seconds here, well past the test timeout.
+  it("trims long whitespace runs in linear time", () => {
+    const url = "ssh://git@forge.example/org/repo.git";
+    const padding = " ".repeat(200_000);
+    expect(
+      parseOriginUrlFromGitConfig(`[remote "origin"]\nurl = ${padding}${url}${padding}\n`),
+    ).toBe(url);
   });
 
-  it("returns null when there is no remote section", () => {
-    expect(parseOriginUrlFromGitConfig("[core]\n\tbare = false\n")).toBeNull();
-    expect(parseOriginUrlFromGitConfig("")).toBeNull();
+  it("reads settings on the remote header line", () => {
+    const upstream = '\n[remote "upstream"]\n\turl = https://github.com/other/source.git\n';
+    expect(
+      parseOriginUrlFromGitConfig(`[remote "origin"] url = git@github.com:a/b.git${upstream}`),
+    ).toBe("git@github.com:a/b.git");
+    expect(parseOriginUrlFromGitConfig("[remote.Origin]url=git@github.com:a/b.git\n")).toBe(
+      "git@github.com:a/b.git",
+    );
+    expect(
+      parseOriginUrlFromGitConfig(
+        `[remote "origin"] fetch = +refs/heads/*:refs/remotes/origin/*\n\turl = git@github.com:a/b.git${upstream}`,
+      ),
+    ).toBe("git@github.com:a/b.git");
   });
-});
 
-describe("parseGitHubRepositoryNameWithOwnerFromRemoteUrl", () => {
-  it("extracts the owner and repository from common GitHub remote shapes", () => {
-    expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
-    expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("https://github.com/T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
-    expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("ssh://github.com/T3Tools/T3Code.git"),
-    ).toBe("T3Tools/T3Code");
-  });
+  it.each(["upstream", String.raw`team\"mirror`])(
+    "falls back to the first remote when there is no origin: %s",
+    (remoteName) => {
+      const config = [
+        `[remote "${remoteName}"]`,
+        "\turl = https://github.com/acme/repo.git",
+        '[remote "fork"]',
+        "\turl = https://github.com/me/repo.git",
+      ].join("\n");
+      expect(parseOriginUrlFromGitConfig(config)).toBe("https://github.com/acme/repo.git");
+    },
+  );
 });
 
 describe("isTemporaryWorktreeBranch", () => {
-  it("matches the generated temporary worktree refName format", () => {
-    expect(
-      isTemporaryWorktreeBranch(
-        buildTemporaryWorktreeBranchName((byteLength) => {
-          expect(byteLength).toBe(4);
-          return "DEADBEEF";
-        }),
-      ),
-    ).toBe(true);
-  });
-
   it("matches generated temporary worktree refs", () => {
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/deadbeef`)).toBe(true);
     expect(isTemporaryWorktreeBranch(` ${WORKTREE_BRANCH_PREFIX}/deadbeef `)).toBe(true);
@@ -200,9 +340,7 @@ describe("isTemporaryWorktreeBranch", () => {
   });
 
   it("rejects UUID-shaped refs that are not RFC 4122 v4", () => {
-    // version nibble is not 4
     expect(isTemporaryWorktreeBranch("t3code/f4ae4e0e-f971-1d48-b4f2-9cf0aa54ab12")).toBe(false);
-    // variant nibble is not [89ab]
     expect(isTemporaryWorktreeBranch("t3code/f4ae4e0e-f971-4d48-c4f2-9cf0aa54ab12")).toBe(false);
   });
 
@@ -257,7 +395,7 @@ describe("applyGitStatusStreamEvent", () => {
     const current: VcsStatusResult = {
       isRepo: true,
       sourceControlProvider: {
-        kind: "github",
+        kind: SourceControlProviderKind.make("github"),
         name: "GitHub",
         baseUrl: "https://github.com",
       },
@@ -293,26 +431,61 @@ describe("applyGitStatusStreamEvent", () => {
   });
 });
 
-describe("formatGeneratedBranchName", () => {
-  it.each(["t3code", "t3code/"])("joins static prefix %s with one slash", (prefix) => {
-    expect(
-      formatGeneratedBranchName("Add Search", { mode: "static", prefix, instructions: "" }),
-    ).toBe("t3code/add-search");
+describe("sanitizeFeatureBranchName", () => {
+  it("sanitizes an explicit namespace before preserving it", () => {
+    expect(sanitizeFeatureBranchName(' "FIX//Calendar recruitment filter" ')).toBe(
+      "fix/calendar-recruitment-filter",
+    );
   });
-  it("supports an empty prefix and preserves user prefix casing", () => {
-    expect(
-      formatGeneratedBranchName("Add Search", { mode: "static", prefix: "", instructions: "" }),
-    ).toBe("add-search");
-    expect(
-      formatGeneratedBranchName("Add Search", {
-        mode: "static",
-        prefix: "Team/Julius/",
-        instructions: "",
-      }),
-    ).toBe("Team/Julius/add-search");
-  });
+
+  // regression: #15615 generated branch namespaces are preserved
   it.each([
-    ["release..candidate", "release-candidate/add-search"],
+    ["refine toolbar", "feature/refine-toolbar"],
+    [" /?. / ", "feature/update"],
+    ["fix///", "feature/fix"],
+  ])("keeps the fallback for unprefixed input %s", (input, expected) => {
+    expect(sanitizeFeatureBranchName(input)).toBe(expected);
+  });
+
+  it("keeps accented letters as their plain letters", () => {
+    expect(sanitizeFeatureBranchName("fix/Añadir validación del café")).toBe(
+      "fix/anadir-validacion-del-cafe",
+    );
+  });
+
+  it("keeps words with letters that have no Unicode decomposition whole", () => {
+    expect(sanitizeFeatureBranchName("Größe der Straße korrigieren")).toBe(
+      "feature/grosse-der-strasse-korrigieren",
+    );
+    expect(sanitizeFeatureBranchName("fix/Đặt tên")).toBe("fix/dat-ten");
+    expect(sanitizeFeatureBranchName("Napraw błąd w żółtym przycisku")).toBe(
+      "feature/napraw-blad-w-zoltym-przycisku",
+    );
+  });
+});
+
+describe("resolveAutoFeatureBranchName", () => {
+  it("resolves case-insensitive collisions within the generated namespace", () => {
+    expect(
+      resolveAutoFeatureBranchName(
+        ["FIX/refine-toolbar", "fix/refine-toolbar-2"],
+        "fix/refine-toolbar",
+      ),
+    ).toBe("fix/refine-toolbar-3");
+  });
+
+  // regression: #15615 generated branch namespaces are preserved
+  it.each([
+    ["fix/name", ["fix"], "fix-2/name"],
+    ["fix/name", ["fix/name/child"], "fix/name-2"],
+    ["fix/name", ["fixes", "fix/name-extra/child"], "fix/name"],
+  ])("resolves %s against namespace blockers %j", (preferredBranch, existingNames, expected) => {
+    expect(resolveAutoFeatureBranchName(existingNames, preferredBranch)).toBe(expected);
+  });
+});
+
+describe("formatGeneratedBranchName", () => {
+  it.each([
     [" Team / Jules.lock/", "Team/Jules-lock/add-search"],
     ["-team//feature@{new}", "team/feature-new/add-search"],
     [" /?. / ", "add-search"],
@@ -329,15 +502,5 @@ describe("formatGeneratedBranchName", () => {
         instructions: "",
       }),
     ).toBe("feat/add-search");
-  });
-  it("preserves the full custom name, including case, dots and length", () => {
-    const branch = `Julius/ABC-123/release.v2-${"x".repeat(70)}`;
-    expect(
-      formatGeneratedBranchName(` ${branch} `, {
-        mode: "custom",
-        prefix: "ignored",
-        instructions: "",
-      }),
-    ).toBe(branch);
   });
 });

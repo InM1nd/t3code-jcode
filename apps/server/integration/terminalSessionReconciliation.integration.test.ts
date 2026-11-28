@@ -1,9 +1,6 @@
 /**
- * End-to-end smoke test for the orphaned-terminal cleanup mechanism
- * (apps/server/src/terminal/TerminalSessionReconciliation.ts): a real OS
- * process, registered as if a previous `apps/server` boot had spawned and
- * crashed without cleaning up, must actually be killed by
- * `reconcileTerminalSessions` — not a fake process-control double.
+ * End-to-end smoke test for `reconcileTerminalSessions`: spawns a real detached
+ * OS process under a dead server PID and verifies it is killed and cleaned up.
  */
 // @effect-diagnostics nodeBuiltinImport:off - drives real detached OS processes to prove the reconciler's process-group kill against something node-pty would actually spawn.
 import * as NodeChildProcess from "node:child_process";
@@ -72,6 +69,9 @@ layer("reconcileTerminalSessions (real process control)", (it) => {
           detached: true,
           stdio: "ignore",
         });
+        const exited = new Promise<void>((resolve) => {
+          child.once("exit", () => resolve());
+        });
         child.unref();
         const orphanPid = child.pid;
         assert.ok(orphanPid !== undefined);
@@ -93,14 +93,12 @@ layer("reconcileTerminalSessions (real process control)", (it) => {
         assert.strictEqual(isAlive(orphanPid), true);
 
         yield* reconcileTerminalSessions;
-        // Real SIGTERM -> 1s grace -> SIGKILL escalation, plus OS teardown slack.
-        yield* Effect.sleep(1500);
+        yield* Effect.promise(() => exited);
 
         assert.strictEqual(isAlive(orphanPid), false);
 
         const rows = yield* repository.list();
         assert.deepStrictEqual(rows, []);
       }),
-    15_000,
   );
 });

@@ -7,6 +7,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { DEFAULT_TERMINAL_ID, type TerminalOpenInput } from "@t3tools/contracts";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -14,7 +15,7 @@ import * as Path from "effect/Path";
 
 import * as ProcessRunner from "../processRunner.ts";
 import * as TerminalManager from "./Manager.ts";
-import * as PtyAdapter from "./PtyAdapter.ts";
+import * as PtyAdapter from "@t3tools/shared/PtyAdapter";
 
 class FakePtyProcess implements PtyAdapter.PtyProcess {
   readonly pid: number;
@@ -126,14 +127,16 @@ it.layer(
       const baseDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-terminal-hooks-" });
       const ptyAdapter = new FakePtyAdapter();
       const clearCalls: Array<{ threadId: string; terminalId: string }> = [];
+      const cleared = yield* Deferred.make<void>();
 
       const manager = yield* TerminalManager.makeWithOptions({
         logsDir: join(baseDir, "logs"),
         ptyAdapter,
         clearSessionPid: (input) =>
-          Effect.sync(() =>
-            clearCalls.push({ threadId: input.threadId, terminalId: input.terminalId }),
-          ),
+          Effect.gen(function* () {
+            clearCalls.push({ threadId: input.threadId, terminalId: input.terminalId });
+            yield* Deferred.succeed(cleared, undefined);
+          }),
       });
 
       yield* manager.open(openInput());
@@ -141,7 +144,7 @@ it.layer(
       assert.ok(spawned !== undefined);
       spawned?.emitExit({ exitCode: 0, signal: 0 });
 
-      yield* Effect.sleep(20);
+      yield* Deferred.await(cleared);
 
       assert.strictEqual(clearCalls.length, 1);
       assert.strictEqual(clearCalls[0]?.threadId, "thread-1");

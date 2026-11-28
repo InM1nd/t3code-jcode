@@ -2,6 +2,7 @@ import type {
   OrchestrationV2ProviderTurn,
   OrchestrationV2ProviderTurnTokenUsage,
   ProviderTurnId,
+  TurnTokenUsage,
 } from "@t3tools/contracts";
 
 import { formatContextWindowTokens } from "../lib/contextWindow";
@@ -16,13 +17,19 @@ export type TandemTurnUsage = {
 
 /** A label only when the provider reported this turn's input or output. */
 export function tandemTurnUsageFromProviderTurn(
-  usage: OrchestrationV2ProviderTurnTokenUsage | undefined,
+  usage: TurnTokenUsage | OrchestrationV2ProviderTurnTokenUsage | undefined,
 ): TandemTurnUsage | null {
   if (!usage) return null;
   const inputTokens = usage.inputTokens;
   const outputTokens = usage.outputTokens;
   const total = (inputTokens ?? 0) + (outputTokens ?? 0);
   if (total <= 0) return null;
+  const reasoningOutputTokens =
+    "reasoningTokens" in usage
+      ? usage.reasoningTokens
+      : "reasoningOutputTokens" in usage
+        ? usage.reasoningOutputTokens
+        : undefined;
   return {
     totalTokens: total,
     ...(inputTokens !== undefined ? { inputTokens } : {}),
@@ -30,9 +37,7 @@ export function tandemTurnUsageFromProviderTurn(
       ? { cachedInputTokens: usage.cachedInputTokens }
       : {}),
     ...(outputTokens !== undefined ? { outputTokens } : {}),
-    ...(usage.reasoningOutputTokens !== undefined
-      ? { reasoningOutputTokens: usage.reasoningOutputTokens }
-      : {}),
+    ...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
   };
 }
 
@@ -60,11 +65,13 @@ export function messageIdsShowingTurnUsage(
 }
 
 export function indexTurnUsageByProviderTurnId(
-  turns: ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "id" | "tokenUsage">> | undefined,
+  turns:
+    | ReadonlyArray<Pick<OrchestrationV2ProviderTurn, "id" | "turnTokenUsage" | "tokenUsage">>
+    | undefined,
 ): ReadonlyMap<ProviderTurnId, TandemTurnUsage> {
   const byTurnId = new Map<ProviderTurnId, TandemTurnUsage>();
   for (const turn of turns ?? []) {
-    const usage = tandemTurnUsageFromProviderTurn(turn.tokenUsage);
+    const usage = tandemTurnUsageFromProviderTurn(turn.turnTokenUsage ?? turn.tokenUsage);
     if (usage) byTurnId.set(turn.id, usage);
   }
   return byTurnId;

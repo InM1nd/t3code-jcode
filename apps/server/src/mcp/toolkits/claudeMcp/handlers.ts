@@ -1,7 +1,7 @@
 import { OrchestratorMcpFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import { enableClaudeMcpServer } from "../../../provider/claudeMcpAuto.ts";
+import { enableClaudeMcpServer } from "../../../provider/fork/claudeMcpAuto.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { readCaller } from "../../threadAccess.ts";
 import { ClaudeMcpToolkit } from "./tools.ts";

@@ -5,11 +5,13 @@ import type {
   ThreadId,
 } from "@t3tools/contracts";
 import { formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
+import { workModeInstruction } from "@t3tools/shared/workMode";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 
 import type * as PortScanner from "../preview/PortScanner.ts";
+import { turnWorkMode } from "../workMode/WorkModeService.ts";
 
 /**
  * Production turns include the worktree, port, and board prefix. The default
@@ -29,7 +31,7 @@ export function registerTurnPortScan(scan: PortScan): void {
   registeredPortScan = scan;
 }
 
-export function turnPortScan(): PortScan {
+function turnPortScan(): PortScan {
   return registeredPortScan ?? (() => Effect.succeed([]));
 }
 
@@ -109,7 +111,7 @@ function formatActivePortsPromptBlock(
     .toSorted((left, right) => left.port - right.port)
     .map(
       (entry) =>
-        `- ${entry.port}${entry.processName ? ` (${entry.processName})` : ""} — thread "${entry.threadTitle}"`,
+        `- ${entry.port}${entry.processName ? ` (${entry.processName})` : ""}: thread "${entry.threadTitle}"`,
     );
   return [
     "<t3_active_ports>",
@@ -159,16 +161,16 @@ export function isProviderSlashCommand(text: string): boolean {
  * or times out leaves the rest of the turn unchanged. Slash commands pass
  * through unchanged.
  */
-export function applyTurnContext(input: {
-  readonly text: string;
-  readonly threadId: ThreadId;
-  readonly worktreePath: string | null;
-  readonly branch: string | null;
-  readonly boardItems?: ReadonlyArray<ProjectBoardItem>;
-  readonly portDiscovery: Pick<PortScanner.PortDiscovery["Service"], "scan">;
-  readonly getThreadTitle: (threadId: ThreadId) => Effect.Effect<string | null>;
-}): Effect.Effect<string> {
-  return Effect.gen(function* () {
+export const applyTurnContext = Effect.fn("orchestrationV2.applyTurnContext")(
+  function* (input: {
+    readonly text: string;
+    readonly threadId: ThreadId;
+    readonly worktreePath: string | null;
+    readonly branch: string | null;
+    readonly boardItems?: ReadonlyArray<ProjectBoardItem>;
+    readonly portDiscovery: Pick<PortScanner.PortDiscovery["Service"], "scan">;
+    readonly getThreadTitle: (threadId: ThreadId) => Effect.Effect<string | null>;
+  }): Effect.fn.Return<string> {
     if (isProviderSlashCommand(input.text)) return input.text;
     let text = input.worktreePath
       ? prependBlock(
@@ -201,5 +203,44 @@ export function applyTurnContext(input: {
       return threadTitle ? [{ port: owner.port, processName: owner.processName, threadTitle }] : [];
     });
     return prependBlock(text, formatActivePortsPromptBlock(entries));
-  }).pipe(Effect.orElseSucceed(() => input.text));
-}
+  },
+  (effect, input) => Effect.orElseSucceed(effect, () => input.text),
+);
+
+/** Single entry point for ProviderTurnStartService: work mode, slash-command guard, board digest, worktree & ports. */
+export const enrichTurnContextPrompt = Effect.fn("orchestrationV2.enrichTurnContextPrompt")(
+  function* (input: {
+    readonly enabled: boolean;
+    readonly text: string;
+    readonly hasAttachments: boolean;
+    readonly thread: {
+      readonly id: ThreadId;
+      readonly projectId: ProjectId;
+      readonly worktreePath: string | null;
+      readonly branch: string | null;
+      readonly lineage?: { readonly relationshipToParent: "fork" | "subagent" | null };
+    };
+    readonly getThreadTitle: (threadId: ThreadId) => Effect.Effect<string | null>;
+  }): Effect.fn.Return<string> {
+    const bareProviderCommand = !input.hasAttachments && isProviderSlashCommand(input.text);
+    if (!input.enabled || bareProviderCommand) return input.text;
+    const storedWorkMode = yield* turnWorkMode(input.thread.id);
+    const workModeText = workModeInstruction(storedWorkMode);
+    const promptedText =
+      workModeText === null
+        ? input.text
+        : input.text.trim().length === 0
+          ? workModeText
+          : `${workModeText}\n\n${input.text}`;
+    const boardItems = yield* turnBoardItems(input.thread.projectId, input.thread.lineage);
+    return yield* applyTurnContext({
+      text: promptedText,
+      threadId: input.thread.id,
+      worktreePath: input.thread.worktreePath,
+      branch: input.thread.branch,
+      boardItems,
+      portDiscovery: { scan: turnPortScan() },
+      getThreadTitle: input.getThreadTitle,
+    });
+  },
+);

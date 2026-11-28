@@ -87,7 +87,7 @@ export const dispatchBoardCard = Effect.fn("mcp.board.dispatch")(function* (inpu
     execution: {
       role,
       ...(target === undefined ? {} : { target }),
-      threadId: task.childThreadId,
+      ...(task.childThreadId === null ? {} : { threadId: task.childThreadId }),
       taskId: task.taskId,
     },
   });

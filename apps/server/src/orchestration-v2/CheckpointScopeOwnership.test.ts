@@ -1,4 +1,5 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -16,16 +17,20 @@ import {
 } from "@t3tools/contracts";
 import * as CheckpointDiffQuery from "../checkpointing/CheckpointDiffQuery.ts";
 import * as CheckpointStore from "../checkpointing/CheckpointStore.ts";
-import * as IdAllocator from "./IdAllocator.ts";
+import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { checkpointRefForScopeOrdinal } from "./CheckpointService.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 const layerProjection = Layer.mergeAll(
-  ProjectionStore.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemory)),
+  ProjectionStore.layer.pipe(
+    Layer.provide(NodeCrypto.layer),
+    Layer.provideMerge(SqlitePersistence.layerMemory),
+  ),
   SqlitePersistence.layerMemory,
   IdAllocator.layer,
   NodeCrypto.layer,
+  NodeServices.layer,
 );
 it.effect("resolves the thread baseline after a second root run replaces scope ownership", () =>
   Effect.gen(function* () {
@@ -219,6 +224,7 @@ it.effect("resolves the thread baseline after a second root run replaces scope o
             getCheckpointContext: () => Effect.succeed(context),
           }),
           Layer.mock(CheckpointStore.CheckpointStore)({
+            listAuthoredPaths: () => Effect.succeed(null),
             diffCheckpoints: (input) => {
               assert.equal(input.cwd, "/prepared-repo");
               assert.equal(input.fromCheckpointRef, checkpointRefs[0]);

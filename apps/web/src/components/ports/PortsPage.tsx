@@ -4,11 +4,11 @@ import { RadioTowerIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
-import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { namedClipboardTarget, useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { readLocalApi } from "~/localApi";
 import { useDiscoveredPortsState } from "~/portDiscoveryState";
-import { useActiveEnvironmentId, useEnvironmentThreadRefs, useThreadShell } from "~/state/entities";
-import { useEnvironments } from "~/state/environments";
+import { useEnvironmentThreadRefs, useThreadShell } from "~/state/entities";
+import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
 
 import { isElectron } from "../../env";
 import { Button } from "../ui/button";
@@ -59,7 +59,7 @@ function PortRow({
   environmentId: EnvironmentId;
   threadRefs: ReadonlyArray<ScopedThreadRef>;
 }) {
-  const { copyToClipboard } = useCopyToClipboard({ target: "URL" });
+  const { copyToClipboard } = useCopyToClipboard({ target: namedClipboardTarget("URL") });
   // server.url is localhost from the *environment's* point of view; on a remote
   // client that host is the wrong machine until it's resolved.
   const resolvedUrl = resolveDiscoveredServerUrl(environmentId, server.url);
@@ -97,7 +97,7 @@ function PortRow({
 
 export function PortsPage() {
   const { environments } = useEnvironments();
-  const activeEnvironmentId = useActiveEnvironmentId();
+  const activeEnvironmentId = usePrimaryEnvironmentId();
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<EnvironmentId | null>(
     activeEnvironmentId,
   );

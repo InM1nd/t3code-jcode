@@ -186,9 +186,15 @@ describe("local domains", () => {
     };
     process.on("uncaughtException", onCrash);
     try {
+      let resolveUpstreamClosed!: () => void;
+      const upstreamClosed = new Promise<void>((resolve) => {
+        resolveUpstreamClosed = resolve;
+      });
       const upstream = NodeHttp.createServer();
       upstream.on("upgrade", (_request, socket) => {
         socket.on("error", () => {});
+        socket.once("end", () => socket.end());
+        socket.once("close", resolveUpstreamClosed);
         socket.write(
           "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
         );
@@ -213,7 +219,7 @@ describe("local domains", () => {
         request.once("error", reject);
         request.end();
       });
-      await new Promise((resolve) => setImmediate(resolve));
+      await upstreamClosed;
       expect(crashes).toEqual([]);
     } finally {
       process.off("uncaughtException", onCrash);

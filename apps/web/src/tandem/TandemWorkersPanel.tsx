@@ -8,7 +8,6 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef } from "react";
 
-import { formatCompactElapsedSeconds } from "../components/chat/AgentElapsed";
 import { formatContextWindowTokens } from "../lib/contextWindow";
 import { useThreadShells } from "../state/entities";
 import { megathreadUsage, projectBoardItems } from "../state/projectBoard";
@@ -21,8 +20,13 @@ import {
 } from "./megathreadWorkers";
 
 const STATUS_LABELS: Record<MegathreadWorker["status"], string> = {
+  connecting: "Connecting",
+  reconnecting: "Reconnecting",
+  offline: "Offline",
   approval: "Needs approval",
   input: "Needs reply",
+  request: "Needs reply",
+  preparing: "Preparing",
   working: "Working",
   waiting: "Idle",
   failed: "Failed",
@@ -42,6 +46,15 @@ function UsageLine({ usage }: { usage: MegathreadThreadUsage }) {
 }
 
 /** Ticks once a second by writing the DOM, so a running worker costs no React commits. */
+function formatCompactElapsedSeconds(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes >= 600) return `${Math.floor(minutes / 60)}h`;
+  return `${Math.floor(minutes / 6) / 10}h`;
+}
+
 function WorkerElapsed({ worker }: { worker: MegathreadWorker }) {
   const textRef = useRef<HTMLSpanElement>(null);
   const { startedAt, completedAt } = worker;

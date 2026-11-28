@@ -128,12 +128,13 @@ export const makeProjectActivityRpcHandlers = (
   sql: SqlClient.SqlClient,
   board: Board.BoardService["Service"],
 ) => ({
-  [BOARD_WS_METHODS.activityList]: (input: { readonly projectId: ProjectId }) =>
-    Effect.gen(function* () {
-      const snapshot = yield* board.list(input.projectId);
-      const items = yield* listProjectActivity(sql, input.projectId, snapshot.items);
-      return { projectId: input.projectId, items };
-    }),
+  [BOARD_WS_METHODS.activityList]: Effect.fn("ProjectActivity.activityList")(function* (input: {
+    readonly projectId: ProjectId;
+  }) {
+    const snapshot = yield* board.list(input.projectId);
+    const items = yield* listProjectActivity(sql, input.projectId, snapshot.items);
+    return { projectId: input.projectId, items };
+  }),
 });
 
 export function mapProjectActivity(input: {

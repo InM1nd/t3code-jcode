@@ -5,7 +5,7 @@ import {
   ProjectId,
   type ProjectBoardItem,
 } from "@t3tools/contracts";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import { findProjectBoardItem, formatProjectBoardDigest } from "@t3tools/shared/projectBoard";
 
@@ -39,14 +39,13 @@ const boardProjectId = (context: Caller, requested: ProjectId | undefined) => {
   return Effect.succeed(resolved);
 };
 
-const latestCallerTurnId = (context: Caller) =>
-  Effect.gen(function* () {
-    if (context.caller === undefined) return undefined;
-    const records = yield* context.threads
-      .getThreadRecords(context.caller.id, ["providerTurns"])
-      .pipe(Effect.mapError(() => failure("Could not read the calling thread's latest turn.")));
-    return latestBoardTurnId(records.providerTurns);
-  });
+const latestCallerTurnId = Effect.fn("mcp.board.latestCallerTurnId")(function* (context: Caller) {
+  if (context.caller === undefined) return undefined;
+  const records = yield* context.threads
+    .getThreadRecords(context.caller.id, ["providerTurns"])
+    .pipe(Effect.mapError(() => failure("Could not read the calling thread's latest turn.")));
+  return latestBoardTurnId(records.providerTurns);
+});
 
 export const slimItem = (item: ProjectBoardItem): ProjectBoardItem => ({
   ...item,
@@ -131,16 +130,16 @@ export const layer = McpToolAccess.toLayer(BoardToolkit, {
       const context = yield* readCaller();
       const projectId = yield* boardProjectId(context, input.projectId);
       const board = yield* BoardService.BoardService;
-      const crypto = yield* Crypto.Crypto;
+      const random = yield* SecureRandom.SecureRandom;
       const items = (yield* board.list(projectId).pipe(Effect.mapError(boardError))).items;
       const existing = input.itemId ? findProjectBoardItem(items, input.itemId) : undefined;
       const itemId =
         existing?.id ??
         input.itemId ??
         ProjectBoardItemId.make(
-          yield* crypto.randomUUIDv4.pipe(
-            Effect.mapError(() => failure("Could not create a board card id.")),
-          ),
+          yield* random
+            .uuidV4()
+            .pipe(Effect.mapError(() => failure("Could not create a board card id."))),
         );
       const linkTurnId = yield* latestCallerTurnId(context);
       const item = yield* board
@@ -285,7 +284,7 @@ const readItem = Effect.fn("mcp.board.readItem")(function* (
   return { context, projectId, board, item };
 });
 
-const mutate = (
+const mutate = Effect.fn("mcp.board.mutate")(function* (
   input: {
     readonly projectId?: ProjectId | undefined;
     readonly itemId: ProjectBoardItem["id"];
@@ -295,11 +294,10 @@ const mutate = (
     projectId: ProjectId,
     itemId: ProjectBoardItem["id"],
   ) => Effect.Effect<ProjectBoardItem, BoardServiceError>,
-) =>
-  Effect.gen(function* () {
-    const found = yield* readItem(input.projectId, input.itemId);
-    const item = yield* operation(found.board, found.projectId, found.item.id).pipe(
-      Effect.mapError(boardError),
-    );
-    return writeResult(found.projectId, item);
-  });
+) {
+  const found = yield* readItem(input.projectId, input.itemId);
+  const item = yield* operation(found.board, found.projectId, found.item.id).pipe(
+    Effect.mapError(boardError),
+  );
+  return writeResult(found.projectId, item);
+});

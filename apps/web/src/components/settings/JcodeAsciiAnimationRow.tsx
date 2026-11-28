@@ -3,7 +3,7 @@ import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import { useClientSettings, useUpdatePrimarySettings } from "~/hooks/useSettings";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { SettingResetButton, SettingsRow } from "./settingsLayout";
-import { searchableSetting } from "./settingsSearch";
+import { useSearchableSetting } from "./settingsSearch";
 import { JcodeAsciiIdle } from "../chat/JcodeAsciiIdle";
 
 const LABELS = {
@@ -15,6 +15,7 @@ const LABELS = {
 
 /** Fork-owned control for the empty-chat ASCII canvas. */
 export function JcodeAsciiAnimationRow() {
+  const searchableSetting = useSearchableSetting();
   const animation = useClientSettings((settings) => settings.jcodeAsciiAnimation);
   const updateSettings = useUpdatePrimarySettings();
 
@@ -29,7 +30,7 @@ export function JcodeAsciiAnimationRow() {
         resetAction={
           animation !== DEFAULT_CLIENT_SETTINGS.jcodeAsciiAnimation ? (
             <SettingResetButton
-              label="empty chat animation"
+              ariaLabel="Reset empty chat animation to default"
               onClick={() =>
                 updateSettings({ jcodeAsciiAnimation: DEFAULT_CLIENT_SETTINGS.jcodeAsciiAnimation })
               }

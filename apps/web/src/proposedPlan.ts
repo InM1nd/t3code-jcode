@@ -1,41 +1,28 @@
-export function proposedPlanTitle(planMarkdown: string): string | null {
-  const heading = planMarkdown.match(/^\s{0,3}#{1,6}\s+(.+)$/m)?.[1]?.trim();
-  return heading && heading.length > 0 ? heading : null;
-}
+import { displayedPlanMarkdown, proposedPlanTitle } from "@t3tools/shared/proposedPlanText";
+import { msg } from "gt-react";
 
-export function stripDisplayedPlanMarkdown(planMarkdown: string): string {
-  const lines = planMarkdown.trimEnd().split(/\r?\n/);
-  const sourceLines = lines[0] && /^\s{0,3}#{1,6}\s+/.test(lines[0]) ? lines.slice(1) : [...lines];
-  while (sourceLines[0]?.trim().length === 0) {
-    sourceLines.shift();
-  }
-  const firstHeadingMatch = sourceLines[0]?.match(/^\s{0,3}#{1,6}\s+(.+)$/);
-  if (firstHeadingMatch?.[1]?.trim().toLowerCase() === "summary") {
-    sourceLines.shift();
-    while (sourceLines[0]?.trim().length === 0) {
-      sourceLines.shift();
-    }
-  }
-  return sourceLines.join("\n");
-}
+import { m, type MessageResolver } from "./i18n/messages";
 
 export function buildCollapsedProposedPlanPreviewMarkdown(
   planMarkdown: string,
   options?: {
     maxLines?: number;
   },
+  resolve: MessageResolver = m,
 ): string {
   const maxLines = options?.maxLines ?? 8;
-  const lines = stripDisplayedPlanMarkdown(planMarkdown)
+  const { markdown, separatorLine } = displayedPlanMarkdown(planMarkdown);
+  const lines = markdown
     .trimEnd()
     .split(/\r?\n/)
     .map((line) => line.trimEnd());
   const previewLines: string[] = [];
   let visibleLineCount = 0;
   let hasMoreContent = false;
+  let openFence: { marker: string; indent: string } | null = null;
 
-  for (const line of lines) {
-    const isVisibleLine = line.trim().length > 0;
+  for (const [index, line] of lines.entries()) {
+    const isVisibleLine = index !== separatorLine && line.trim().length > 0;
     if (isVisibleLine && visibleLineCount >= maxLines) {
       hasMoreContent = true;
       break;
@@ -44,6 +31,20 @@ export function buildCollapsedProposedPlanPreviewMarkdown(
     if (isVisibleLine) {
       visibleLineCount += 1;
     }
+    const match = /^( {0,3})(?:(`{3,})[^`]*|(~{3,}).*)$/.exec(line);
+    const fence = match?.[2] ?? match?.[3];
+    if (match === null || fence === undefined) {
+      continue;
+    }
+    if (openFence === null) {
+      openFence = { marker: fence, indent: match[1] ?? "" };
+    } else if (
+      fence[0] === openFence.marker[0] &&
+      fence.length >= openFence.marker.length &&
+      line.trim() === fence
+    ) {
+      openFence = null;
+    }
   }
 
   while (previewLines.length > 0 && previewLines.at(-1)?.trim().length === 0) {
@@ -51,7 +52,11 @@ export function buildCollapsedProposedPlanPreviewMarkdown(
   }
 
   if (previewLines.length === 0) {
-    return proposedPlanTitle(planMarkdown) ?? "Plan preview unavailable.";
+    return proposedPlanTitle(planMarkdown) ?? resolve(msg("Plan preview unavailable."));
+  }
+
+  if (openFence !== null) {
+    previewLines.push(openFence.indent + openFence.marker);
   }
 
   if (hasMoreContent) {
@@ -70,41 +75,7 @@ function sanitizePlanFileSegment(input: string): string {
   return sanitized.length > 0 ? sanitized : "plan";
 }
 
-/** Prefix of the message the app sends when the user approves a plan. */
 export const PLAN_IMPLEMENTATION_PROMPT_PREFIX = "PLEASE IMPLEMENT THIS PLAN:\n";
-
-export function buildPlanImplementationPrompt(planMarkdown: string): string {
-  return `${PLAN_IMPLEMENTATION_PROMPT_PREFIX}${planMarkdown.trim()}`;
-}
-
-export function resolvePlanFollowUpSubmission(input: { draftText: string; planMarkdown: string }): {
-  text: string;
-  interactionMode: "default" | "plan";
-  workMode: "build" | "plan";
-} {
-  const trimmedDraftText = input.draftText.trim();
-  if (trimmedDraftText.length > 0) {
-    return {
-      text: trimmedDraftText,
-      interactionMode: "plan",
-      workMode: "plan",
-    };
-  }
-
-  return {
-    text: buildPlanImplementationPrompt(input.planMarkdown),
-    interactionMode: "default",
-    workMode: "build",
-  };
-}
-
-export function buildPlanImplementationThreadTitle(planMarkdown: string): string {
-  const title = proposedPlanTitle(planMarkdown);
-  if (!title) {
-    return "Implement plan";
-  }
-  return `Implement ${title}`;
-}
 
 export function buildProposedPlanMarkdownFilename(planMarkdown: string): string {
   const title = proposedPlanTitle(planMarkdown);

@@ -15,7 +15,6 @@ import {
   mergeProcesses,
   processIdentityKey,
   type ProcessState,
-  type TelemetryCounters,
 } from "./Model.ts";
 
 const MAX_HISTORY_WINDOW_MS = 60 * 60_000;
@@ -118,27 +117,44 @@ function buildBuckets(input: {
 }): ReadonlyArray<ResourceTelemetryHistoryBucket> {
   const windowStartMs = input.nowMs - input.windowMs;
   const buckets: ResourceTelemetryHistoryBucket[] = [];
+  // Samples arrive sorted by sampledAtMs, so one cursor walks them across all buckets.
+  let index = 0;
   for (let startedAtMs = windowStartMs; startedAtMs < input.nowMs; startedAtMs += input.bucketMs) {
     const endedAtMs = Math.min(input.nowMs, startedAtMs + input.bucketMs);
-    const samples = input.samples.filter(
-      (sample) =>
-        sample.sampledAtMs >= startedAtMs &&
-        (endedAtMs === input.nowMs
-          ? sample.sampledAtMs <= endedAtMs
-          : sample.sampledAtMs < endedAtMs),
-    );
-    const cpuTotal = samples.reduce((total, sample) => total + sample.cpuPercent, 0);
+    const isLastBucket = endedAtMs === input.nowMs;
+    while (index < input.samples.length && input.samples[index]!.sampledAtMs < startedAtMs) {
+      index += 1;
+    }
+    let count = 0;
+    let cpuTotal = 0;
+    let maxCpuPercent = -Infinity;
+    let maxRssBytes = -Infinity;
+    let maxProcessCount = -Infinity;
+    let ioReadBytes = 0;
+    let ioWriteBytes = 0;
+    while (index < input.samples.length) {
+      const sample = input.samples[index]!;
+      if (isLastBucket ? sample.sampledAtMs > endedAtMs : sample.sampledAtMs >= endedAtMs) {
+        break;
+      }
+      count += 1;
+      cpuTotal += sample.cpuPercent;
+      maxCpuPercent = Math.max(maxCpuPercent, sample.cpuPercent);
+      maxRssBytes = Math.max(maxRssBytes, sample.rssBytes);
+      maxProcessCount = Math.max(maxProcessCount, sample.processCount);
+      ioReadBytes += sample.ioReadBytes;
+      ioWriteBytes += sample.ioWriteBytes;
+      index += 1;
+    }
     buckets.push({
       startedAt: DateTime.makeUnsafe(startedAtMs),
       endedAt: DateTime.makeUnsafe(endedAtMs),
-      avgCpuPercent: samples.length === 0 ? 0 : cpuTotal / samples.length,
-      maxCpuPercent:
-        samples.length === 0 ? 0 : Math.max(...samples.map((sample) => sample.cpuPercent)),
-      maxRssBytes: samples.length === 0 ? 0 : Math.max(...samples.map((sample) => sample.rssBytes)),
-      ioReadBytes: samples.reduce((total, sample) => total + sample.ioReadBytes, 0),
-      ioWriteBytes: samples.reduce((total, sample) => total + sample.ioWriteBytes, 0),
-      maxProcessCount:
-        samples.length === 0 ? 0 : Math.max(...samples.map((sample) => sample.processCount)),
+      avgCpuPercent: count === 0 ? 0 : cpuTotal / count,
+      maxCpuPercent: count === 0 ? 0 : maxCpuPercent,
+      maxRssBytes: count === 0 ? 0 : maxRssBytes,
+      ioReadBytes,
+      ioWriteBytes,
+      maxProcessCount: count === 0 ? 0 : maxProcessCount,
     });
   }
   return buckets;
@@ -167,8 +183,8 @@ export function buildResourceTelemetryHistory(
   const aggregateSamples: AggregateSample[] = [];
   const legacyBackendAggregateSamples: AggregateSample[] = [];
   const processSamples: ProcessSample[] = [];
-  let previous: ReadonlyMap<string, ProcessState> = new Map();
-  let counters: TelemetryCounters = emptyTelemetryCounters();
+  const previous = new Map<string, ProcessState>();
+  const counters = emptyTelemetryCounters();
   let previousSnapshotAtMs: number | undefined;
 
   for (const snapshot of snapshots) {
@@ -216,9 +232,12 @@ export function buildResourceTelemetryHistory(
       previous,
       counters,
       updatePrevious: true,
+      accumulateCounters: false,
     });
-    previous = new Map([...previous, ...merged.previous]);
-    counters = merged.counters;
+    // Keep absent identities' baselines without copying every exited process on each sample.
+    for (const [identityKey, state] of merged.previous) {
+      previous.set(identityKey, state);
+    }
     if (snapshot.sampledAtUnixMs < windowStartMs) {
       continue;
     }

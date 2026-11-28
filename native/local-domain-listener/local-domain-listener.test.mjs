@@ -30,18 +30,20 @@ const freePort = async () => {
   return port;
 };
 
-const waitForReady = (child) =>
+const waitForReady = (child, signal) =>
   new Promise((resolve, reject) => {
     let stdout = "";
     let stderr = "";
-    const timeout = setTimeout(
-      () => reject(new Error("listener did not become ready")),
-      TEST_TIMEOUT_MS,
-    );
+    const onAbort = () => finish(reject, new Error("listener did not become ready"));
     const finish = (callback, value) => {
-      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
       callback(value);
     };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
       if (stdout === "ready\n") finish(resolve);
@@ -78,7 +80,7 @@ const requestAfterWriteEnd = (port) =>
 NodeTest.test(
   "forwards loopback HTTP and stops on SIGTERM",
   { skip: skipUnlessDarwin, timeout: TEST_TIMEOUT_MS },
-  async () => {
+  async (t) => {
     const directory = await NodeFSP.mkdtemp(
       NodePath.join(NodeOS.tmpdir(), "t3-local-domain-listener-"),
     );
@@ -96,7 +98,7 @@ NodeTest.test(
         "--target-port",
         String(upstreamPort),
       ]);
-      await waitForReady(listener);
+      await waitForReady(listener, t.signal);
 
       const response = await fetch(`http://127.0.0.1:${listenerPort}`);
       NodeAssert.equal(await response.text(), "forwarded");
@@ -119,7 +121,7 @@ NodeTest.test(
 NodeTest.test(
   "keeps the reverse stream open after the client ends its request",
   { skip: skipUnlessDarwin, timeout: TEST_TIMEOUT_MS },
-  async () => {
+  async (t) => {
     const directory = await NodeFSP.mkdtemp(
       NodePath.join(NodeOS.tmpdir(), "t3-local-domain-listener-"),
     );
@@ -139,7 +141,7 @@ NodeTest.test(
         "--target-port",
         String(upstreamPort),
       ]);
-      await waitForReady(listener);
+      await waitForReady(listener, t.signal);
 
       const response = await requestAfterWriteEnd(listenerPort);
       NodeAssert.match(response, /forwarded after write end/);
