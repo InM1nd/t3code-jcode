@@ -10,7 +10,6 @@ import {
   PlayIcon,
   SendIcon,
 } from "lucide-react";
-import { useMemo } from "react";
 
 import { projectBoardStatusLabel } from "../components/ProjectBoardPanel.logic";
 import { projectActivity } from "../state/projectBoard";
@@ -23,17 +22,13 @@ export function ProjectActivityTimeline(props: {
   readonly projectId: ProjectId;
 }) {
   const router = useRouter();
-  const activityAtom = useMemo(
-    () =>
-      projectActivity({
-        environmentId: props.environmentId,
-        input: { projectId: props.projectId },
-      }),
-    [props.environmentId, props.projectId],
-  );
+  const activityAtom = projectActivity({
+    environmentId: props.environmentId,
+    input: { projectId: props.projectId },
+  });
   const query = useEnvironmentQuery(activityAtom);
   const items = query.data?.items ?? [];
-  const groups = useMemo(() => groupProjectActivityByDay(items), [items]);
+  const groups = groupProjectActivityByDay(items);
 
   const openThread = (item: ProjectActivityItem) => {
     if (!item.threadId) return;

@@ -1,7 +1,7 @@
 import type { DiscoveredLocalServer, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 import { Link } from "@tanstack/react-router";
 import { RadioTowerIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
 import { namedClipboardTarget, useCopyToClipboard } from "~/hooks/useCopyToClipboard";
@@ -105,10 +105,7 @@ export function PortsPage() {
     selectedEnvironmentId ?? activeEnvironmentId ?? environments[0]?.environmentId ?? null;
   const { servers } = useDiscoveredPortsState(environmentId);
   const threadRefs = useEnvironmentThreadRefs(environmentId);
-  const sortedServers = useMemo(
-    () => servers.toSorted((a, b) => a.host.localeCompare(b.host) || a.port - b.port),
-    [servers],
-  );
+  const sortedServers = servers.toSorted((a, b) => a.host.localeCompare(b.host) || a.port - b.port);
 
   const topbarContent = (
     <div className="flex w-full min-w-0 items-center gap-3">

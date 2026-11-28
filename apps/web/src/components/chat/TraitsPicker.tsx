@@ -390,9 +390,14 @@ export const ULTRATHINK_IN_BODY_NOTE = msg(
 
 const TRAIT_MENU_LEAD_IDS = new Set(["contextWindow", "fastMode", "serviceTier"]);
 
-function traitMenuLabel(descriptor: ProviderOptionDescriptor): string {
-  if (descriptor.id === "contextWindow") return "Context";
-  if (descriptor.id === "fastMode" || descriptor.id === "serviceTier") return "Speed";
+const TRAIT_MENU_CONTEXT_LABEL = msg("Context", { $context: "model option name" });
+const TRAIT_MENU_SPEED_LABEL = msg("Speed", { $context: "model option name" });
+
+function traitMenuLabel(descriptor: ProviderOptionDescriptor, resolve: MessageResolver): string {
+  if (descriptor.id === "contextWindow") return resolve(TRAIT_MENU_CONTEXT_LABEL);
+  if (descriptor.id === "fastMode" || descriptor.id === "serviceTier") {
+    return resolve(TRAIT_MENU_SPEED_LABEL);
+  }
   return descriptor.label;
 }
 
@@ -455,7 +460,7 @@ const TraitsMenuContent = memo(function TraitsMenuContentImpl(props: TraitsSelec
               {index > 0 ? <MenuDivider /> : null}
               <MenuGroup>
                 <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
-                  {traitMenuLabel(descriptor)}
+                  {traitMenuLabel(descriptor, resolve)}
                 </div>
                 <MenuRadioGroup
                   value={selectedValue}
@@ -493,7 +498,7 @@ const TraitsMenuContent = memo(function TraitsMenuContentImpl(props: TraitsSelec
             {index > 0 ? <MenuDivider /> : null}
             <MenuGroup>
               <div className="px-2 pt-1.5 pb-1 font-medium text-muted-foreground text-xs">
-                {traitMenuLabel(descriptor)}
+                {traitMenuLabel(descriptor, resolve)}
               </div>
               {ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id ? (
                 <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">

@@ -105,6 +105,7 @@ export const PetAscii = memo(function PetAscii(props: { mood: PetMood; size: num
   const moodRef = useRef(props.mood);
   moodRef.current = props.mood;
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mounts and tears down the textmodifier canvas plus its theme and visibility listeners
   useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;

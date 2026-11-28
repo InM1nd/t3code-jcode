@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef } from "react";
 import { textmode, type Textmodifier } from "textmode.js";
 
+import { observeResize } from "~/lib/observeResize";
 import { cn } from "~/lib/utils";
 import { useClientSettings } from "~/hooks/useSettings";
 import {
@@ -103,6 +104,7 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
   const animationRef = useRef(animation);
   animationRef.current = animation;
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- mounts and tears down the textmodifier canvas plus its DOM, resize, and visibility listeners
   useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
@@ -191,7 +193,7 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
       attributeFilter: ["class", "style", "data-theme-id"],
     });
 
-    const observer = new ResizeObserver(() => {
+    const stopObservingResize = observeResize(wrap, () => {
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         if (disposed) return;
@@ -205,7 +207,6 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
         clampGrid(tm);
       }, 0);
     });
-    observer.observe(wrap);
 
     const { w, h } = measure(wrap);
     if (w >= 8 && h >= 8) mount(w, h);
@@ -215,7 +216,7 @@ export const JcodeAsciiIdle = memo(function JcodeAsciiIdle(props: { className?: 
       if (resizeTimer) clearTimeout(resizeTimer);
       document.removeEventListener("visibilitychange", onVisibility);
       themeObserver.disconnect();
-      observer.disconnect();
+      stopObservingResize();
       perfEl?.remove();
       tm?.destroy();
       tm = null;

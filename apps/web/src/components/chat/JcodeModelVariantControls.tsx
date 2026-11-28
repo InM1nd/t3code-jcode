@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { cn } from "~/lib/utils";
 import { resolveJcodeModelVariants } from "./jcodeModelVariants";
 
@@ -13,10 +11,7 @@ export function JcodeModelVariantControls(props: {
   readonly currentSlug: string;
   readonly onSelect: (slug: string) => void;
 }) {
-  const variants = useMemo(
-    () => resolveJcodeModelVariants(props.models, props.currentSlug),
-    [props.currentSlug, props.models],
-  );
+  const variants = resolveJcodeModelVariants(props.models, props.currentSlug);
   if (!variants) return null;
   const showReasoning = variants.reasoning.length > 1;
   const showSpeed = variants.speed.length > 1;

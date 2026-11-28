@@ -14,13 +14,9 @@ import { newMessageId } from "./lib/utils";
 import type { threadEnvironment } from "./state/threads";
 
 /**
- * Rollover: continue a thread whose context is full in a fresh one, on the
- * same branch and worktree, seeded from the board instead of from the old
- * transcript.
- *
- * The board is what carries state across the boundary, so rollover asks the
- * outgoing thread for a handoff first — a successor seeded from a stale card
- * is worse than the manual "new thread, go read the board" ritual it replaces.
+ * Rollover: continue a full-context thread in a fresh one on the same branch
+ * and worktree, seeded from the board. It asks the outgoing thread for a
+ * handoff first, because a successor seeded from a stale card is worse than none.
  */
 
 /**
@@ -49,7 +45,7 @@ function cardLines(cards: ReadonlyArray<ProjectBoardItem>): string[] {
  * only agent that can write an accurate handoff — the successor cannot.
  */
 export function buildHandoffRequestPrompt(cards: ReadonlyArray<ProjectBoardItem>): string {
-  const lines = ["Wrapping this thread up — context is rolling over to a fresh thread.", ""];
+  const lines = ["Wrapping this thread up. Context is rolling over to a fresh thread.", ""];
   if (cards.length > 0) {
     lines.push("Call board_handoff for:", ...cardLines(cards), "");
   } else {
@@ -61,7 +57,7 @@ export function buildHandoffRequestPrompt(cards: ReadonlyArray<ProjectBoardItem>
   lines.push(
     "Capture what is done, the decisions worth keeping, and the exact next step.",
     "Point at codebase-memory qualified names instead of re-describing code.",
-    "Then stop — do not start new work.",
+    "Then stop: do not start new work.",
   );
   return lines.join("\n");
 }
@@ -77,7 +73,7 @@ export function buildRolloverSeedPrompt(input: {
   readonly previousTitle: string;
 }): string {
   const lines = [
-    `Continuing "${input.previousTitle}" in a fresh thread — same branch and worktree, empty context.`,
+    `Continuing "${input.previousTitle}" in a fresh thread (same branch and worktree, empty context).`,
     "",
     formatProjectBoardDigest(input.items),
     "",

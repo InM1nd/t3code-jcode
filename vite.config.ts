@@ -627,6 +627,7 @@ export default defineConfig({
           "apps/web/src/threadRollover.tsx",
           "apps/web/src/workspaceScopeWarningUi.tsx",
           "apps/web/src/composerAttachmentsPalette.tsx",
+          "apps/web/src/components/SidebarProjectHeader.tsx",
         ],
         rules: { "t3code/no-untranslated-copy": "off" },
       },

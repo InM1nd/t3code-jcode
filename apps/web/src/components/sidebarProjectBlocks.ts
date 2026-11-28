@@ -2,8 +2,6 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { isThreadWorking } from "@t3tools/client-runtime/state/thread-inbox";
 
-import { useMemo } from "react";
-
 import type { SidebarProjectSnapshot } from "../sidebarProjectGrouping";
 import {
   legacyProjectCwdPreferenceKey,
@@ -12,12 +10,9 @@ import {
 } from "../uiStateStore";
 
 /**
- * Fork: project grouping for the sidebar's Active section.
- *
- * Only Active rows group under project headers. Pinned rows and the Working,
- * Snoozed, and Settled shelves stay flat (each row already shows its project),
- * and collapsing a project hides only its Active rows. A collapsed header shows
- * a working dot for running threads it hides (the Working shelf is opt-in).
+ * Fork: groups only the sidebar's Active rows under project headers; pinned
+ * rows and the Working, Snoozed, and Settled shelves stay flat. A collapsed
+ * header shows a working dot for the running threads it hides.
  */
 
 export interface SidebarProjectBlockProject {
@@ -129,17 +124,13 @@ export function useSidebarActiveProjects(
 ) {
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const setProjectExpanded = useUiStateStore((store) => store.setProjectExpanded);
-  return useMemo(
-    () =>
-      layoutSidebarActiveProjects({
-        projectGroups,
-        projectExpandedById,
-        activeThreads,
-        workingThreads,
-        setProjectExpanded,
-      }),
-    [activeThreads, projectExpandedById, projectGroups, setProjectExpanded, workingThreads],
-  );
+  return layoutSidebarActiveProjects({
+    projectGroups,
+    projectExpandedById,
+    activeThreads,
+    workingThreads,
+    setProjectExpanded,
+  });
 }
 
 function layoutSidebarActiveProjects(input: {

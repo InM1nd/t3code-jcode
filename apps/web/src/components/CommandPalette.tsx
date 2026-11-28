@@ -94,7 +94,6 @@ import {
   useDeferredValue,
   useEffect,
   useId,
-  useMemo,
   useReducer,
   useRef,
   useState,
@@ -781,17 +780,14 @@ function OpenCommandPaletteDialog(props: {
   const currentProjectEnvironmentId =
     activeThread?.environmentId ?? activeDraftThread?.environmentId ?? null;
   const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
-  const boardAtom = useMemo(
-    () =>
-      currentProjectEnvironmentId && currentProjectId
-        ? projectBoardItems({
-            environmentId: currentProjectEnvironmentId,
-            input: { projectId: currentProjectId },
-          })
-        : null,
-    [currentProjectEnvironmentId, currentProjectId],
+  const boardQuery = useEnvironmentQuery(
+    currentProjectEnvironmentId && currentProjectId
+      ? projectBoardItems({
+          environmentId: currentProjectEnvironmentId,
+          input: { projectId: currentProjectId },
+        })
+      : null,
   );
-  const boardQuery = useEnvironmentQuery(boardAtom);
   const scratchTargetEnvironmentId = scratchEnvironmentId(currentProjectEnvironmentId);
   const supportsTriage = (environmentId: EnvironmentId | null) =>
     environments.find((environment) => environment.environmentId === environmentId)?.serverConfig

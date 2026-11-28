@@ -7,7 +7,7 @@ import {
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useRouter } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { cn, randomUUID } from "~/lib/utils";
@@ -66,15 +66,12 @@ export function ProjectBoardPanel(props: {
   readonly projectId: ProjectId;
   readonly composerTarget: ComposerThreadTarget;
 }) {
-  const boardAtom = useMemo(
-    () =>
-      projectBoardItems({
-        environmentId: props.environmentId,
-        input: { projectId: props.projectId },
-      }),
-    [props.environmentId, props.projectId],
+  const query = useEnvironmentQuery(
+    projectBoardItems({
+      environmentId: props.environmentId,
+      input: { projectId: props.projectId },
+    }),
   );
-  const query = useEnvironmentQuery(boardAtom);
   const router = useRouter();
   const upsert = useAtomCommand(upsertBoardItem);
   const archive = useAtomCommand(archiveBoardItem);

@@ -1,6 +1,6 @@
 import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { TurnId } from "@t3tools/contracts";
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 
 import {
   consumeBoardItemAwaitingTurnLink,
@@ -18,18 +18,16 @@ export function useDelegationTurnLink(input: {
   readonly latestTurnId: string | null;
 }) {
   const upsert = useAtomCommand(upsertBoardItem, { reportFailure: false });
-  const boardAtom = useMemo(
-    () =>
-      input.environmentId && input.projectId
-        ? projectBoardItems({
-            environmentId: input.environmentId,
-            input: { projectId: input.projectId },
-          })
-        : null,
-    [input.environmentId, input.projectId],
-  );
+  const boardAtom =
+    input.environmentId && input.projectId
+      ? projectBoardItems({
+          environmentId: input.environmentId,
+          input: { projectId: input.projectId },
+        })
+      : null;
   const board = useEnvironmentQuery(boardAtom);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- consumes the module-level pending launch entry once the server delivers the thread's first turn and its board card loads
   useEffect(() => {
     if (!input.threadId || !input.latestTurnId || !input.environmentId || !input.projectId) {
       return;

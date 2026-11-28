@@ -1,11 +1,4 @@
-import {
-  memo,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { cn } from "~/lib/utils";
 import {
@@ -21,33 +14,24 @@ import type { PetMood } from "./petMood";
 export const PetOverlay = memo(function PetOverlay(props: { mood: PetMood }) {
   const storedPosition = usePetUiStore((state) => state.position);
   const setStoredPosition = usePetUiStore((state) => state.setPosition);
-  const [position, setPosition] = useState<PetPosition | null>(storedPosition);
+  // Only set while dragging; the store owns the resting position.
+  const [dragPosition, setDragPosition] = useState<PetPosition | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const dragOffsetRef = useRef<{ dx: number; dy: number } | null>(null);
   const draggedRef = useRef(false);
 
-  const syncFromStore = useEffectEvent((next: PetPosition | null) => {
-    setPosition(next);
-  });
-
-  useEffect(() => {
-    syncFromStore(storedPosition);
-  }, [storedPosition]);
-
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to window resize to keep the pet inside the viewport
   useEffect(() => {
     const onResize = () => {
-      setPosition((current) => {
-        if (current === null) return current;
-        const next = clampPetPosition(current.x, current.y);
-        setStoredPosition(next);
-        return next;
-      });
+      const current = usePetUiStore.getState().position;
+      if (current === null) return;
+      setStoredPosition(clampPetPosition(current.x, current.y));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [setStoredPosition]);
 
-  const resolved = position ?? defaultPetPosition();
+  const resolved = dragPosition ?? storedPosition ?? defaultPetPosition();
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -62,8 +46,7 @@ export const PetOverlay = memo(function PetOverlay(props: { mood: PetMood }) {
     const offset = dragOffsetRef.current;
     if (!offset) return;
     draggedRef.current = true;
-    const next = clampPetPosition(event.clientX - offset.dx, event.clientY - offset.dy);
-    setPosition(next);
+    setDragPosition(clampPetPosition(event.clientX - offset.dx, event.clientY - offset.dy));
   };
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -75,11 +58,10 @@ export const PetOverlay = memo(function PetOverlay(props: { mood: PetMood }) {
       // already released
     }
     if (!draggedRef.current) return;
-    setPosition((current) => {
+    setDragPosition((current) => {
       const next = current ?? defaultPetPosition();
-      const clamped = clampPetPosition(next.x, next.y);
-      setStoredPosition(clamped);
-      return clamped;
+      setStoredPosition(clampPetPosition(next.x, next.y));
+      return null;
     });
   };
 

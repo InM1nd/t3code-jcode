@@ -1,6 +1,6 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { FolderGit2Icon, FolderIcon, PlusIcon } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { useThreadShellsForProjectRefs } from "../state/entities";
@@ -24,12 +24,9 @@ export const TandemDraftWorkspacePicker = memo(function TandemDraftWorkspacePick
 }) {
   const draft = useComposerDraftStore((store) => store.getDraftSession(draftId));
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-  const projectRef = useMemo(
-    () => (draft ? scopeProjectRef(draft.environmentId, draft.projectId) : null),
-    [draft],
-  );
+  const projectRef = draft ? scopeProjectRef(draft.environmentId, draft.projectId) : null;
   const threads = useThreadShellsForProjectRefs(projectRef ? [projectRef] : []);
-  const worktrees = useMemo(() => listKnownWorktrees(threads), [threads]);
+  const worktrees = listKnownWorktrees(threads);
   const [selectedLocal, setSelectedLocal] = useState(false);
 
   if (!draft || !projectRef) return null;

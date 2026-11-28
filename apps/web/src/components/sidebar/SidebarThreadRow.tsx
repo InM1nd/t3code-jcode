@@ -389,7 +389,10 @@ function SidebarThreadTooltip({
             />
             <div className="min-w-0 truncate text-foreground/75">
               {harnessSource
-                ? `${modelLabel} · ${harnessSource.label} via Jcode`
+                ? gt("{model} · {harness} via Jcode", {
+                    model: modelLabel,
+                    harness: harnessSource.label,
+                  })
                 : showInstanceBadge && providerEntry
                   ? `${modelLabel} · ${providerEntry.displayName}`
                   : modelLabel}

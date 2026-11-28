@@ -2246,8 +2246,6 @@ export default function ChatView(props: ChatViewProps) {
     stored: pickedMode ?? workModeQuery.data?.mode ?? null,
     interactionMode: activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE,
   });
-  const workModeForTurnRef = useRef(workMode);
-  workModeForTurnRef.current = workMode;
   const handleWorkModeChange = (mode: WorkMode) => {
     const threadIdForMode = activeThread?.id;
     if (threadIdForMode) {
@@ -2282,7 +2280,7 @@ export default function ChatView(props: ChatViewProps) {
     const modeResult = mapAtomCommandResult(
       await saveThreadWorkMode({
         environmentId,
-        input: { threadId: input.threadId, mode: input.workMode ?? workModeForTurnRef.current },
+        input: { threadId: input.threadId, mode: input.workMode ?? workMode },
       }),
       () => undefined,
     );

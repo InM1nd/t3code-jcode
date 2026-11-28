@@ -9,7 +9,6 @@ import {
   LoaderCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useMemo } from "react";
 import { useRouter } from "@tanstack/react-router";
 
 import { resolveSidebarThreadStatus } from "../components/Sidebar.logic";
@@ -54,38 +53,28 @@ export function TandemAgentAttention() {
   const router = useRouter();
   const { archiveThread } = useThreadActions();
   const threads = useThreadShells();
-  const entries = useMemo<ReadonlyArray<AgentEntry>>(
-    () =>
-      threads.map((thread) => ({
-        id: `${thread.environmentId}:${thread.id}`,
-        environmentId: thread.environmentId,
-        threadId: thread.id,
-        title: thread.title,
-        state: agentState(thread),
-      })),
-    [threads],
+  const entries: ReadonlyArray<AgentEntry> = threads.map((thread) => ({
+    id: `${thread.environmentId}:${thread.id}`,
+    environmentId: thread.environmentId,
+    threadId: thread.id,
+    title: thread.title,
+    state: agentState(thread),
+  }));
+  const summary = summarizeAgentAttention(
+    threads.map((thread, index) => ({
+      ...entries[index]!,
+      archivedAt: thread.archivedAt,
+      updatedAt: thread.updatedAt,
+    })),
   );
-  const summary = useMemo(
-    () =>
-      summarizeAgentAttention(
-        threads.map((thread, index) => ({
-          ...entries[index]!,
-          archivedAt: thread.archivedAt,
-          updatedAt: thread.updatedAt,
-        })),
-      ),
-    [entries, threads],
+  const byThreadKey = new Map(
+    entries.map((entry) => [`${entry.environmentId}:${entry.threadId}`, entry]),
   );
-  const visibleEntries = useMemo(() => {
-    const byThreadKey = new Map(
-      entries.map((entry) => [`${entry.environmentId}:${entry.threadId}`, entry]),
-    );
-    return {
-      needsAction: summary.needsAction.map((thread) => byThreadKey.get(thread.id)),
-      active: summary.active.map((thread) => byThreadKey.get(thread.id)),
-      completed: summary.completed.slice(0, 5).map((thread) => byThreadKey.get(thread.id)),
-    };
-  }, [entries, summary]);
+  const visibleEntries = {
+    needsAction: summary.needsAction.map((thread) => byThreadKey.get(thread.id)),
+    active: summary.active.map((thread) => byThreadKey.get(thread.id)),
+    completed: summary.completed.slice(0, 5).map((thread) => byThreadKey.get(thread.id)),
+  };
   const attentionCount = summary.needsAction.length + summary.active.length;
 
   const openThread = (entry: AgentEntry) => {
@@ -111,7 +100,7 @@ export function TandemAgentAttention() {
             aria-label={
               attentionCount === 0 ? "Agent control" : `Agent control: ${attentionCount} active`
             }
-            className="relative z-10 ml-auto hidden h-7 min-w-7 cursor-pointer items-center justify-center rounded-md px-1.5 text-muted-foreground outline-hidden hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+            className="relative z-10 ml-auto hidden h-7 min-w-7 cursor-pointer items-center justify-center rounded-md px-1.5 text-muted-foreground outline-hidden hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:inline-flex"
           />
         }
       >
@@ -183,7 +172,7 @@ function AgentSection({
           >
             <button
               type="button"
-              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               onClick={() => onOpenThread(entry)}
             >
               <presentation.Icon
@@ -200,7 +189,7 @@ function AgentSection({
                     <button
                       type="button"
                       aria-label="Dismiss (archives the thread)"
-                      className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+                      className="shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-hover:opacity-100"
                       onClick={(event) => {
                         event.stopPropagation();
                         onDismissThread(entry);

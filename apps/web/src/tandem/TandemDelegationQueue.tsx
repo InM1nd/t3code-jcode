@@ -1,11 +1,12 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ProjectBoardItem, ProjectId } from "@t3tools/contracts";
 import { PlayIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
 import { Button } from "../components/ui/button";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { markBoardItemAwaitingTurnLink } from "../lib/boardTurnLinkPending";
 import { useProjects } from "../state/entities";
 import { projectBoardItems, upsertBoardItem } from "../state/projectBoard";
@@ -24,30 +25,24 @@ function ProjectReadyReporter(props: {
   readonly projectId: ProjectId;
   readonly onChange: (key: string, items: ReadonlyArray<PreparedDelegation>) => void;
 }) {
+  const { onChange } = props;
   const key = `${props.environmentId}:${props.projectId}`;
-  const boardAtom = useMemo(
-    () =>
-      projectBoardItems({
-        environmentId: props.environmentId,
-        input: { projectId: props.projectId },
-      }),
-    [props.environmentId, props.projectId],
-  );
+  const boardAtom = projectBoardItems({
+    environmentId: props.environmentId,
+    input: { projectId: props.projectId },
+  });
   const board = useEnvironmentQuery(boardAtom);
-  const ready = useMemo(
-    () =>
-      (board.data?.items ?? []).filter(isTandemDelegation).map((item) => ({
-        environmentId: props.environmentId,
-        projectId: props.projectId,
-        item,
-      })),
-    [board.data?.items, props.environmentId, props.projectId],
-  );
+  const ready = (board.data?.items ?? []).filter(isTandemDelegation).map((item) => ({
+    environmentId: props.environmentId,
+    projectId: props.projectId,
+    item,
+  }));
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- holds this project's entry in the parent's per-project registry until unmount; hooks cannot run per project in a loop
   useEffect(() => {
-    props.onChange(key, ready);
-    return () => props.onChange(key, []);
-  }, [key, props.onChange, ready]);
+    onChange(key, ready);
+    return () => onChange(key, []);
+  }, [key, onChange, ready]);
 
   return null;
 }
@@ -60,15 +55,15 @@ export function TandemDelegationQueue() {
   const [byProject, setByProject] = useState<
     ReadonlyMap<string, ReadonlyArray<PreparedDelegation>>
   >(() => new Map());
-  const onChange = useCallback((key: string, items: ReadonlyArray<PreparedDelegation>) => {
+  const onChange = useStableCallback((key: string, items: ReadonlyArray<PreparedDelegation>) => {
     setByProject((current) => {
       const next = new Map(current);
       if (items.length === 0) next.delete(key);
       else next.set(key, items);
       return next;
     });
-  }, []);
-  const delegations = useMemo(() => [...byProject.values()].flat().slice(0, 5), [byProject]);
+  });
+  const delegations = [...byProject.values()].flat().slice(0, 5);
 
   const launch = async (delegation: PreparedDelegation) => {
     if (launchingId) return;

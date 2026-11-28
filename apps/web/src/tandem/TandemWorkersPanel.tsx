@@ -6,7 +6,7 @@ import {
   type ProjectId,
 } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { formatContextWindowTokens } from "../lib/contextWindow";
 import { useThreadShells } from "../state/entities";
@@ -58,6 +58,7 @@ function formatCompactElapsedSeconds(totalSeconds: number): string {
 function WorkerElapsed({ worker }: { worker: MegathreadWorker }) {
   const textRef = useRef<HTMLSpanElement>(null);
   const { startedAt, completedAt } = worker;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- one-second interval that writes the elapsed text into the DOM node without React commits
   useEffect(() => {
     if (!startedAt) return;
     const update = () => {
@@ -83,33 +84,21 @@ export function TandemWorkersPanel(props: {
 }) {
   const router = useRouter();
   const threads = useThreadShells();
-  const boardAtom = useMemo(
-    () =>
-      projectBoardItems({
-        environmentId: props.environmentId,
-        input: { projectId: props.projectId },
-      }),
-    [props.environmentId, props.projectId],
-  );
+  const boardAtom = projectBoardItems({
+    environmentId: props.environmentId,
+    input: { projectId: props.projectId },
+  });
   const items = useEnvironmentQuery(boardAtom).data?.items;
-  const workers = useMemo(
-    () =>
-      selectMegathreadWorkers({
-        threads: threads.filter((thread) => thread.environmentId === props.environmentId),
-        bossThreadId: props.bossThreadId,
-        items: items ?? [],
-      }),
-    [threads, props.environmentId, props.bossThreadId, items],
-  );
+  const workers = selectMegathreadWorkers({
+    threads: threads.filter((thread) => thread.environmentId === props.environmentId),
+    bossThreadId: props.bossThreadId,
+    items: items ?? [],
+  });
   const threadIdsKey = [props.bossThreadId, ...workers.map((worker) => worker.threadId)].join(",");
-  const usageAtom = useMemo(
-    () =>
-      megathreadUsage({
-        environmentId: props.environmentId,
-        input: { threadIds: threadIdsKey.split(",").map((id) => ThreadId.make(id)) },
-      }),
-    [props.environmentId, threadIdsKey],
-  );
+  const usageAtom = megathreadUsage({
+    environmentId: props.environmentId,
+    input: { threadIds: threadIdsKey.split(",").map((id) => ThreadId.make(id)) },
+  });
   const query = useEnvironmentQuery(usageAtom);
   // Usage only moves when a run starts or settles, so those are the refetch points.
   const boss = threads.find(
@@ -120,8 +109,10 @@ export function TandemWorkersPanel(props: {
     ...workers.map((worker) => `${worker.status}:${worker.completedAt ?? ""}`),
   ].join(",");
   const refresh = query.refresh;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- usage has no push stream, so the server query is refetched when a run starts or settles
   useEffect(() => {
     refresh();
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- activityKey changes exactly when a run starts or settles, which is the refetch trigger.
   }, [activityKey, refresh]);
 
   const usage = summarizeMegathreadUsage(query.data?.threads ?? [], props.bossThreadId);
